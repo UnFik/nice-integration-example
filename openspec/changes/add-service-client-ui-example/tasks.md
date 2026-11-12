@@ -29,7 +29,7 @@
 
 Grup ini butuh NICE dev dengan `add-service-clients`, `add-delegated-nice-api`, dan `add-seamless-org-switch`, serta setup manual dari README.
 
-- [ ] 6.1 Jalankan `shared-service-oauth` dan `service-client-ui`, lalu jalankan checklist uji manual di browser (login di organisasi ber-entitlement pertama, pemilih dari `/me/contexts`, pindah organisasi tanpa redirect, penolakan saat akses dicabut, reload tetap login); verifikasi setiap langkah memberi hasil yang diharapkan dan catat revisi `nice` di README
+- [x] 6.1 Jalankan `shared-service-oauth` dan `service-client-ui`, lalu jalankan checklist uji manual di browser (login di organisasi ber-entitlement pertama, pemilih dari `/me/contexts`, pindah organisasi tanpa redirect, penolakan saat akses dicabut, reload tetap login); verifikasi setiap langkah memberi hasil yang diharapkan dan catat revisi `nice` di README
 
 ## Workflow follow-up
 

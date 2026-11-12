@@ -12,7 +12,7 @@ Kapan memakai contoh ini dan kapan [`../public-client-pkce`](../public-client-pk
 
 Versi NICE minimum: revisi yang memuat change `add-service-clients`, `add-delegated-nice-api`, dan `add-seamless-org-switch` (`nice` `8160ac4` atau sesudahnya).
 
-Diuji terhadap nice revisi: belum diuji terhadap NICE yang berjalan
+Diuji terhadap nice revisi: `8160ac4` (2026-11-13)
 
 ## Isi
 
@@ -95,7 +95,7 @@ curl -sS "$NICE/api/v1/shared-services/inventaris/dependencies" -X PUT \
 
 ### 5. Dua organisasi yang memakai `inventaris`
 
-Untuk organisasi A dan B, jalankan langkah 6-8 README `shared-service-oauth`: entitlement `inventaris`, aktivasi di satu project, dan binding user uji ke `inventaris.operator` di project itu. Tanpa binding, project tidak muncul di `/me/contexts`.
+Untuk organisasi A dan B, jalankan langkah 6-8 README `shared-service-oauth`: entitlement `inventaris`, aktivasi di project, dan binding user uji ke `inventaris.operator` di setiap project itu. Checklist uji memakai dua project di A (P dan Q) dan satu di B (R). Tanpa binding, project tidak muncul di `/me/contexts`.
 
 Opsional, untuk melihat organisasi yang ditandai tidak tersedia: organisasi C milik user uji yang di-entitle `inventaris` tetapi user tidak punya binding `inventaris` di project mana pun.
 
@@ -159,7 +159,7 @@ Setelah muat ulang, UI kembali ke organisasi refresh token tanpa project terpili
 
 ## Checklist uji manual
 
-Buka DevTools (tab Network dengan **Preserve log**, dan Application > Session Storage). A dan B adalah organisasi dari langkah 5, P project `inventaris` di A, R project `inventaris` di B.
+Buka DevTools (tab Network dengan **Preserve log**, dan Application > Session Storage). A dan B adalah organisasi dari langkah 5, P dan Q project `inventaris` di A, R project `inventaris` di B.
 
 | # | Requirement | Langkah | Hasil yang diharapkan |
 | --- | --- | --- | --- |
@@ -170,8 +170,8 @@ Buka DevTools (tab Network dengan **Preserve log**, dan Application > Session St
 | 5 | Pindah project | Pilih P di A | Satu `POST /oauth/token` dengan `scope=... nice:aud:inventaris nice:prj:<P>` (tanpa `nice:org` bila sesi sudah di A), lalu `GET http://127.0.0.1:8081/items`. Tombol P bertanda aktif dan daftar barang A tampil |
 | 6 | Pindah organisasi | Dari A/P, pilih R di B | Tepat satu `POST /oauth/token` dengan `scope=openid profile email offline_access nice:org:<B> nice:aud:inventaris nice:prj:<R>`, dijawab 200 dengan `refresh_token` baru. Tidak ada request dokumen ke NICE (browser tidak berpindah halaman). Daftar barang B tampil |
 | 7 | Kembali ke konteks sebelumnya | Dalam 10 menit, pilih P di A lagi | Tidak ada `POST /oauth/token`; `GET /items` memakai token A/P yang sama dengan langkah 5 |
-| 8 | Akses dicabut di antara | Setelah pemilih tampil, nonaktifkan `inventaris` di R (console: project R, **Product & Activation**), lalu pilih R | `POST /oauth/token` dijawab 400 `invalid_scope`. UI tetap di konteks sebelumnya, menampilkan alasannya, dan memanggil `GET /api/v1/me/contexts` lagi; R tidak lagi ditawarkan. Session Storage masih memegang refresh token yang sama (tidak diputar). Aktifkan lagi R sesudahnya |
-| 9 | Organisasi dicabut | Cabut entitlement `inventaris` organisasi B, lalu pilih R dari pemilih lama | `POST /oauth/token` dengan `nice:org:<B>` dijawab 400 `access_denied`; hasilnya sama dengan langkah 8, dan B hilang dari pemilih setelah dimuat ulang. Berikan lagi entitlement-nya sesudahnya |
-| 10 | Muat ulang | Setelah langkah 6, tekan F5 | Tetap login tanpa redirect. Satu refresh dengan scope dasar saja dijawab token dengan `nice_org_id` B (organisasi refresh token terakhir), lalu `GET /oauth/userinfo` dan `/me/contexts`. Session Storage hanya berisi `nice-service-ui.refresh_token` dan `nice-service-ui.id_token` |
+| 8 | Muat ulang | Setelah langkah 7, tekan F5 | Tetap login tanpa redirect. Refresh pertama hanya membawa scope dasar dan dijawab token dengan `nice_org_id` B, organisasi refresh token terakhir (langkah 6), walaupun konteks terakhir di layar A/P. Lalu `GET /oauth/userinfo` dan `/me/contexts`; B bertanda **Organisasi saat ini**. Session Storage hanya berisi `nice-service-ui.refresh_token` dan `nice-service-ui.id_token` |
+| 9 | Akses dicabut di antara | Setelah pemilih tampil, nonaktifkan `inventaris` di Q (console: project Q, **Product & Activation**), lalu pilih Q. Q belum punya token, jadi UI harus bertanya ke NICE | Satu `POST /oauth/token` dengan `nice:org:<A> nice:aud:inventaris nice:prj:<Q>` dijawab 400 `invalid_scope`. UI tetap di konteks sebelumnya, menampilkan alasannya, dan memanggil `GET /api/v1/me/contexts` lagi; Q tidak lagi ditawarkan. Refresh token di Session Storage sama seperti sebelum klik (tidak diputar). Aktifkan lagi Q sesudahnya |
+| 10 | Organisasi dicabut | Pilih P di A (sesi pindah ke A), cabut entitlement `inventaris` organisasi B, lalu pilih R dari pemilih lama. Setelah muat ulang di langkah 8, R belum punya token | `POST /oauth/token` dengan `nice:org:<B>` dijawab 400 `access_denied` (`the organization is not entitled to the service of this client`), refresh token yang dikirim tetap berlaku, UI tetap di A/P, dan B hilang dari pemilih setelah konteks dimuat ulang. Sesudahnya berikan lagi entitlement B, lalu nonaktifkan dan aktifkan lagi `inventaris` di R: sebelum itu `/me/contexts` menampilkan B tanpa project |
 | 11 | Sesi berakhir | Di Session Storage, ubah `nice-service-ui.refresh_token` menjadi `rusak`, lalu pilih konteks yang belum punya token | `POST /oauth/token` dijawab `invalid_grant`; layar **Sesi berakhir**; tidak ada kunci `nice-service-ui.*` tersisa |
 | 12 | Logout | Tekan **Keluar** | `POST /oauth/revoke`, lalu navigasi ke `/oauth/end_session` dengan `post_logout_redirect_uri=http://localhost:5181/`; kembali ke halaman **Masuk** |

@@ -12,7 +12,7 @@ When to use this example and when to use [`../public-client-pkce`](../public-cli
 
 Minimum NICE version: a revision with the changes `add-service-clients`, `add-delegated-nice-api`, and `add-seamless-org-switch` (`nice` `8160ac4` or later).
 
-Tested against nice revision: not yet tested against a running NICE
+Tested against nice revision: `8160ac4` (2026-11-13)
 
 ## Contents
 
@@ -95,7 +95,7 @@ curl -sS "$NICE/api/v1/shared-services/inventaris/dependencies" -X PUT \
 
 ### 5. Two organizations that use `inventaris`
 
-For organizations A and B, run steps 6-8 of the `shared-service-oauth` README: the `inventaris` entitlement, the activation in one project, and a binding of the test user to `inventaris.operator` in that project. Without a binding, the project does not appear in `/me/contexts`.
+For organizations A and B, run steps 6-8 of the `shared-service-oauth` README: the `inventaris` entitlement, the activation in the projects, and a binding of the test user to `inventaris.operator` in each of those projects. The test checklist uses two projects in A (P and Q) and one in B (R). Without a binding, the project does not appear in `/me/contexts`.
 
 Optional, to see an organization marked unavailable: an organization C of the test user that is entitled to `inventaris` while the user has no `inventaris` binding in any of its projects.
 
@@ -159,7 +159,7 @@ After a reload the UI returns to the organization of the refresh token with no p
 
 ## Manual test checklist
 
-Open DevTools (Network tab with **Preserve log**, and Application > Session Storage). A and B are the organizations from step 5, P the `inventaris` project in A, R the `inventaris` project in B.
+Open DevTools (Network tab with **Preserve log**, and Application > Session Storage). A and B are the organizations from step 5, P and Q the `inventaris` projects in A, R the `inventaris` project in B.
 
 | # | Requirement | Step | Expected result |
 | --- | --- | --- | --- |
@@ -170,8 +170,8 @@ Open DevTools (Network tab with **Preserve log**, and Application > Session Stor
 | 5 | Switch project | Choose P in A | One `POST /oauth/token` with `scope=... nice:aud:inventaris nice:prj:<P>` (no `nice:org` when the session is already in A), then `GET http://127.0.0.1:8081/items`. The P button is marked active and the items of A are listed |
 | 6 | Switch organization | From A/P, choose R in B | Exactly one `POST /oauth/token` with `scope=openid profile email offline_access nice:org:<B> nice:aud:inventaris nice:prj:<R>`, answered 200 with a new `refresh_token`. No document request to NICE (the browser does not leave the page). The items of B are listed |
 | 7 | Back to the previous context | Within 10 minutes, choose P in A again | No `POST /oauth/token`; `GET /items` uses the same A/P token as step 5 |
-| 8 | Access removed in between | After the chooser shows, deactivate `inventaris` in R (console: project R, **Product & Activation**), then choose R | `POST /oauth/token` answers 400 `invalid_scope`. The UI stays on the previous context, shows the reason, and calls `GET /api/v1/me/contexts` again; R is no longer offered. Session Storage still holds the same refresh token (not rotated). Activate R again afterwards |
-| 9 | Organization removed | Revoke the `inventaris` entitlement of organization B, then choose R from the old chooser | `POST /oauth/token` with `nice:org:<B>` answers 400 `access_denied`; the result is the same as step 8, and B leaves the chooser after the reload. Grant the entitlement again afterwards |
-| 10 | Reload | After step 6, press F5 | Still signed in, no redirect. One refresh with the base scope only answers a token with `nice_org_id` B (the organization of the latest refresh token), then `GET /oauth/userinfo` and `/me/contexts`. Session Storage holds only `nice-service-ui.refresh_token` and `nice-service-ui.id_token` |
+| 8 | Reload | After step 7, press F5 | Still signed in, no redirect. The first refresh carries the base scope only and answers a token with `nice_org_id` B, the organization of the latest refresh token (step 6), although the last context on screen was A/P. Then `GET /oauth/userinfo` and `/me/contexts`; B is marked **Organisasi saat ini**. Session Storage holds only `nice-service-ui.refresh_token` and `nice-service-ui.id_token` |
+| 9 | Access removed in between | After the chooser shows, deactivate `inventaris` in Q (console: project Q, **Product & Activation**), then choose Q. Q has no token yet, so the UI has to ask NICE | One `POST /oauth/token` with `nice:org:<A> nice:aud:inventaris nice:prj:<Q>` answers 400 `invalid_scope`. The UI stays on the previous context, shows the reason, and calls `GET /api/v1/me/contexts` again; Q is no longer offered. The refresh token in Session Storage is the one from before the click (not rotated). Activate Q again afterwards |
+| 10 | Organization removed | Choose P in A (the session moves to A), revoke the `inventaris` entitlement of organization B, then choose R from the old chooser. After the reload of step 8, R has no token yet | `POST /oauth/token` with `nice:org:<B>` answers 400 `access_denied` (`the organization is not entitled to the service of this client`), the presented refresh token stays usable, the UI stays on A/P, and B leaves the chooser after the contexts reload. Afterwards grant B the entitlement again, then deactivate and activate `inventaris` in R again: until then `/me/contexts` lists B without projects |
 | 11 | Session ended | In Session Storage, change `nice-service-ui.refresh_token` to `rusak`, then choose a context that has no token yet | `POST /oauth/token` answers `invalid_grant`; the **Sesi berakhir** screen; no `nice-service-ui.*` key is left |
 | 12 | Logout | Press **Keluar** | `POST /oauth/revoke`, then navigation to `/oauth/end_session` with `post_logout_redirect_uri=http://localhost:5181/`; back on the **Masuk** page |
