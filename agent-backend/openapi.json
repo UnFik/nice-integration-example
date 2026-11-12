@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Agen",
+    "version": "1.0",
+    "description": "Example MCP server of NICE (auth mode nice_token). Its tools call inventaris and pengiriman on behalf of the user with tokens from token exchange. Every request needs a NICE access token for the audience agen."
+  },
+  "x-nice-roles": [
+    {
+      "id": "user",
+      "name": "User",
+      "description": "Use the agent through an MCP client",
+      "permissions": ["agen.mcp.use"]
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Access token of NICE requested with the scope nice:aud:agen."
+      }
+    }
+  },
+  "paths": {
+    "/mcp": {
+      "post": {
+        "operationId": "mcp",
+        "summary": "MCP over Streamable HTTP",
+        "description": "JSON-RPC messages of the Model Context Protocol (initialize, tools/list, tools/call). Every tool exchanges the user's token for a token of its target service.",
+        "tags": ["mcp"],
+        "security": [{ "BearerAuth": [] }],
+        "x-nice-permission": "agen.mcp.use",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          },
+          "401": { "description": "Missing or invalid token; WWW-Authenticate names the resource metadata" },
+          "403": { "description": "The token lacks agen.mcp.use" }
+        }
+      }
+    }
+  }
+}

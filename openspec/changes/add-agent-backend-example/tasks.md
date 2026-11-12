@@ -3,7 +3,7 @@
 ## 1. Kerangka `agent-backend`
 
 - [x] 1.1 Buat modul Go `agent-backend/` (Go 1.27, `replace github.com/nice-platform/nice => ../../nice`, SDK MCP Go v1.8.x), `Makefile` (`run`, `test`, `smoke`), konfigurasi env dan `.env.example` (issuer, client confidential, endpoint `inventaris`, URL NICE untuk proxy, listen `127.0.0.1:8083`); verifikasi `go build ./...` dan tes konfigurasi (variabel wajib yang kosong menghentikan start dengan pesan yang menyebut namanya)
-- [ ] 1.2 Tulis `openapi.json` service `agen` (`POST /mcp`, `x-nice-permission: agen.mcp.use`) yang disajikan untuk impor katalog; verifikasi tes isi dokumen
+- [x] 1.2 Tulis `openapi.json` service `agen` (`POST /mcp`, `x-nice-permission: agen.mcp.use`) yang disajikan untuk impor katalog; verifikasi tes isi dokumen
 
 ## 2. Server MCP dan perlindungan
 
