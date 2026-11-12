@@ -268,7 +268,7 @@ Path relatif terhadap `endpoint` + `base_path`, dan NICE mengganti `{key_id}` de
 - Superadmin dapat melihat metadata key di `GET /api/v1/service-account-keys?service=pengiriman` (Console: **Platform Admin > Kunci Service Account**).
 - `scripts/smoke.sh` tetap lulus, dan log service kini mencatat `credential=mirrored` untuk request lewat proxy.
 
-Pada nice revisi `c7a5086` proxy belum memakai mirrored key: NICE membuat dan mendaftar key-nya, tetapi tabel rute proxy kehilangan tanda per akun (`PerAccountKeys` tidak disalin di `nice/internal/bootstrap/proxy.go`). Akibatnya proxy tetap mengirim `SERVICE_CREDENTIAL`, log mencatat `credential=service`, dan user NICE tidak ditolak. Dengan field itu disalin, smoke lulus dengan `credential=mirrored` dan user mendapat 403 `service_account_required`.
+Sampai nice revisi `c7a5086`, proxy tidak memakai mirrored key karena tabel rute proxy kehilangan tanda per akun, sehingga proxy tetap mengirim `SERVICE_CREDENTIAL` dan log mencatat `credential=service`. Bug ini diperbaiki di nice `2638605`: mirrored key kini benar-benar sampai ke upstream, smoke lulus dengan `credential=mirrored`, dan user NICE mendapat 403 `service_account_required`.
 
 Catatan:
 
