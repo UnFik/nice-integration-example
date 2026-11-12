@@ -23,7 +23,7 @@
 
 ## 5. Dokumentasi contoh baru
 
-- [ ] 5.1 Tulis `README.md` dan `README.en.md`: versi NICE minimum; checklist setup manual (service `agen` dan impor, client `agen-user` public dan `agen-backend` confidential terikat `agen`, dependensi `agen` → `inventaris` dan `pengiriman` dengan izin baca dan buat, binding user ke role `agen`); cara memperoleh token user dengan `nice/scripts/dev-token.sh`; cara memanggil tool dengan MCP Inspector dan `curl`; batas contoh (tanpa DCR, tanpa aktor di `pengiriman`, tanpa tool sensitif); dan checklist uji; verifikasi nama variabel sama dengan `.env.example`
+- [x] 5.1 Tulis `README.md` dan `README.en.md`: versi NICE minimum; checklist setup manual (service `agen` dan impor, client `agen-user` public dan `agen-backend` confidential terikat `agen`, dependensi `agen` → `inventaris` dan `pengiriman` dengan izin baca dan buat, binding user ke role `agen`); cara memperoleh token user dengan `nice/scripts/dev-token.sh`; cara memanggil tool dengan MCP Inspector dan `curl`; batas contoh (tanpa DCR, tanpa aktor di `pengiriman`, tanpa tool sensitif); dan checklist uji; verifikasi nama variabel sama dengan `.env.example`
 
 ## 6. Verifikasi integrasi terhadap NICE dev
 
