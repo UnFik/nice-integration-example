@@ -4,7 +4,7 @@
 
 Contoh SharedService NICE bermode `nice_token` dengan slug `inventaris`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/nicetoken`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../nice/docs/token-verification.md), memisahkan data per organisasi, dan memeriksa operasi sensitif secara online ke NICE.
 
-Diuji terhadap nice revisi: _belum diisi (diisi saat verifikasi integrasi)_
+Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 
 ## Isi
 
@@ -51,7 +51,7 @@ Perilaku yang perlu diketahui:
   ```
 
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
-- NICE dev berjalan di `http://localhost:8080` (`cd ../../nice && make db && make migrate && make dev`).
+- NICE dev berjalan, bawaannya di `http://localhost:8080` (`cd ../../nice && make db && make migrate && make dev`). NICE di alamat lain juga bisa: isikan ke `NICE_ISSUER` di `.env` dan ke `NICE` di shell checklist.
 
 ## Konfigurasi
 
@@ -87,7 +87,7 @@ Jalankan dari direktori `example/shared-service-oauth`. Langkah console disebut 
 Sebelum mulai, siapkan variabel shell. Token diambil dengan `nice/scripts/dev-token.sh` (client `nice-console` dengan redirect bawaan NICE dev `http://localhost:5173/callback`; bila akun memakai verifikasi dua langkah, set `TOTP_SECRET`, lihat kepala skrip). Token berlaku 30 menit; ulangi bila kedaluwarsa.
 
 ```bash
-export NICE=http://localhost:8080
+export NICE=${NICE:-http://localhost:8080}   # alamat NICE, sama dengan NICE_ISSUER di .env; dev-token.sh juga membacanya
 
 # akun Platform Admin dev Anda
 read -rp 'Email Platform Admin: ' ADMIN_EMAIL; read -rsp 'Password: ' ADMIN_PASSWORD; echo
@@ -178,7 +178,7 @@ curl -sS "$NICE/api/v1/projects/$PROJECT_ID/services/inventaris/activation" -X P
 
 ### 8. Binding user ke role inventaris
 
-Console: project tenant, **IAM**. Bila dijawab `unknown_role`, IAM belum menyalin katalog; tunggu sebentar lalu ulangi.
+Console: project tenant, **IAM**. IAM menyalin katalog dan aktivasi secara asinkron: bila dijawab `unknown_role` atau `service_not_active`, tunggu beberapa detik lalu ulangi. `echo "$BINDING_ID"` harus mencetak `rb_...`, bukan `null`.
 
 ```bash
 BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST \
@@ -209,6 +209,8 @@ curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/api-keys" -X POST \
 ```
 
 Key hanya tampil sekali. Isikan ke `NICE_SERVICE_API_KEY` di `.env`, lalu jalankan ulang `make run`; peringatan feed saat start hilang.
+
+IAM mengetahui Service Account baru secara asinkron, jadi binding yang dibuat tepat setelah akunnya dibuat bisa dijawab 400 `principal_not_in_org`. Tunggu beberapa detik lalu ulangi binding-nya; hal yang sama berlaku di langkah 10.
 
 ### 10. Service Account tenant untuk smoke
 

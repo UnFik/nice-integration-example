@@ -4,7 +4,7 @@
 
 An example NICE SharedService in `nice_token` mode with the slug `inventaris`, written in Go (`net/http`) with the reference library `nice/pkg/nicetoken`. Clients call this service directly with a NICE access token; NICE is not on the request path. The service verifies the token itself according to the [token verification contract](../../nice/docs/token-verification.md), keeps data apart per organization, and checks sensitive operations online with NICE.
 
-Tested against nice revision: _not filled in yet (filled in during integration verification)_
+Tested against nice revision: `c7a5086` (2026-11-13)
 
 ## Contents
 
@@ -51,7 +51,7 @@ Behavior worth knowing:
   ```
 
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
-- A dev NICE running at `http://localhost:8080` (`cd ../../nice && make db && make migrate && make dev`).
+- A dev NICE running, at `http://localhost:8080` by default (`cd ../../nice && make db && make migrate && make dev`). NICE at another address works too: put it in `NICE_ISSUER` in `.env` and in `NICE` in the checklist shell.
 
 ## Configuration
 
@@ -87,7 +87,7 @@ Run from the `example/shared-service-oauth` directory. Console steps name the pa
 First, prepare shell variables. Tokens come from `nice/scripts/dev-token.sh` (client `nice-console` with the NICE dev default redirect `http://localhost:5173/callback`; if the account uses two-step verification, set `TOTP_SECRET`, see the script header). Tokens last 30 minutes; repeat when they expire.
 
 ```bash
-export NICE=http://localhost:8080
+export NICE=${NICE:-http://localhost:8080}   # address of NICE, same as NICE_ISSUER in .env; dev-token.sh reads it too
 
 # your dev Platform Admin account
 read -rp 'Platform Admin email: ' ADMIN_EMAIL; read -rsp 'Password: ' ADMIN_PASSWORD; echo
@@ -178,7 +178,7 @@ curl -sS "$NICE/api/v1/projects/$PROJECT_ID/services/inventaris/activation" -X P
 
 ### 8. Bind a user to an inventaris role
 
-Console: tenant project, **IAM**. If the answer is `unknown_role`, IAM has not copied the catalog yet; wait a moment and retry.
+Console: tenant project, **IAM**. IAM copies the catalog and the activation asynchronously: if the answer is `unknown_role` or `service_not_active`, wait a few seconds and retry. `echo "$BINDING_ID"` must print `rb_...`, not `null`.
 
 ```bash
 BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST \
@@ -209,6 +209,8 @@ curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/api-keys" -X POST \
 ```
 
 The key is shown once. Put it in `NICE_SERVICE_API_KEY` in `.env`, then restart `make run`; the feed warning at start is gone.
+
+IAM learns about a new Service Account asynchronously, so a binding made right after creating it can be answered 400 `principal_not_in_org`. Wait a few seconds and repeat the binding; the same holds for step 10.
 
 ### 10. Tenant Service Account for the smoke test
 
