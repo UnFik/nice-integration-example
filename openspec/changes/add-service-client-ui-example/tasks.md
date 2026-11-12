@@ -6,7 +6,7 @@
 
 ## 2. Protokol dan token
 
-- [ ] 2.1 Salin dan sesuaikan modul OIDC (PKCE, callback, `access_denied` dengan pesan service tidak tersedia, issuer `http` hanya loopback) dari `public-client-pkce`; verifikasi tes callback termasuk `access_denied`
+- [x] 2.1 Salin dan sesuaikan modul OIDC (PKCE, callback, `access_denied` dengan pesan service tidak tersedia, issuer `http` hanya loopback) dari `public-client-pkce`; verifikasi tes callback termasuk `access_denied`
 - [ ] 2.2 Implementasikan token manager berkunci `(org, service, project)` dengan scope dasar di setiap refresh, `nice:org` hanya saat organisasi berubah, organisasi aktif dari klaim token terakhir, antrean refresh tunggal, pakai ulang token, dan satu pengulangan pada `token_stale`; verifikasi tes untuk pindah organisasi, kembali ke konteks lama tanpa permintaan token baru, dan penolakan tanpa rotasi
 - [ ] 2.3 Perluas NICE palsu: `nice:org` saat refresh, `/api/v1/me/contexts` dengan token terdelegasi, `invalid_scope` untuk project tidak aktif; verifikasi tes membuktikan kode akan gagal bila `nice:org` atau scope dasar dihilangkan
 

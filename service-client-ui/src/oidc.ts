@@ -13,8 +13,15 @@ export class InsecureIssuerError extends Error {
   }
 }
 
+// service_unavailable is NICE's access_denied for a service client: none of
+// the user's organizations is entitled to the bound service.
+export type LoginErrorReason = "service_unavailable" | "refused";
+
 export class LoginError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason: LoginErrorReason = "refused",
+  ) {
     super(message);
     this.name = "LoginError";
   }
@@ -83,7 +90,7 @@ export class OidcClient {
     return new OidcClient(await oauth.processDiscoveryResponse(issuer, response), options, http);
   }
 
-  async authorizationUrl(storage: KeyValueStorage): Promise<string> {
+  async authorizationUrl(storage: KeyValueStorage, options: { selectAccount?: boolean } = {}): Promise<string> {
     if (!this.as.authorization_endpoint) throw new LoginError("Discovery NICE tidak memuat authorization_endpoint.");
     const transaction: LoginTransaction = {
       state: oauth.generateRandomState(),
@@ -102,6 +109,7 @@ export class OidcClient {
       code_challenge_method: "S256",
     };
     for (const [name, value] of Object.entries(params)) url.searchParams.set(name, value);
+    if (options.selectAccount) url.searchParams.set("prompt", "select_account");
     storage.setItem(keys.login, JSON.stringify(transaction));
     return url.href;
   }
@@ -120,6 +128,12 @@ export class OidcClient {
       if (error instanceof oauth.AuthorizationResponseError) {
         if (error.error === "temporarily_unavailable" && error.error_description === "authentication_expired") {
           return { kind: "restart" };
+        }
+        if (error.error === "access_denied") {
+          throw new LoginError(
+            "Tidak ada organisasi Anda yang memakai service ini, atau organisasinya tidak aktif. Masuk dengan akun lain, atau minta admin organisasi mengaktifkan service ini.",
+            "service_unavailable",
+          );
         }
         throw new LoginError(
           `NICE menolak login: ${error.error}${error.error_description ? ` (${error.error_description})` : ""}.`,
