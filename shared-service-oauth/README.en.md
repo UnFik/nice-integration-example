@@ -62,7 +62,7 @@ Copy `.env.example` to `.env`. The service reads `.env` from the directory it ru
 | `NICE_ISSUER` | required | the NICE issuer, exactly as the `iss` claim of its tokens. Without it the service stops with a message naming `NICE_ISSUER` |
 | `LISTEN_ADDR` | `127.0.0.1:8081` | listen address |
 | `JWKS_FILE` | `data/jwks.json` | JWKS copy on disk (`data/` is not committed) |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | browser origins allowed to call, comma separated |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | browser origins allowed to call, comma separated. `.env.example` sets `http://localhost:5180,http://localhost:5181`, for `public-client-pkce` and `service-client-ui` |
 | `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role (step 9); turns on the feed and the online check |
 | `SMOKE_SA_ID`, `SMOKE_API_KEY` | empty | read only by `scripts/smoke.sh`: a tenant Service Account and its API key (step 10) |
 
@@ -112,7 +112,7 @@ NICE_OUTBOUND_ALLOW_HTTP=true
 NICE_OUTBOUND_ALLOW_CIDRS=127.0.0.0/8
 ```
 
-`NICE_OUTBOUND_ALLOW_CIDRS` is a comma-separated list of CIDRs. The SPA origin `http://localhost:5180` in `NICE_CORS_ALLOWED_ORIGINS` (e.g. `http://localhost:5173,http://localhost:5180`) is only needed by the `public-client-pkce` example, not by this service.
+`NICE_OUTBOUND_ALLOW_CIDRS` is a comma-separated list of CIDRs. This service does not need `NICE_CORS_ALLOWED_ORIGINS`. The SPA examples (`public-client-pkce` on 5180, `service-client-ui` on 5181) do not either, on a NICE with `add-delegated-nice-api`: NICE allows the redirect URI origin of every `public` OAuth client.
 
 ### 2. Run the service
 
