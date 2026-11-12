@@ -63,6 +63,13 @@ A key is `pgk_` + 32 random bytes in base64url, and its id is `key_` + 24 hex ch
 
 The `X-Api-Key` middleware (`src/auth.ts`) hashes the presented value with SHA-256 and compares it with `crypto.timingSafeEqual` against the hash of the service credential and the hash of every active mirrored key. The credential kind (`service` or `mirrored`) is recorded on the request context and in the log. Credential and key values are never logged.
 
+## Called by an agent backend
+
+The agent backend [`../agent-backend`](../agent-backend/README.en.md) calls this service on behalf of the user through the NICE proxy, like any other client. It exchanges the user's token for a token with `aud=pengiriman` through token exchange, then calls `<NICE>/pengiriman/shipments`. The proxy checks the permission against the `perms` of that token, the user's permissions cut down to what `agen` declared for this dependency.
+
+- **No actor.** The proxy forwards only `X-Nice-Organization`, `X-Nice-Project`, and `X-Nice-Principal`, not the `act` claim. `created_by` holds the user, and this service cannot tell that an agent acted. A `nice_token` service such as `inventaris` can record the actor as `acted_by`.
+- **Mirrored keys refuse users.** After step 12, the proxy accepts only Service Accounts. An exchanged token has a user as principal, so it gets 403 `service_account_required`, and the agent's tools for `pengiriman` return that error. Run the agent example against `pengiriman` without step 12.
+
 ## Requirements
 
 - Node.js 22.18 or later (runs `.ts` directly through type stripping, no build) and npm.
