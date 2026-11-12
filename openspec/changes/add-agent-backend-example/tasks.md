@@ -13,7 +13,7 @@
 ## 3. Tool
 
 - [x] 3.1 Implementasikan empat tool (`inventaris_list_items`, `inventaris_create_item`, `pengiriman_list_shipments`, `pengiriman_create_shipment`) dengan argumen opsional `organization_id` dan `project_id`, tanpa tool sensitif; verifikasi tes MCP dengan transport dalam memori untuk setiap tool, konteks bawaan dan konteks organisasi lain, daftar tool tanpa operasi hapus, dan bukti service palsu tidak pernah menerima token `aud=agen`
-- [ ] 3.2 Tes paralel dan cache: sepuluh panggilan dalam satu konteks menghasilkan satu exchange, dan dua service berbeda menukar bersamaan; verifikasi `go test -race ./...` lulus
+- [x] 3.2 Tes paralel dan cache: sepuluh panggilan dalam satu konteks menghasilkan satu exchange, dan dua service berbeda menukar bersamaan; verifikasi `go test -race ./...` lulus
 
 ## 4. Penyesuaian contoh lain
 
