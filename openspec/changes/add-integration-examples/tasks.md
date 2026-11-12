@@ -1,0 +1,54 @@
+# Tasks
+
+## 1. Kerangka repo
+
+- [x] 1.1 Tambah `.gitignore` (`.env`, `data/`, `node_modules/`, `dist/`) dan verifikasi `git status` tidak menampilkan berkas dari pola itu setelah berkas uji dibuat lalu dihapus
+- [x] 1.2 Tulis `AGENTS.md` (bahasa dokumen dan README `.en.md`, komentar singkat berbahasa Inggris diizinkan, larangan rahasia di berkas, perintah per contoh, rujukan dokumen kontrak NICE) dan `CLAUDE.md` berisi `@AGENTS.md`; verifikasi setiap perintah yang disebut ada di `Makefile` atau `package.json` contoh terkait setelah grup 2-4 selesai
+- [x] 1.3 Tulis `README.md` dan `README.en.md` indeks: peta tiga contoh, susunan direktori yang dibutuhkan (`nice/` di sebelah `example/`), env NICE yang dibutuhkan, port; verifikasi semua tautan relatif menunjuk ke berkas yang ada
+- [x] 1.4 Perbarui akar `CLAUDE.md` workspace (di luar repo): `example/` sebagai repo ketiga beserta alur worktree `example-<change>` dari `main`; verifikasi bagian Workspace dan alur OpenSpec menyebut `example`
+
+## 2. shared-service-oauth (Go, `inventaris`)
+
+- [x] 2.1 Buat modul Go (`go.mod` Go 1.27, `require` + `replace github.com/nice-platform/nice => ../../nice`, swag v1 sebagai `tool`) dan `Makefile` (`run`, `test`, `swag`, `swag-check`); verifikasi `go build ./...` berhasil dan `go list -m github.com/nice-platform/nice` menunjuk ke `../../nice`
+- [x] 2.2 Uji coba anotasi swag `@x-nice-permission`, `@x-nice-sensitive`, dan `@x-nice-roles` tingkat info pada satu handler; verifikasi `make swag` menghasilkan ketiga ekstensi itu dengan nilai JSON yang benar di `docs/swagger.json`
+- [x] 2.3 Implementasikan pembacaan konfigurasi dari env dan `.env` plus `.env.example`; verifikasi tes: issuer kosong menghentikan start dengan pesan yang menyebut nama variabelnya
+- [x] 2.4 Implementasikan penyimpanan barang per org di memori dan handler list/get/create/edit/delete dengan validasi dan bentuk galat `{"error","error_description"}`; verifikasi tes handler untuk 404 `not_found` dan 400 `invalid_argument`
+- [x] 2.5 Pasang `nicetoken` (`JWKSFile`, `ProvisionOnFirstUse`, `Run`), tabel rute tunggal dengan `Require`, CORS paling luar, serta `/healthz` di luar middleware; verifikasi tes dengan `StaticJWKS` dan token yang ditandatangani di tes: `missing_token`, `wrong_audience`, `expired`, `permission_denied`, isolasi org, tenant pertama kali, preflight dari origin terdaftar dan tidak terdaftar, `/healthz` tanpa token
+- [x] 2.6 Tandai `DELETE /items/{id}` dengan `Sensitive()`, pasang `NewHTTPChecker` dan `StartFeed` hanya bila API key `nice.service` diisi, dan catat peringatan bila tidak; verifikasi tes: pemeriksa palsu menolak menghasilkan 403 `access_denied`, tanpa pemeriksa menghasilkan 503, dan barang tetap ada pada keduanya
+- [x] 2.7 Lengkapi anotasi swag semua operasi barang (tanpa `/healthz` dan `/openapi.json`), embed hasilnya, dan sajikan di `/openapi.json`; verifikasi tes kecocokan tabel rute dengan dokumen (izin, sensitif, tanpa operasi lain), dan pastikan `make swag-check` lulus
+- [x] 2.8 Tulis `scripts/smoke.sh` (baca `.env`, cek 401 tanpa token, ambil token Service Account `nice:aud:inventaris`, cek 200 `GET /items`, petakan `invalid_scope` dan `invalid_client` ke nomor langkah checklist, tanpa mencetak rahasia); verifikasi `shellcheck` bersih dan skrip keluar bukan 0 dengan pesan jelas bila `.env` atau NICE tidak tersedia
+- [x] 2.9 Tulis `README.md` dan `README.en.md`: env NICE, checklist manual bernomor (registrasi `inventaris`, impor `/openapi.json`, aktivasi, entitlement, aktivasi project, binding, Service Account platform `nice.service` dan API key-nya, Service Account tenant untuk smoke) dengan potongan `curl` memakai `nice/scripts/dev-token.sh`, cara menjalankan, tes, smoke, dan revisi `nice` yang dipakai; verifikasi nama variabel di README sama dengan `.env.example` dan target `make` yang disebut ada
+
+## 3. shared-service-apikey (Hono, `pengiriman`)
+
+- [x] 3.1 Buat paket npm (`engines` Node >=22.18, `type: module`, skrip `dev`/`start`/`test`/`typecheck`, tsconfig `noEmit` dan `allowImportingTsExtensions`, dependensi Hono, `@hono/node-server`, `@hono/zod-openapi`, Vitest); verifikasi `npm install`, `npm run typecheck`, dan `node src/index.ts` jalan tanpa build
+- [x] 3.2 Implementasikan konfigurasi dari env dan `.env` plus `.env.example`; verifikasi tes: tanpa kredensial service, start gagal dengan pesan yang menyebut nama variabelnya
+- [x] 3.3 Implementasikan middleware `X-Api-Key` (bandingkan SHA-256 dengan `timingSafeEqual`, catat jenis kredensial) dengan pengecualian `/healthz` dan `/openapi.json`; verifikasi tes: tanpa key dan key salah menghasilkan 401 `unauthorized`, kredensial service diterima, `/healthz` terbuka
+- [x] 3.4 Implementasikan penyimpanan mirrored key di `data/keys.json` (hanya hash, tulis lewat berkas sementara lalu `rename`) dan `POST /keys`, `POST /keys/{key_id}/rotate`, `DELETE /keys/{key_id}`; verifikasi tes: generate 201 dan key langsung diterima, rotate mematikan key lama, revoke 204, id tidak dikenal 404, mirrored key ke operasi key menghasilkan 403 `admin_credential_required`, key bertahan setelah aplikasi dibuat ulang dari berkas yang sama
+- [x] 3.5 Implementasikan operasi pengiriman dengan tenant `X-Nice-Organization`, `created_by` dari `X-Nice-Principal`, validasi zod, dan galat `missing_organization`, `not_found`, `already_cancelled`, `invalid_argument`; verifikasi tes untuk setiap galat, isolasi org, dan `created_by`
+- [x] 3.6 Sajikan `/openapi.json` (OpenAPI 3) dengan `x-nice-permission` pada ketiga operasi, tanpa operasi key, `/healthz`, dan `/openapi.json` (pakai pasca-proses berdasarkan `operationId` bila `createRoute` tidak meneruskan ekstensi); verifikasi tes isi dokumen: tepat tiga operasi dengan izin yang benar
+- [x] 3.7 Pastikan kredensial dan key tidak pernah dicatat di log; verifikasi tes yang menangkap output log saat generate, rotate, dan request berkredensial tidak memuat nilai rahasia
+- [x] 3.8 Tulis `scripts/smoke.sh` (401 langsung tanpa key, 401 proxy tanpa token, token Service Account `nice:aud:pengiriman`, 200 `GET <NICE>/pengiriman/shipments`, pemetaan galat proxy ke langkah checklist); verifikasi `shellcheck` bersih dan skrip keluar bukan 0 dengan pesan jelas bila `.env` atau NICE tidak tersedia
+- [x] 3.9 Tulis `README.md` dan `README.en.md`: env NICE, checklist manual bernomor (registrasi `api_key` dengan kredensial `X-Api-Key`, impor, aktivasi, entitlement, aktivasi project, binding, Service Account tenant dan API key, langkah opsional `upstream/key-operations` beserta akibatnya bahwa hanya Service Account yang bisa memanggil), peringatan kepercayaan header `X-Nice-*`, cara menjalankan, tes, dan smoke; verifikasi nama variabel sama dengan `.env.example` dan path operasi key di README sama dengan kode
+
+## 4. public-client-pkce (React)
+
+- [x] 4.1 Buat proyek Vite + React 19 + TypeScript (port 5180 `strictPort`, dependensi `oauth4webapi` dan Vitest, skrip `dev`/`build`/`test`/`typecheck`); verifikasi `npm run typecheck` dan `npm run build` berhasil
+- [x] 4.2 Implementasikan pembacaan dan validasi konfigurasi `VITE_*` (termasuk `VITE_SERVICES` JSON) beserta halaman galat konfigurasi dan `.env.example`; verifikasi tes: client id kosong dan `VITE_SERVICES` tidak sah menghasilkan galat yang menyebut nama variabelnya
+- [x] 4.3 Implementasikan modul OIDC dengan `oauth4webapi`: discovery, mulai login (PKCE `S256`, `state`, `nonce` di `sessionStorage`), callback (cek `state` sekali pakai, tukar kode, cek `nonce`, buang parameter dari URL, `authentication_expired` memulai login baru), dan `allowInsecureRequests` hanya untuk issuer `http` loopback; verifikasi tes: `state` salah atau terpakai ditolak, transaksi login dihapus setelah callback, issuer `http` non-loopback ditolak
+- [x] 4.4 Implementasikan token manager (cache per `slug|project`, antrean satu refresh per sesi, berbagi hasil per pasangan, pakai ulang selama `iat + 10 menit + jitter` dan `exp - 60 detik`, backoff 5-60 detik, `onSessionEnded`, `call` dengan satu pengulangan pada 401 `token_stale`/`expired`, simpan refresh token baru sebelum promise selesai); verifikasi tes Vitest untuk setiap perilaku di spec "Token per service", "Satu refresh sekaligus", "Pengulangan pada token basi", dan "Sesi berakhir dan kegagalan sementara"
+- [x] 4.5 Implementasikan UI: tombol masuk, halaman utama (userinfo dan klaim terdekode dengan keterangan tidak diverifikasi), panel service per entri (status, `error_description`, body), layar "Sesi berakhir", dan logout (revoke, bersihkan `sessionStorage`, redirect end-session dengan `id_token_hint`); verifikasi `npm run typecheck` dan `npm run build` berhasil serta tes logout memastikan `sessionStorage` kosong walau revoke gagal
+- [x] 4.6 Tulis `README.md` dan `README.en.md`: env NICE (origin `http://localhost:5180` di `NICE_CORS_ALLOWED_ORIGINS`), checklist pembuatan OAuth client tenant `public` (redirect `http://localhost:5180/callback`, post-logout `http://localhost:5180/`), syarat CORS service yang dipanggil, batas tab duplikat, alasan tidak memanggil service `api_key`, dan checklist uji manual per requirement; verifikasi nama variabel sama dengan `.env.example`
+
+## 5. Verifikasi integrasi terhadap NICE dev
+
+Grup ini butuh NICE dev yang sudah diatur sesuai checklist README; registrasi service dan OAuth client dilakukan pengguna secara manual.
+
+- [ ] 5.1 Jalankan `shared-service-oauth`, lalu `scripts/smoke.sh`; verifikasi keluar dengan kode 0, impor `/openapi.json` di NICE menghasilkan lima operasi, empat izin, dan role `inventaris.viewer`, `inventaris.admin`, `inventaris.operator`, dan pencabutan binding membuat token lama ditolak `token_stale` saat feed aktif
+- [ ] 5.2 Jalankan `shared-service-apikey`, lalu `scripts/smoke.sh`; verifikasi keluar dengan kode 0 dan impor menghasilkan tepat tiga operasi; setelah `upstream/key-operations` diatur, verifikasi `data/keys.json` berisi key untuk Service Account dan smoke tetap lulus lewat proxy
+- [ ] 5.3 Jalankan `public-client-pkce` terhadap `inventaris` dan jalankan checklist uji manual README di browser (login, reload tetap login, panggil service, `invalid_scope` untuk service tanpa hak, logout, tab baru belum login); verifikasi setiap langkah memberi hasil yang diharapkan dan catat revisi `nice` yang dipakai di README ketiga contoh
+
+## Workflow follow-up
+
+- Kerjakan di worktree `.worktrees/example-add-integration-examples` (branch `feat/add-integration-examples` dari `main`), dengan direktori change dipindahkan ke worktree.
+- Setelah semua tugas tercentang dan tes terkait hijau, arsipkan change, commit di branch worktree, merge ke `main`, lalu hapus worktree dan branch `feat/add-integration-examples`. Push hanya bila diminta.
