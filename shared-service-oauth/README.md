@@ -39,6 +39,18 @@ Perilaku yang perlu diketahui:
 - Salinan JWKS disimpan di `JWKS_FILE`, sehingga service yang restart ketika NICE mati tetap memverifikasi token yang masih berlaku.
 - Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit) dan `DELETE /items/{id}` dijawab `503`.
 
+## Atribusi agen (`acted_by`)
+
+Backend yang menukar token user lewat token exchange, misalnya [`../agent-backend`](../agent-backend/README.md), memanggil service ini dengan token yang `sub`-nya tetap user dan klaim `act.sub`-nya `client_id` service client backend itu. Service memverifikasi token itu dengan langkah yang sama. Aktor tidak mendapat hak tambahan: izinnya tetap `perms` di token, yaitu izin user yang dipotong deklarasi dependensi service backend.
+
+Barang yang dibuat dengan token seperti itu mencatat keduanya:
+
+```json
+{"id": "itm_...", "name": "Kabel UTP", "quantity": 3, "created_by": "usr_...", "acted_by": "<client_id agen-backend>"}
+```
+
+Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `nicetoken` (`items.go`), dan tes `TestItemCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
+
 ## Prasyarat
 
 - Susunan direktori: `replace github.com/nice-platform/nice => ../../nice` di `go.mod` hanya berjalan bila repo `nice` berada di sebelah `example/`:

@@ -39,6 +39,18 @@ Behavior worth knowing:
 - A copy of the JWKS is kept at `JWKS_FILE`, so a service that restarts while NICE is down still verifies tokens that have not expired.
 - Without `NICE_SERVICE_API_KEY`, the service still runs and logs a warning at start: the access change feed is off (revocation takes effect only when the token expires, at most 30 minutes) and `DELETE /items/{id}` answers `503`.
 
+## Agent attribution (`acted_by`)
+
+A backend that exchanges the user's token through token exchange, for example [`../agent-backend`](../agent-backend/README.en.md), calls this service with a token whose `sub` is still the user and whose `act.sub` claim is the `client_id` of that backend's service client. The service verifies that token with the same steps. The actor gains no rights: the permissions are still the `perms` of the token, the user's permissions cut down to what the backend's service declared for this dependency.
+
+An item created with such a token records both:
+
+```json
+{"id": "itm_...", "name": "Kabel UTP", "quantity": 3, "created_by": "usr_...", "acted_by": "<client_id of agen-backend>"}
+```
+
+Without `act`, there is no `acted_by` field. The code reads it from `Claims.Actor` of `nicetoken` (`items.go`), and the test `TestItemCreatedByAnAgentRecordsTheActor` uses a test token that carries `act`.
+
 ## Prerequisites
 
 - Directory layout: the `replace github.com/nice-platform/nice => ../../nice` in `go.mod` only works when the `nice` repository sits next to `example/`:

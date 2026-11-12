@@ -2,7 +2,7 @@
 
 [Bahasa Indonesia](README.md)
 
-Four runnable examples of the ways a system connects to NICE. Each example stands alone with its own README, `.env.example`, tests, and NICE setup checklist.
+Five runnable examples of the ways a system connects to NICE. Each example stands alone with its own README, `.env.example`, tests, and NICE setup checklist.
 
 | Example | Use it when | Stack |
 |---|---|---|
@@ -10,6 +10,7 @@ Four runnable examples of the ways a system connects to NICE. Each example stand
 | [`shared-service-apikey/`](shared-service-apikey/README.en.md) | A legacy service that only knows its own API key. Clients call it through the NICE proxy `/<slug>/...` (`auth_mode: api_key`). | TypeScript + Hono, port 8082 |
 | [`public-client-pkce/`](public-client-pkce/README.en.md) | A browser app owned by one organization (tenant client) that signs in with a NICE account and calls `nice_token` services on the user's behalf. | Vite + React + `oauth4webapi`, port 5180 |
 | [`service-client-ui/`](service-client-ui/README.en.md) | A first-party service UI that serves many organizations (service client): contexts from `/api/v1/me/contexts`, organization and project switched by refresh. | Vite + React + `oauth4webapi`, port 5181 |
+| [`agent-backend/`](agent-backend/README.en.md) | An AI agent backend (MCP server) that runs tools against other services on behalf of the user through token exchange, without passing the user's token on. | Go + MCP Go SDK + `nice/pkg/niceclient`, port 8083 |
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
@@ -20,6 +21,12 @@ Four runnable examples of the ways a system connects to NICE. Each example stand
 ```text
  UI (service client) --PKCE, then refresh nice:aud:nice--> NICE /api/v1/me/contexts
  UI --refresh nice:org nice:aud:inventaris nice:prj--> NICE /oauth/token --> UI --Bearer JWT--> shared-service-oauth
+```
+
+```text
+ MCP client --Bearer JWT (aud=agen)--> agent-backend --token exchange--> NICE /oauth/token
+ agent-backend --Bearer exchanged JWT (aud=inventaris, act)--> shared-service-oauth
+ agent-backend --Bearer exchanged JWT (aud=pengiriman)--> NICE /pengiriman/... --> shared-service-apikey
 ```
 
 The SPA does not call the `api_key` service because CORS does not cover the NICE proxy path `/<slug>/...`.
@@ -34,10 +41,11 @@ The SPA protocol code (`oidc.ts`, the token manager, the fake NICE for tests) is
 | `shared-service-apikey` | `2638605` (mirrored keys reach the upstream through the proxy) |
 | `public-client-pkce` | `c7a5086`; without `NICE_CORS_ALLOWED_ORIGINS` from `60939ed` (`add-delegated-nice-api`) |
 | `service-client-ui` | `8160ac4` (`add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`) |
+| `agent-backend` | `6cc9986` (plus `add-token-exchange`); `acted_by` in `shared-service-oauth` needs this revision too |
 
 ## Prerequisites
 
-- Directory layout: `nice/` must sit next to `example/`. The Go example uses `nice/pkg/nicetoken` through `replace ../../nice`.
+- Directory layout: `nice/` must sit next to `example/`. The Go examples use `nice/pkg/nicetoken` and `nice/pkg/niceclient` through `replace ../../nice`.
 - A dev NICE running on the host (`cd nice && make db && make migrate && make dev`, `http://localhost:8080`).
 - Settings in `nice/.env` (restart NICE after changing them):
 
@@ -53,10 +61,10 @@ Register service endpoints with `127.0.0.1`, not `localhost`, so NICE never trie
 
 ## Setup in NICE
 
-Service registration, catalog import, entitlement, activation, bindings, OAuth clients, Service Accounts, and API keys are done by hand. Each example's README holds a numbered checklist with the console steps and equivalent `curl` snippets. When a check fails, `scripts/smoke.sh` in both service examples names the step that was probably missed.
+Service registration, catalog import, entitlement, activation, bindings, OAuth clients, Service Accounts, and API keys are done by hand. Each example's README holds a numbered checklist with the console steps and equivalent `curl` snippets. When a check fails, `scripts/smoke.sh` in the service examples and in `agent-backend` names the step that was probably missed.
 
 ## NICE contracts followed
 
 - [`nice/docs/token-verification.md`](../nice/docs/token-verification.md): token verification in a service, the access change feed, and sensitive operations.
 - [`nice/docs/gateway-integration.md`](../nice/docs/gateway-integration.md): the service and client integration flow.
-- [`nice/docs/api.md`](../nice/docs/api.md): sections "Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", and "Konteks pemanggil".
+- [`nice/docs/api.md`](../nice/docs/api.md): sections "Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil", and "Token exchange: backend atas nama user".

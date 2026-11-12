@@ -105,3 +105,33 @@ func TestUpdateRefusesInvalidInputAndKeepsTheItem(t *testing.T) {
 		t.Fatalf("quantity changed to %d", got.Quantity)
 	}
 }
+
+func TestItemCreatedByAnAgentRecordsTheActor(t *testing.T) {
+	e := newTestEnv(t, nil)
+	c := claims(orgA, permCreate, permRead)
+	c["act"] = map[string]any{"sub": "agen-backend-client"}
+	tok := sign(t, c)
+	r := e.do(http.MethodPost, "/items", tok, map[string]any{"name": "Kabel", "quantity": 1})
+	if r.Status != http.StatusCreated {
+		t.Fatalf("create = %d %s", r.Status, r.Body)
+	}
+	created := r.JSON(t)
+	if created["created_by"] != "usr_test" || created["acted_by"] != "agen-backend-client" {
+		t.Fatalf("created = %v, want created_by the user and acted_by the agent's client", created)
+	}
+	r = e.do(http.MethodGet, "/items/"+created["id"].(string), tok, nil)
+	if r.JSON(t)["acted_by"] != "agen-backend-client" {
+		t.Fatalf("get = %s, want acted_by kept", r.Body)
+	}
+}
+
+func TestItemCreatedByTheUserHasNoActor(t *testing.T) {
+	e := newTestEnv(t, nil)
+	r := e.do(http.MethodPost, "/items", token(t, orgA, permCreate), map[string]any{"name": "Kabel", "quantity": 1})
+	if r.Status != http.StatusCreated {
+		t.Fatalf("create = %d %s", r.Status, r.Body)
+	}
+	if _, ok := r.JSON(t)["acted_by"]; ok {
+		t.Fatalf("created = %s, want no acted_by without act", r.Body)
+	}
+}

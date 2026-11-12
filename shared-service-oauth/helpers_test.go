@@ -174,7 +174,7 @@ func (e *testEnv) do(method, path, token string, body any, headers ...string) re
 func (e *testEnv) create(org, name string) Item {
 	e.t.Helper()
 	_ = e.store.CreateTenant(context.Background(), org)
-	return e.store.Create(org, name, 1, "usr_test")
+	return e.store.Create(org, name, 1, "usr_test", "")
 }
 
 func wantError(t *testing.T, r response, status int, code, description string) {

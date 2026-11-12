@@ -63,6 +63,13 @@ Key berbentuk `pgk_` + 32 byte acak base64url, dan id-nya `key_` + 24 karakter h
 
 Middleware `X-Api-Key` (`src/auth.ts`) menghitung SHA-256 nilai yang dikirim, lalu membandingkannya dengan `crypto.timingSafeEqual` terhadap hash kredensial service dan hash setiap mirrored key aktif. Jenis kredensial (`service` atau `mirrored`) dicatat di konteks request dan di log. Nilai kredensial dan key tidak pernah ditulis ke log.
 
+## Dipanggil oleh backend agen
+
+Backend agen [`../agent-backend`](../agent-backend/README.md) memanggil service ini atas nama user lewat proxy NICE, sama seperti klien lain. Ia menukar token user menjadi token `aud=pengiriman` lewat token exchange, lalu memanggil `<NICE>/pengiriman/shipments`. Proxy memeriksa izin dari `perms` token itu, yaitu izin user yang dipotong deklarasi dependensi `agen`.
+
+- **Tanpa aktor.** Proxy hanya meneruskan `X-Nice-Organization`, `X-Nice-Project`, dan `X-Nice-Principal`, tidak klaim `act`. `created_by` berisi user, dan service ini tidak tahu bahwa yang bertindak adalah agen. Service `nice_token` seperti `inventaris` bisa mencatat aktornya sebagai `acted_by`.
+- **Mirrored key menolak user.** Setelah langkah 12, proxy hanya menerima Service Account. Token hasil exchange berprincipal user, jadi dijawab 403 `service_account_required`, dan tool agen untuk `pengiriman` mengembalikan galat itu. Jalankan contoh agen terhadap `pengiriman` tanpa langkah 12.
+
 ## Prasyarat
 
 - Node.js 22.18 atau lebih baru (menjalankan `.ts` langsung lewat type stripping, tanpa build) dan npm.
