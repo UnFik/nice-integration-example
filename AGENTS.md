@@ -1,6 +1,6 @@
 # Contoh integrasi NICE: panduan untuk agen
 
-Repo ini berisi empat contoh integrasi dengan NICE yang **berdiri sendiri**. Contoh-contoh ini tidak berbagi kode. Duplikasi kecil di antaranya disengaja, supaya mitra bisa menyalin satu contoh tanpa membuka contoh lain.
+Repo ini berisi lima contoh integrasi dengan NICE yang **berdiri sendiri**. Contoh-contoh ini tidak berbagi kode. Duplikasi kecil di antaranya disengaja, supaya mitra bisa menyalin satu contoh tanpa membuka contoh lain.
 
 | Folder | Peran di NICE | Stack | Port |
 |---|---|---|---|
@@ -8,8 +8,9 @@ Repo ini berisi empat contoh integrasi dengan NICE yang **berdiri sendiri**. Con
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
 | `service-client-ui/` | Service client `public` (PKCE) terikat ke `inventaris` | Vite + React 19 + TypeScript | 5181 |
+| `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service lain lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceclient` | 8083 |
 
-`shared-service-oauth` memakai `replace github.com/nice-platform/nice => ../../nice`, jadi repo `nice` harus berada di sebelah `example/`.
+`shared-service-oauth` dan `agent-backend` memakai `replace github.com/nice-platform/nice => ../../nice`, jadi repo `nice` harus berada di sebelah `example/`.
 
 ## Perintah
 
@@ -31,9 +32,13 @@ npm test | npm run typecheck | npm run build
 cd service-client-ui
 npm run dev                        http://localhost:5181
 npm test | npm run typecheck | npm run build
+
+cd agent-backend
+make run | make test               jalankan agen / tes unit dengan -race (tanpa NICE)
+make smoke                         uji terhadap NICE yang sudah diatur (baca .env dan AGENT_USER_TOKEN)
 ```
 
-Versi NICE minimum per contoh ada di `README.md` akar. `service-client-ui` butuh `nice` `8160ac4` atau sesudahnya.
+Versi NICE minimum per contoh ada di `README.md` akar. `service-client-ui` butuh `nice` `8160ac4` atau sesudahnya, dan `agent-backend` butuh `6cc9986` atau sesudahnya.
 
 ## Aturan
 
@@ -43,11 +48,11 @@ Versi NICE minimum per contoh ada di `README.md` akar. `service-client-ui` butuh
 - **Rahasia.** Jangan menulis rahasia ke berkas yang di-commit. `.env` dan `data/` di-ignore, dan `.env.example` hanya berisi placeholder. Nilai kredensial, API key, dan token tidak boleh muncul di log, respons galat, atau keluaran `smoke.sh`.
 - **Tes.** Tes unit tidak boleh butuh NICE yang berjalan. Hanya `scripts/smoke.sh` dan uji manual SPA yang menyentuh NICE.
 - **OpenAPI.** Dokumen ini adalah sumber katalog di NICE:
-  - Izin di dokumen harus sama dengan yang ditegakkan kode (`openapi_test.go` di Go dan `test/openapi.test.ts` di Hono menjaganya).
+  - Izin di dokumen harus sama dengan yang ditegakkan kode (`openapi_test.go` di Go dan `test/openapi.test.ts` di Hono menjaganya). `agent-backend/openapi.json` ditulis tangan, bukan hasil swag.
   - Operasi key (`/keys*`), `/healthz`, dan `/openapi.json` tidak boleh masuk dokumen.
   - Setelah mengubah anotasi swag, jalankan `make swag`.
 - **Checklist dan smoke.** Nomor langkah checklist di README dirujuk oleh `scripts/smoke.sh`. Mengubah urutan checklist berarti memperbarui skripnya juga.
-- **Kontrak NICE.** Kontrak yang diikuti ada di `nice/docs/token-verification.md`, `nice/docs/api.md` ("Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil"), dan `nice/docs/gateway-integration.md`. Bila kontrak berubah:
+- **Kontrak NICE.** Kontrak yang diikuti ada di `nice/docs/token-verification.md`, `nice/docs/api.md` ("Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil", "Token exchange: backend atas nama user"), dan `nice/docs/gateway-integration.md`. Bila kontrak berubah:
   1. Perbarui contoh yang terdampak.
   2. Jalankan ulang smoke dan uji manual.
   3. Perbarui baris "Diuji terhadap nice revisi" di README contoh itu.

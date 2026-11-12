@@ -19,7 +19,7 @@
 
 - [x] 4.1 `shared-service-oauth`: catat `acted_by` dari `Claims.Actor` saat membuat barang, perbarui anotasi swag dan `docs/swagger.json`, serta tes dengan token uji yang membawa `act`; verifikasi `make test` dan `make swag-check` lulus
 - [x] 4.2 `shared-service-oauth` README `id` dan `en`: atribusi agen lewat `acted_by`; `shared-service-apikey` README `id` dan `en`: pemanggilan oleh backend agen lewat proxy, tanpa aktor, dan penolakan `service_account_required` bila mirrored key aktif; verifikasi tautan relatif valid
-- [ ] 4.3 README indeks `id` dan `en` serta `AGENTS.md`: contoh baru, port 8083, perintah, dan versi NICE minimum; verifikasi tautan relatif valid dan perintah yang disebut ada di `Makefile`
+- [x] 4.3 README indeks `id` dan `en` serta `AGENTS.md`: contoh baru, port 8083, perintah, dan versi NICE minimum; verifikasi tautan relatif valid dan perintah yang disebut ada di `Makefile`
 
 ## 5. Dokumentasi contoh baru
 
