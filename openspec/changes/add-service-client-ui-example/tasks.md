@@ -2,7 +2,7 @@
 
 ## 1. Kerangka `service-client-ui`
 
-- [ ] 1.1 Buat proyek Vite + React 19 + TypeScript di `service-client-ui/` (port 5181 `strictPort`, `oauth4webapi`, Vitest, skrip `dev`/`build`/`test`/`typecheck`, `.env.example` dengan issuer, `client_id`, redirect URI, post-logout URI, dan endpoint `inventaris`); verifikasi `npm run typecheck` dan `npm run build` lulus
+- [x] 1.1 Buat proyek Vite + React 19 + TypeScript di `service-client-ui/` (port 5181 `strictPort`, `oauth4webapi`, Vitest, skrip `dev`/`build`/`test`/`typecheck`, `.env.example` dengan issuer, `client_id`, redirect URI, post-logout URI, dan endpoint `inventaris`); verifikasi `npm run typecheck` dan `npm run build` lulus
 
 ## 2. Protokol dan token
 
