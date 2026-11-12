@@ -62,7 +62,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `NICE_ISSUER` | wajib | issuer NICE, sama persis dengan klaim `iss` token. Tanpa nilai ini service berhenti dengan pesan yang menyebut `NICE_ISSUER` |
 | `LISTEN_ADDR` | `127.0.0.1:8081` | alamat listen |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser yang boleh memanggil, dipisah koma |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser yang boleh memanggil, dipisah koma. `.env.example` mengisinya `http://localhost:5180,http://localhost:5181`, untuk `public-client-pkce` dan `service-client-ui` |
 | `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed dan pemeriksaan online |
 | `SMOKE_SA_ID`, `SMOKE_API_KEY` | kosong | hanya dibaca `scripts/smoke.sh`: Service Account tenant dan API key-nya (langkah 10) |
 
@@ -112,7 +112,7 @@ NICE_OUTBOUND_ALLOW_HTTP=true
 NICE_OUTBOUND_ALLOW_CIDRS=127.0.0.0/8
 ```
 
-`NICE_OUTBOUND_ALLOW_CIDRS` berupa daftar CIDR dipisah koma. Origin SPA `http://localhost:5180` di `NICE_CORS_ALLOWED_ORIGINS` (mis. `http://localhost:5173,http://localhost:5180`) hanya dibutuhkan contoh `public-client-pkce`, bukan service ini.
+`NICE_OUTBOUND_ALLOW_CIDRS` berupa daftar CIDR dipisah koma. Service ini tidak butuh `NICE_CORS_ALLOWED_ORIGINS`. Contoh SPA (`public-client-pkce` di 5180, `service-client-ui` di 5181) juga tidak, pada NICE yang memuat `add-delegated-nice-api`: NICE mengizinkan origin redirect URI setiap OAuth client `public`.
 
 ### 2. Jalankan service
 

@@ -268,7 +268,7 @@ Paths are relative to `endpoint` + `base_path`, and NICE replaces `{key_id}` wit
 - A superadmin can see key metadata at `GET /api/v1/service-account-keys?service=pengiriman` (Console: **Platform Admin > Kunci Service Account**).
 - `scripts/smoke.sh` still passes, and the service log now records `credential=mirrored` for proxied requests.
 
-At nice revision `c7a5086` the proxy does not use mirrored keys yet: NICE creates the keys and lists them, but the proxy route table drops the per-account flag (`PerAccountKeys` is not copied in `nice/internal/bootstrap/proxy.go`), so the proxy keeps sending `SERVICE_CREDENTIAL`, the log records `credential=service`, and NICE users are not refused. With that field copied, the smoke test passes with `credential=mirrored` and a user gets 403 `service_account_required`.
+Up to nice revision `c7a5086`, the proxy did not use mirrored keys because the proxy route table dropped the per-account flag, so the proxy kept sending `SERVICE_CREDENTIAL` and the log recorded `credential=service`. The bug was fixed in nice `2638605`: mirrored keys now really reach the upstream, the smoke test passes with `credential=mirrored`, and a NICE user gets 403 `service_account_required`.
 
 Notes:
 

@@ -6,6 +6,17 @@ A React SPA that acts as a **tenant public OAuth client** of NICE. It signs in w
 
 Tested against nice revision: `c7a5086` (2026-11-13)
 
+### Tenant client or service client
+
+| | Tenant client (this example) | Service client ([`../service-client-ui`](../service-client-ui/README.en.md)) |
+| --- | --- | --- |
+| Owner | a project of a tenant organization | a project of the platform organization, bound to one service |
+| Organization | the client's organization only | every organization of the user entitled to that service; switched by a `nice:org` refresh |
+| Project of a service token | the client's project; `nice:prj` may be empty | `nice:prj` required, any project of the token's organization |
+| Context discovery | none; services come from `VITE_SERVICES` | `GET /api/v1/me/contexts` with a delegated NICE API token |
+
+Use this example for an application owned by one organization. A first-party service UI that serves many organizations uses `service-client-ui`.
+
 ## Contents
 
 | File | Contents |
@@ -39,13 +50,15 @@ PROJECT_ID=prj_...   # tenant project where inventaris is active
 
 ### 1. NICE env
 
-Add the SPA origin to `nice/.env`, then restart NICE. The list is comma separated, exact, with no trailing slash:
+On a NICE with the change `add-delegated-nice-api` (`nice` `60939ed` or later), nothing changes: NICE allows the redirect URI origin of every `public` OAuth client, including `http://localhost:5180` from step 2, within 60 seconds of the client being created. `NICE_CORS_ALLOWED_ORIGINS` is no longer required.
+
+On an older NICE, add the SPA origin to `nice/.env`, then restart NICE. The list is comma separated, exact, with no trailing slash:
 
 ```text
 NICE_CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5180
 ```
 
-Without it the browser refuses the answers of discovery, `/oauth/token`, `/oauth/userinfo`, and `/oauth/revoke`. `/oauth/authorize` and `/oauth/end_session` are full navigations, so they need no CORS.
+Without an allowed origin the browser refuses the answers of discovery, `/oauth/token`, `/oauth/userinfo`, and `/oauth/revoke`. `/oauth/authorize` and `/oauth/end_session` are full navigations, so they need no CORS.
 
 ### 2. Create a tenant `public` OAuth client
 
