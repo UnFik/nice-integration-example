@@ -7,7 +7,7 @@
 
 ## 2. Server MCP dan perlindungan
 
-- [ ] 2.1 Pasang `nicetoken` (`aud=agen`, `Require("agen.mcp.use")`) di depan handler Streamable HTTP `/mcp`, dan sajikan `/.well-known/oauth-protected-resource`; verifikasi tes: tanpa token 401 dengan `WWW-Authenticate`, `wrong_audience`, `permission_denied`, dan metadata menunjuk issuer NICE
+- [x] 2.1 Pasang `nicetoken` (`aud=agen`, `Require("agen.mcp.use")`) di depan handler Streamable HTTP `/mcp`, dan sajikan `/.well-known/oauth-protected-resource`; verifikasi tes: tanpa token 401 dengan `WWW-Authenticate`, `wrong_audience`, `permission_denied`, dan metadata menunjuk issuer NICE
 - [ ] 2.2 Implementasikan `callAs` di atas `niceclient.DoAs` dengan konteks bawaan dari klaim token user dan pemetaan galat ke hasil tool bertanda galat tanpa token atau body mentah; verifikasi tes dengan NICE palsu (exchange sukses, `access_denied`, `invalid_scope`) dan service palsu (`permission_denied`, satu pengulangan pada `token_stale`)
 
 ## 3. Tool
