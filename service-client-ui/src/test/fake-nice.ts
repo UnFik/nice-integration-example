@@ -100,6 +100,7 @@ export class FakeNice {
   sessionOrg = ORG_A;
   grantScopes: string[] = [...LOGIN_SCOPES];
   contextsPageSize?: number;
+  contextsOverride?: () => Response | undefined;
 
   readonly tokenRequests: URLSearchParams[] = [];
   readonly revokeRequests: URLSearchParams[] = [];
@@ -318,6 +319,8 @@ export class FakeNice {
 
   private contexts(url: URL, authorization: string | null): Response {
     this.contextsRequests.push({ url: url.href, authorization });
+    const override = this.contextsOverride?.();
+    if (override) return override;
     const claims = bearerClaims(authorization);
     if (!claims || claims.aud !== "nice") return apiError(401, "unauthenticated", "missing or invalid token");
     const perms = Array.isArray(claims.perms) ? claims.perms : [];
@@ -340,7 +343,9 @@ export class FakeNice {
         name: org.name,
         slug: org.slug,
         appearance: {},
-        projects: org.projects.map(({ id, name, slug, services }) => ({ id, name, slug, services })),
+        projects: org.projects
+          .filter((project) => project.services.length > 0)
+          .map(({ id, name, slug, services }) => ({ id, name, slug, services })),
         projects_truncated: false,
       })),
       page: more ? { next_page_token: page.at(-1)?.id } : {},

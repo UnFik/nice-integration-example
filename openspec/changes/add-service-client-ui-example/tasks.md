@@ -12,8 +12,8 @@
 
 ## 3. Layar
 
-- [ ] 3.1 Implementasikan identitas (token client lalu userinfo) dan pemilih konteks dari `/me/contexts` (organisasi tanpa project ditandai tidak tersedia, konteks aktif ditandai); verifikasi tes komponen bahwa pemilih hanya berisi konteks dari jawaban
-- [ ] 3.2 Implementasikan pindah konteks dengan satu refresh, tetap di konteks lama dan muat ulang konteks saat ditolak, dan daftar barang `inventaris` di konteks aktif; verifikasi tes alur penuh dengan NICE palsu dan `inventaris` palsu
+- [x] 3.1 Implementasikan identitas (token client lalu userinfo) dan pemilih konteks dari `/me/contexts` (organisasi tanpa project ditandai tidak tersedia, konteks aktif ditandai); verifikasi tes komponen bahwa pemilih hanya berisi konteks dari jawaban
+- [x] 3.2 Implementasikan pindah konteks dengan satu refresh, tetap di konteks lama dan muat ulang konteks saat ditolak, dan daftar barang `inventaris` di konteks aktif; verifikasi tes alur penuh dengan NICE palsu dan `inventaris` palsu
 
 ## 4. Dokumentasi contoh baru
 

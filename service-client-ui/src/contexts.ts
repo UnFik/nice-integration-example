@@ -15,6 +15,12 @@ export interface ContextOrganization {
   projectsTruncated: boolean;
 }
 
+// ActiveContext is the organization and project the UI works in.
+export interface ActiveContext {
+  org: string;
+  project?: string;
+}
+
 export interface Contexts {
   currentOrganizationId: string;
   organizations: ContextOrganization[];

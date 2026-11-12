@@ -181,3 +181,43 @@ button:focus-visible {
 details {
   margin-top: 8px;
 }
+
+.contexts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+.card.current {
+  border-color: var(--accent);
+}
+
+.badge {
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+.choices {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+
+.items th,
+.items td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
