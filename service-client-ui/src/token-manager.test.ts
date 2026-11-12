@@ -347,3 +347,50 @@ describe("session end and temporary failures", () => {
     expect(ended).not.toHaveBeenCalled();
   });
 });
+
+// These tests tamper with the request on its way to the fake NICE, the way a
+// client without nice:org or without the base scope would send it, and show
+// that the fake refuses it or answers in the wrong organization.
+describe("the fake NICE catches a client that", () => {
+  const strip = (pattern: RegExp) => (form: URLSearchParams) => {
+    form.set("scope", (form.get("scope") ?? "").split(" ").filter((s) => !pattern.test(s)).join(" "));
+    return undefined;
+  };
+
+  it("drops nice:org: the switch to B/R is refused, because R is not a project of A", async () => {
+    const tokens = await manager();
+    await tokens.token(AP);
+    nice.tokenOverride = strip(/^nice:org:/);
+
+    await expect(tokens.token(BR)).rejects.toMatchObject({ code: "invalid_scope" });
+    expect(nice.sessionOrg).toBe(ORG_A);
+  });
+
+  it("drops nice:org: the delegated token stays in the old organization", async () => {
+    const tokens = await manager();
+    await tokens.token(AP);
+    nice.tokenOverride = strip(/^nice:org:/);
+
+    expect(claimsOf(await tokens.token(niceIn(ORG_B))).nice_org_id).toBe(ORG_A);
+  });
+
+  it("drops the base scope: the next client token for userinfo is refused invalid_scope", async () => {
+    const tokens = await manager();
+    nice.tokenOverride = (form) =>
+      form.get("scope") === BASE_SCOPE ? undefined : strip(/^(openid|profile|email|offline_access)$/)(form);
+    await tokens.token(AP);
+
+    await expect(tokens.token({ org: ORG_A })).rejects.toMatchObject({ kind: "refused", code: "invalid_scope" });
+  });
+
+  it("relies on nice:org in scope: a refresh without scope stays in the organization of the refresh token", async () => {
+    const tokens = await manager();
+    await tokens.token(BR);
+    nice.tokenOverride = (form) => {
+      form.delete("scope");
+      return undefined;
+    };
+
+    expect(claimsOf(await tokens.token(AQ)).nice_org_id).toBe(ORG_B);
+  });
+});
