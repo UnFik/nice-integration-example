@@ -23,7 +23,7 @@
 
 - [x] 5.1 `shared-service-oauth`: tambah `http://localhost:5181` ke `CORS_ALLOWED_ORIGINS` di `.env.example` dan README; verifikasi tes konfigurasi `.env.example` tetap lulus
 - [x] 5.2 `public-client-pkce`: README `id` dan `en` menjelaskan client tenant lawan service client (tautan ke `service-client-ui`) dan bahwa `NICE_CORS_ALLOWED_ORIGINS` tidak wajib pada NICE dengan `add-delegated-nice-api`; verifikasi tautan relatif valid
-- [ ] 5.3 README indeks `id` dan `en` serta `AGENTS.md`: contoh baru, port 5181, perintah, versi NICE minimum per contoh, dan catatan bahwa kode protokol SPA diduplikasi di dua contoh; verifikasi tautan relatif valid
+- [x] 5.3 README indeks `id` dan `en` serta `AGENTS.md`: contoh baru, port 5181, perintah, versi NICE minimum per contoh, dan catatan bahwa kode protokol SPA diduplikasi di dua contoh; verifikasi tautan relatif valid
 
 ## 6. Verifikasi integrasi terhadap NICE dev
 
