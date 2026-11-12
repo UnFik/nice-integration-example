@@ -6,6 +6,17 @@ SPA React yang menjadi **OAuth client tenant bertipe public** di NICE. SPA masuk
 
 Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 
+### Client tenant atau service client
+
+| | Client tenant (contoh ini) | Service client ([`../service-client-ui`](../service-client-ui/README.md)) |
+| --- | --- | --- |
+| Pemilik | project di organisasi tenant | project di organisasi platform, diikat ke satu service |
+| Organisasi | hanya organisasi client | setiap organisasi user yang meng-entitle service itu; pindah lewat refresh `nice:org` |
+| Project token service | project client; `nice:prj` boleh kosong | `nice:prj` wajib, project mana pun di organisasi token |
+| Discovery konteks | tidak ada; service dari `VITE_SERVICES` | `GET /api/v1/me/contexts` dengan token API NICE terdelegasi |
+
+Pakai contoh ini untuk aplikasi milik satu organisasi. UI service first-party yang melayani banyak organisasi memakai `service-client-ui`.
+
 ## Isi
 
 | Berkas | Isi |
@@ -39,13 +50,15 @@ PROJECT_ID=prj_...   # project tenant tempat inventaris aktif
 
 ### 1. Env NICE
 
-Tambahkan origin SPA ke `nice/.env`, lalu jalankan ulang NICE. Daftar dipisah koma, persis tanpa garis miring di akhir:
+Pada NICE yang memuat change `add-delegated-nice-api` (`nice` `60939ed` atau sesudahnya), tidak ada yang perlu diubah: NICE mengizinkan origin redirect URI setiap OAuth client `public`, termasuk `http://localhost:5180` dari langkah 2, dalam 60 detik setelah client dibuat. `NICE_CORS_ALLOWED_ORIGINS` tidak wajib lagi.
+
+Pada NICE yang lebih lama, tambahkan origin SPA ke `nice/.env`, lalu jalankan ulang NICE. Daftar dipisah koma, persis tanpa garis miring di akhir:
 
 ```text
 NICE_CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5180
 ```
 
-Tanpa ini browser menolak jawaban discovery, `/oauth/token`, `/oauth/userinfo`, dan `/oauth/revoke`. `/oauth/authorize` dan `/oauth/end_session` adalah navigasi penuh, jadi tidak butuh CORS.
+Tanpa origin yang diizinkan, browser menolak jawaban discovery, `/oauth/token`, `/oauth/userinfo`, dan `/oauth/revoke`. `/oauth/authorize` dan `/oauth/end_session` adalah navigasi penuh, jadi tidak butuh CORS.
 
 ### 2. Buat OAuth client tenant `public`
 
