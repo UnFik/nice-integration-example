@@ -11,10 +11,12 @@ import (
 )
 
 type Item struct {
-	ID         string    `json:"id" example:"itm_3f2a9c0d1e4b5a6f7081920a3b4c5d6e"`
-	Name       string    `json:"name" example:"Kabel UTP Cat6"`
-	Quantity   int64     `json:"quantity" example:"12"`
-	CreatedBy  string    `json:"created_by" example:"usr_01a1..."`
+	ID        string `json:"id" example:"itm_3f2a9c0d1e4b5a6f7081920a3b4c5d6e"`
+	Name      string `json:"name" example:"Kabel UTP Cat6"`
+	Quantity  int64  `json:"quantity" example:"12"`
+	CreatedBy string `json:"created_by" example:"usr_01a1..."`
+	// ActedBy is act.sub of the token that created the item: the client of a backend acting for CreatedBy.
+	ActedBy    string    `json:"acted_by,omitempty" example:"cli_01a1..."`
 	CreateTime time.Time `json:"create_time"`
 	UpdateTime time.Time `json:"update_time"`
 } // @name Item
@@ -69,14 +71,14 @@ func (s *Store) Get(org, id string) (Item, bool) {
 	return it, ok
 }
 
-func (s *Store) Create(org, name string, quantity int64, createdBy string) Item {
+func (s *Store) Create(org, name string, quantity int64, createdBy, actedBy string) Item {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tenants[org] == nil {
 		s.tenants[org] = map[string]Item{}
 	}
 	now := s.now().UTC()
-	it := Item{ID: newItemID(), Name: name, Quantity: quantity, CreatedBy: createdBy, CreateTime: now, UpdateTime: now}
+	it := Item{ID: newItemID(), Name: name, Quantity: quantity, CreatedBy: createdBy, ActedBy: actedBy, CreateTime: now, UpdateTime: now}
 	s.tenants[org][it.ID] = it
 	return it
 }

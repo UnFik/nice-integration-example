@@ -82,7 +82,7 @@ func (a *api) getItem(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary		Create an item
-// @Description	The name is 1 to 120 characters after trimming; the quantity is an integer of at least 0. An invalid field is named in error_description.
+// @Description	The name is 1 to 120 characters after trimming; the quantity is an integer of at least 0. An invalid field is named in error_description. created_by is the user of the token; when a backend exchanged the user's token (the token carries act), acted_by is that backend's client.
 // @ID				createItem
 // @Tags			items
 // @Accept			json
@@ -107,7 +107,8 @@ func (a *api) createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claims, _ := nicetoken.FromContext(r.Context())
-	it := a.store.Create(org, name, quantity, claims.Subject)
+	// The user stays the creator; an agent that exchanged the user's token is recorded beside it.
+	it := a.store.Create(org, name, quantity, claims.Subject, claims.Actor)
 	w.Header().Set("Location", "/items/"+it.ID)
 	writeJSON(w, http.StatusCreated, it)
 }

@@ -58,7 +58,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "The name is 1 to 120 characters after trimming; the quantity is an integer of at least 0. An invalid field is named in error_description.",
+                "description": "The name is 1 to 120 characters after trimming; the quantity is an integer of at least 0. An invalid field is named in error_description. created_by is the user of the token; when a backend exchanged the user's token (the token carries act), acted_by is that backend's client.",
                 "consumes": [
                     "application/json"
                 ],
@@ -322,6 +322,11 @@
         "Item": {
             "type": "object",
             "properties": {
+                "acted_by": {
+                    "description": "ActedBy is act.sub of the token that created the item: the client of a backend acting for CreatedBy.",
+                    "type": "string",
+                    "example": "cli_01a1..."
+                },
                 "create_time": {
                     "type": "string"
                 },
