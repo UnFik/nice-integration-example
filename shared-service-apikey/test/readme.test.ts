@@ -38,6 +38,17 @@ describe.each(readmes)("$file", ({ file, config }) => {
     }
   });
 
+  it("reads the registration and activation answers inside shared_service", () => {
+    // NICE answers both with {"shared_service": {...}}; a filter on top-level fields prints only nulls.
+    for (const step of [4, 6]) {
+      const start = text.indexOf(`\n### ${step}. `);
+      const body = text.slice(start, text.indexOf("\n### ", start + 1));
+      const filters = [...body.matchAll(/\| jq '([^']*)'/g)].map((m) => m[1]);
+      expect(filters, `step ${step}`).not.toHaveLength(0);
+      for (const filter of filters) expect(filter, `step ${step}`).toMatch(/^\.shared_service \|/);
+    }
+  });
+
   it("numbers the checklist 1 to 12 with no gaps", () => {
     expect(stepHeadings(text)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
   });

@@ -13,7 +13,7 @@ This service does not verify JWTs and does not check permissions. Both are the p
 
 NICE contract followed: `nice/docs/api.md` sections "Service api_key dan proxy", "Kunci per Service Account (mirrored key)", and "Service Account: `client_credentials`", plus `nice/docs/gateway-integration.md` section "Service lama yang tidak bisa diubah".
 
-Tested against nice revision: `<fill in later>`
+Tested against nice revision: `c7a5086` (2026-11-13)
 
 ## Warning: `X-Nice-*` headers
 
@@ -55,7 +55,7 @@ NICE calls the three key operations after step 12 (optional). NICE sends the ser
 
 | Operation | Answer |
 |---|---|
-| `POST /keys` body `{"label":"sa_..."}` | 201 `{"key_id","key"}`. The key is accepted by the shipment operations at once |
+| `POST /keys` body `{"label":"<uuid>"}` | 201 `{"key_id","key"}`. The key is accepted by the shipment operations at once |
 | `POST /keys/{key_id}/rotate` | 200 `{"key_id","key"}` with the same `key_id`; the old key is rejected at once. 404 when the id is unknown or already revoked. The `{"key_id"}` body NICE sends is ignored |
 | `DELETE /keys/{key_id}` | 204 (also for a key that is already revoked); 404 when the id is unknown. NICE treats 404 as already revoked |
 
@@ -67,7 +67,7 @@ The `X-Api-Key` middleware (`src/auth.ts`) hashes the presented value with SHA-2
 
 - Node.js 22.18 or later (runs `.ts` directly through type stripping, no build) and npm.
 - `curl` and `jq` for the checklist and the smoke script.
-- A running NICE dev (`make dev` in `nice/`), with the `nice/` repo next to `example/`.
+- A running NICE dev (`make dev` in `nice/`, `http://localhost:8080` by default), with the `nice/` repo next to `example/`. For NICE at another address, set `NICE_URL` in `.env`; the checklist and the smoke test read it from there.
 
 ## Configuration
 
@@ -155,12 +155,12 @@ Console: **Platform Admin > Shared Service**, register a new service in `api_key
 jq -n '{slug: "pengiriman", name: "Pengiriman", endpoint: "http://127.0.0.1:8082", health_path: "/healthz",
         auth_mode: "api_key", upstream: {credential: {header: "X-Api-Key", value: env.SERVICE_CREDENTIAL}}}' |
   curl -sS -X POST "$NICE/api/v1/shared-services" -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H 'Content-Type: application/json' -d @- | jq '{slug, auth_mode, status, upstream}'
+    -H 'Content-Type: application/json' -d @- | jq '.shared_service | {slug, auth_mode, status, credential}'
 ```
 
 - `endpoint` is `http://127.0.0.1:8082`, not `localhost`. `localhost` may resolve to `::1`, which the service does not listen on and which is outside `127.0.0.0/8`.
 - `base_path` is left empty, so `<NICE>/pengiriman/shipments` is forwarded to `http://127.0.0.1:8082/shipments`.
-- `upstream.credential`: `header` `X-Api-Key`, **no** `scheme`, and `value` exactly equal to `SERVICE_CREDENTIAL`. The value is write-only: the response shows only `configured`. Replace it with `PUT /api/v1/shared-services/pengiriman/upstream/credential`.
+- `upstream.credential`: `header` `X-Api-Key`, **no** `scheme`, and `value` exactly equal to `SERVICE_CREDENTIAL`. The value is write-only: the response shows only `credential.header` and `credential.configured`. Replace it with `PUT /api/v1/shared-services/pengiriman/upstream/credential`.
 - `health_path` `/healthz` is open without a credential, because the NICE probe sends none.
 
 ### 5. Import `/openapi.json`
@@ -184,7 +184,7 @@ The preview must show exactly three operations: `listShipments` (`pengiriman.shi
 Console: the `pengiriman` service page, activate. Or:
 
 ```bash
-curl -sS -X POST "$NICE/api/v1/shared-services/pengiriman/activate" -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{slug, status}'
+curl -sS -X POST "$NICE/api/v1/shared-services/pengiriman/activate" -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.shared_service | {slug, status}'
 ```
 
 ### 7. Organization entitlement
@@ -227,6 +227,8 @@ curl -sS -X POST "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -H "Authoriza
   -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$SA_ID\",\"role\":\"pengiriman.admin\"}"
 ```
 
+IAM learns about a new Service Account asynchronously. A binding made right after step 9 can be answered 400 `principal_not_in_org`, and one made right after step 8 400 `service_not_active`; wait a few seconds and repeat.
+
 ### 11. Service Account API key
 
 Console: the same Service Account page, create an API key whose allowed services include `pengiriman`. Or:
@@ -261,10 +263,12 @@ curl -sS -X PUT "$NICE/api/v1/shared-services/pengiriman/upstream/key-operations
 
 Paths are relative to `endpoint` + `base_path`, and NICE replaces `{key_id}` with the key id. To check the result:
 
-- NICE sweeps active Service Accounts at start and on every role, catalog, or entitlement change (at least 30 seconds apart). After that the service log shows `key generated key_id=key_... label=sa_...`.
-- `jq . data/keys.json` shows a key whose `label` equals `SA_ID` with `status` `active`, and no key value.
+- NICE sweeps active Service Accounts at start and on every role, catalog, or entitlement change (at least 30 seconds apart), and syncs one Service Account when its binding changes. Saving the key operations does not start a sweep by itself: when the Service Account already had its binding (step 10), restart NICE or remove and recreate the binding. After that the service log shows `key generated key_id=key_... label=<uuid>`. The label is the Service Account id without the `sa_` prefix.
+- `jq . data/keys.json` shows a key whose `label` equals `SA_ID` without `sa_`, with `status` `active`, and no key value.
 - A superadmin can see key metadata at `GET /api/v1/service-account-keys?service=pengiriman` (Console: **Platform Admin > Kunci Service Account**).
 - `scripts/smoke.sh` still passes, and the service log now records `credential=mirrored` for proxied requests.
+
+At nice revision `c7a5086` the proxy does not use mirrored keys yet: NICE creates the keys and lists them, but the proxy route table drops the per-account flag (`PerAccountKeys` is not copied in `nice/internal/bootstrap/proxy.go`), so the proxy keeps sending `SERVICE_CREDENTIAL`, the log records `credential=service`, and NICE users are not refused. With that field copied, the smoke test passes with `credential=mirrored` and a user gets 403 `service_account_required`.
 
 Notes:
 

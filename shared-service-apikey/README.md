@@ -13,7 +13,7 @@ Service ini tidak memverifikasi JWT dan tidak memeriksa izin. Keduanya tugas pro
 
 Kontrak NICE yang diikuti: `nice/docs/api.md` bagian "Service api_key dan proxy", "Kunci per Service Account (mirrored key)", dan "Service Account: `client_credentials`", serta `nice/docs/gateway-integration.md` bagian "Service lama yang tidak bisa diubah".
 
-Diuji terhadap nice revisi: `<diisi nanti>`
+Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 
 ## Peringatan: header `X-Nice-*`
 
@@ -55,7 +55,7 @@ Ketiga operasi key dipanggil NICE setelah langkah 12 (opsional). NICE mengirim k
 
 | Operasi | Jawaban |
 |---|---|
-| `POST /keys` body `{"label":"sa_..."}` | 201 `{"key_id","key"}`. Key langsung diterima di operasi pengiriman |
+| `POST /keys` body `{"label":"<uuid>"}` | 201 `{"key_id","key"}`. Key langsung diterima di operasi pengiriman |
 | `POST /keys/{key_id}/rotate` | 200 `{"key_id","key"}` dengan `key_id` yang sama; key lama langsung ditolak. 404 bila id tidak dikenal atau sudah dicabut. Body `{"key_id"}` dari NICE diabaikan |
 | `DELETE /keys/{key_id}` | 204 (juga untuk key yang sudah dicabut); 404 bila id tidak dikenal. NICE menganggap 404 sebagai sudah dicabut |
 
@@ -67,7 +67,7 @@ Middleware `X-Api-Key` (`src/auth.ts`) menghitung SHA-256 nilai yang dikirim, la
 
 - Node.js 22.18 atau lebih baru (menjalankan `.ts` langsung lewat type stripping, tanpa build) dan npm.
 - `curl` dan `jq` untuk checklist dan skrip smoke.
-- NICE dev yang berjalan (`make dev` di `nice/`), dengan repo `nice/` berada di sebelah `example/`.
+- NICE dev yang berjalan (`make dev` di `nice/`, bawaan `http://localhost:8080`), dengan repo `nice/` berada di sebelah `example/`. Untuk NICE di alamat lain, isi `NICE_URL` di `.env`; checklist dan uji smoke membacanya dari sana.
 
 ## Konfigurasi
 
@@ -155,12 +155,12 @@ Console: **Platform Admin > Shared Service**, daftarkan service baru dengan mode
 jq -n '{slug: "pengiriman", name: "Pengiriman", endpoint: "http://127.0.0.1:8082", health_path: "/healthz",
         auth_mode: "api_key", upstream: {credential: {header: "X-Api-Key", value: env.SERVICE_CREDENTIAL}}}' |
   curl -sS -X POST "$NICE/api/v1/shared-services" -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H 'Content-Type: application/json' -d @- | jq '{slug, auth_mode, status, upstream}'
+    -H 'Content-Type: application/json' -d @- | jq '.shared_service | {slug, auth_mode, status, credential}'
 ```
 
 - `endpoint` ditulis `http://127.0.0.1:8082`, bukan `localhost`. `localhost` bisa teresolusi ke `::1`, yang tidak didengarkan service dan tidak termasuk `127.0.0.0/8`.
 - `base_path` dikosongkan, sehingga `<NICE>/pengiriman/shipments` diteruskan ke `http://127.0.0.1:8082/shipments`.
-- `upstream.credential`: `header` `X-Api-Key`, **tanpa** `scheme`, dan `value` sama persis dengan `SERVICE_CREDENTIAL`. Nilainya tulis-saja: respons hanya menampilkan `configured`. Untuk menggantinya pakai `PUT /api/v1/shared-services/pengiriman/upstream/credential`.
+- `upstream.credential`: `header` `X-Api-Key`, **tanpa** `scheme`, dan `value` sama persis dengan `SERVICE_CREDENTIAL`. Nilainya tulis-saja: respons hanya menampilkan `credential.header` dan `credential.configured`. Untuk menggantinya pakai `PUT /api/v1/shared-services/pengiriman/upstream/credential`.
 - `health_path` `/healthz` terbuka tanpa kredensial, karena probe NICE tidak membawa kredensial.
 
 ### 5. Impor `/openapi.json`
@@ -184,7 +184,7 @@ Pratinjau harus menampilkan tepat tiga operasi: `listShipments` (`pengiriman.shi
 Console: halaman service `pengiriman`, aktifkan. Atau:
 
 ```bash
-curl -sS -X POST "$NICE/api/v1/shared-services/pengiriman/activate" -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{slug, status}'
+curl -sS -X POST "$NICE/api/v1/shared-services/pengiriman/activate" -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.shared_service | {slug, status}'
 ```
 
 ### 7. Entitlement organisasi
@@ -227,6 +227,8 @@ curl -sS -X POST "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -H "Authoriza
   -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$SA_ID\",\"role\":\"pengiriman.admin\"}"
 ```
 
+IAM mengetahui Service Account baru secara asinkron. Binding yang dibuat tepat setelah langkah 9 bisa dijawab 400 `principal_not_in_org`, dan tepat setelah langkah 8 400 `service_not_active`; tunggu beberapa detik lalu ulangi.
+
 ### 11. API key Service Account
 
 Console: halaman Service Account tadi, buat API key dengan layanan yang diizinkan memuat `pengiriman`. Atau:
@@ -261,10 +263,12 @@ curl -sS -X PUT "$NICE/api/v1/shared-services/pengiriman/upstream/key-operations
 
 Path relatif terhadap `endpoint` + `base_path`, dan NICE mengganti `{key_id}` dengan id key. Untuk memeriksa hasilnya:
 
-- NICE menyapu Service Account aktif saat start dan setiap ada perubahan role, katalog, atau entitlement (jarak minimal 30 detik). Setelah itu log service memuat `key generated key_id=key_... label=sa_...`.
-- `jq . data/keys.json` menampilkan key dengan `label` sama dengan `SA_ID` dan `status` `active`, tanpa nilai key.
+- NICE menyapu Service Account aktif saat start dan setiap ada perubahan role, katalog, atau entitlement (jarak minimal 30 detik), dan menyinkronkan satu Service Account saat binding-nya berubah. Menyimpan operasi key tidak memicu penyapuan: bila Service Account sudah punya binding (langkah 10), jalankan ulang NICE atau cabut lalu buat ulang binding-nya. Setelah itu log service memuat `key generated key_id=key_... label=<uuid>`. Label berisi id Service Account tanpa awalan `sa_`.
+- `jq . data/keys.json` menampilkan key dengan `label` sama dengan `SA_ID` tanpa `sa_` dan `status` `active`, tanpa nilai key.
 - Superadmin dapat melihat metadata key di `GET /api/v1/service-account-keys?service=pengiriman` (Console: **Platform Admin > Kunci Service Account**).
 - `scripts/smoke.sh` tetap lulus, dan log service kini mencatat `credential=mirrored` untuk request lewat proxy.
+
+Pada nice revisi `c7a5086` proxy belum memakai mirrored key: NICE membuat dan mendaftar key-nya, tetapi tabel rute proxy kehilangan tanda per akun (`PerAccountKeys` tidak disalin di `nice/internal/bootstrap/proxy.go`). Akibatnya proxy tetap mengirim `SERVICE_CREDENTIAL`, log mencatat `credential=service`, dan user NICE tidak ditolak. Dengan field itu disalin, smoke lulus dengan `credential=mirrored` dan user mendapat 403 `service_account_required`.
 
 Catatan:
 
