@@ -17,7 +17,7 @@
 
 ## 4. Dokumentasi contoh baru
 
-- [ ] 4.1 Tulis `README.md` dan `README.en.md`: versi NICE minimum, checklist setup manual (client `public` di project organisasi platform diikat ke `inventaris`, dependensi `inventaris` → `nice` dengan `nice.me.contexts.read`, dua organisasi ber-entitlement), cara menjalankan, dan checklist uji manual per requirement; verifikasi nama variabel sama dengan `.env.example` dan tautan relatif valid
+- [x] 4.1 Tulis `README.md` dan `README.en.md`: versi NICE minimum, checklist setup manual (client `public` di project organisasi platform diikat ke `inventaris`, dependensi `inventaris` → `nice` dengan `nice.me.contexts.read`, dua organisasi ber-entitlement), cara menjalankan, dan checklist uji manual per requirement; verifikasi nama variabel sama dengan `.env.example` dan tautan relatif valid
 
 ## 5. Penyesuaian contoh lain
 
