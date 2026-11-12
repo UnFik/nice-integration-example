@@ -262,11 +262,15 @@ export class FakeNice {
     const [orgs, auds, prjs] = [named("nice:org:"), named("nice:aud:"), named("nice:prj:")];
     if (orgs.length > 1 || auds.length > 1 || prjs.length > 1) return refuse("at most one nice:org, nice:aud, nice:prj");
 
-    const orgId = orgs[0] ?? this.sessionOrg;
-    if (orgs[0] !== undefined) {
+    // Like NICE, nice:org only counts when the request sends scope; grant
+    // scopes left over from an earlier switch never move the session.
+    const switchTo = body.has("scope") ? orgs[0] : undefined;
+    const orgId = switchTo ?? this.sessionOrg;
+    if (switchTo !== undefined) {
       const target = this.org(orgId);
       if (!target || !usable(target)) {
-        return json(400, { error: "access_denied", error_description: "the organization may not be used with this client" });
+        const description = target?.member ? "the organization is not entitled to the service of this client" : "organization is not usable";
+        return json(400, { error: "access_denied", error_description: description });
       }
     }
     const [aud, prj] = [auds[0], prjs[0]];

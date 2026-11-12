@@ -1,19 +1,14 @@
 import { type Claims, decodeClaims, tokenTimes } from "./jwt";
-import { BASE_SCOPE, type ServiceKey, scopeOf } from "./scope";
+import { scopeFor, type TokenKey } from "./scope";
 import { type KeyValueStorage, keys } from "./storage";
 
-export type { ServiceKey };
+export type { TokenKey };
 
-// CLIENT_KEY names the token asked with the base scope only: its aud is the
-// client_id, which is the only audience /oauth/userinfo accepts.
-export const CLIENT_KEY = "client";
+// An entry asked before the organization of the session is known waits under
+// this organization and moves to the real one when its token arrives.
+const UNKNOWN_ORG = "?";
 
-export type TokenKey = ServiceKey | typeof CLIENT_KEY;
-
-export const keyOf = (key: TokenKey): string =>
-  key === CLIENT_KEY ? CLIENT_KEY : `${key.slug}|${key.project ?? ""}`;
-
-const scopeFor = (key: TokenKey): string => (key === CLIENT_KEY ? BASE_SCOPE : scopeOf(key));
+const keyOf = (org: string, key: TokenKey): string => `${org}|${key.service ?? ""}|${key.project ?? ""}`;
 
 export type TokenErrorKind = "temporary" | "refused" | "session_ended";
 
@@ -45,8 +40,10 @@ export type RefreshGrant = (
 
 export interface TokenView {
   key: string;
+  org: string;
   // service is undefined for the client token.
-  service?: ServiceKey;
+  service?: string;
+  project?: string;
   access: string;
   claims: Claims | undefined;
   issuedAt: number;
@@ -76,6 +73,7 @@ interface Held {
 }
 
 interface Entry {
+  id: string;
   target: TokenKey;
   token?: Held;
   inflight?: Promise<string>;
@@ -84,9 +82,9 @@ interface Entry {
   lastError?: TokenError;
 }
 
-// TokenManager keeps one access token per (service, project), plus the client
-// token, for the signed-in user and gets them with the refresh token, like
-// pkg/niceclient in NICE.
+// TokenManager keeps one access token per (organization, service, project)
+// for the signed-in user and gets them with the one refresh token of the
+// session, which NICE moves between organizations on nice:org.
 export class TokenManager {
   private readonly storage: KeyValueStorage;
   private readonly grant: RefreshGrant;
@@ -105,6 +103,9 @@ export class TokenManager {
   // NICE rotates the refresh token on every use, so refreshes run one at a time.
   private queue: Promise<unknown> = Promise.resolve();
   private ended?: TokenError;
+  // org is the organization the refresh token is bound to, read from the
+  // nice_org_id claim of the latest token NICE issued.
+  private org?: string;
   private closed = false;
   private view: TokenView[] = [];
 
@@ -120,6 +121,10 @@ export class TokenManager {
     this.safety = options.safetyMs ?? 60_000;
     this.minBackoff = options.minBackoffMs ?? 5_000;
     this.maxBackoff = options.maxBackoffMs ?? 60_000;
+  }
+
+  currentOrg(): string | undefined {
+    return this.org;
   }
 
   async token(key: TokenKey): Promise<string> {
@@ -141,7 +146,7 @@ export class TokenManager {
   // call sends a request with the token of service. A 401 token_stale or
   // expired gets one new token and one more attempt; the second answer is
   // returned whatever it is.
-  async call(service: ServiceKey, url: string, init: RequestInit = {}): Promise<Response> {
+  async call(service: TokenKey, url: string, init: RequestInit = {}): Promise<Response> {
     const access = await this.token(service);
     const response = await this.send(url, init, access);
     if (response.status !== 401 || !canResend(init.body) || !(await isStale(response))) return response;
@@ -153,6 +158,8 @@ export class TokenManager {
   // of the code exchange, under the same reuse rules as a refreshed one.
   hold(key: TokenKey, access: string, expiresIn?: number): void {
     this.assertOpen();
+    const org = orgOf(access);
+    if (org) this.org = org;
     const entry = this.entryFor(key);
     entry.token = this.held(access, expiresIn);
     entry.retryAt = 0;
@@ -162,7 +169,7 @@ export class TokenManager {
   }
 
   invalidate(key: TokenKey, access: string): void {
-    const entry = this.entries.get(keyOf(key));
+    const entry = this.entries.get(keyOf(key.org ?? this.org ?? UNKNOWN_ORG, key));
     if (entry?.token?.access !== access) return;
     entry.token = undefined;
     entry.retryAt = 0;
@@ -197,19 +204,28 @@ export class TokenManager {
   }
 
   private entryFor(key: TokenKey): Entry {
-    const id = keyOf(key);
+    const org = key.org ?? this.org;
+    const id = keyOf(org ?? UNKNOWN_ORG, key);
     let entry = this.entries.get(id);
     if (!entry) {
-      const target: TokenKey = key === CLIENT_KEY ? key : { slug: key.slug, project: key.project };
-      entry = { target, retryAt: 0, backoff: 0 };
+      entry = { id, target: { org, service: key.service, project: key.project }, retryAt: 0, backoff: 0 };
       this.entries.set(id, entry);
     }
     return entry;
   }
 
+  private file(entry: Entry, org: string | undefined): void {
+    if (entry.target.org || !org) return;
+    this.entries.delete(entry.id);
+    entry.target = { ...entry.target, org };
+    entry.id = keyOf(org, entry.target);
+    this.entries.set(entry.id, entry);
+  }
+
   private async renew(entry: Entry): Promise<string> {
     try {
       const fresh = await this.enqueue(() => this.refresh(entry.target));
+      this.file(entry, this.org);
       entry.token = fresh;
       entry.retryAt = 0;
       entry.backoff = 0;
@@ -254,7 +270,10 @@ export class TokenManager {
     this.assertOpen();
     const refreshToken = this.storage.getItem(keys.refreshToken);
     if (!refreshToken) throw new TokenError("session_ended", "Tidak ada refresh token di sessionStorage.");
-    const response = await this.grant(refreshToken, scopeFor(target), (rotated) => this.keep(rotated));
+    // The scope is decided here, inside the queue, because an earlier refresh
+    // in the queue may have moved the session to another organization.
+    const response = await this.grant(refreshToken, scopeFor(target, this.org), (rotated) => this.keep(rotated));
+    this.org = orgOf(response.access_token) ?? target.org ?? this.org;
     return this.held(response.access_token, response.expires_in);
   }
 
@@ -293,7 +312,9 @@ export class TokenManager {
         ? [
             {
               key,
-              ...(entry.target === CLIENT_KEY ? {} : { service: entry.target }),
+              org: entry.target.org ?? UNKNOWN_ORG,
+              ...(entry.target.service ? { service: entry.target.service } : {}),
+              ...(entry.target.project ? { project: entry.target.project } : {}),
               access: entry.token.access,
               claims: decodeClaims(entry.token.access),
               issuedAt: entry.token.issuedAt,
@@ -305,6 +326,11 @@ export class TokenManager {
     );
     for (const listener of this.listeners) listener();
   }
+}
+
+function orgOf(access: string): string | undefined {
+  const org = decodeClaims(access)?.nice_org_id;
+  return typeof org === "string" && org ? org : undefined;
 }
 
 function canResend(body: RequestInit["body"]): boolean {
