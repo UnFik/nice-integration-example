@@ -1,8 +1,7 @@
 import * as oauth from "oauth4webapi";
+import { BASE_SCOPE } from "./scope";
 import { type KeyValueStorage, keys } from "./storage";
 import { type GrantResponse, type RefreshGrant, TokenError } from "./token-manager";
-
-export const LOGIN_SCOPE = "openid profile offline_access";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const PERMANENT_GRANT_ERRORS = new Set(["invalid_grant", "invalid_client", "unauthorized_client"]);
@@ -45,7 +44,14 @@ interface LoginTransaction {
 
 export type CallbackOutcome =
   | { kind: "restart" }
-  | { kind: "signed-in"; accessToken: string; idToken: string; refreshToken: string; subject: string };
+  | {
+      kind: "signed-in";
+      accessToken: string;
+      expiresIn?: number;
+      idToken: string;
+      refreshToken: string;
+      subject: string;
+    };
 
 type HttpOptions = {
   [oauth.customFetch]: (url: string, options: oauth.CustomFetchOptions<string, unknown>) => Promise<Response>;
@@ -89,7 +95,7 @@ export class OidcClient {
       client_id: this.options.clientId,
       redirect_uri: this.options.redirectUri,
       response_type: "code",
-      scope: LOGIN_SCOPE,
+      scope: BASE_SCOPE,
       state: transaction.state,
       nonce: transaction.nonce,
       code_challenge: await oauth.calculatePKCECodeChallenge(transaction.verifier),
@@ -149,6 +155,7 @@ export class OidcClient {
     return {
       kind: "signed-in",
       accessToken: result.access_token,
+      expiresIn: result.expires_in,
       idToken: result.id_token,
       refreshToken: result.refresh_token,
       subject: claims.sub,
@@ -177,9 +184,9 @@ export class OidcClient {
     }
   };
 
-  async userinfo(accessToken: string, subject: string): Promise<oauth.UserInfoResponse> {
+  async userinfo(accessToken: string, subject: string | undefined): Promise<oauth.UserInfoResponse> {
     const response = await oauth.userInfoRequest(this.as, this.client, accessToken, this.http);
-    return oauth.processUserInfoResponse(this.as, this.client, subject, response);
+    return oauth.processUserInfoResponse(this.as, this.client, subject ?? oauth.skipSubjectCheck, response);
   }
 
   async revoke(refreshToken: string): Promise<void> {

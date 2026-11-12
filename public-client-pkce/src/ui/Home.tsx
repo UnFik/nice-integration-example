@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { decodeClaims } from "../jwt";
 import type { Session, SessionState } from "../session";
+import type { TokenView } from "../token-manager";
 import { ServicePanel } from "./ServicePanel";
 
 export function Home({ session, state }: { session: Session; state: SessionState }) {
   const { config } = session;
   const userinfo = state.identity?.userinfo;
   const name = typeof userinfo?.name === "string" && userinfo.name ? userinfo.name : undefined;
+  const clientToken = state.tokens.find((held) => !held.service);
   const [round, setRound] = useState(0);
 
   return (
@@ -34,16 +36,11 @@ export function Home({ session, state }: { session: Session; state: SessionState
             <dt>Nama</dt>
             <dd>{text(userinfo.name)}</dd>
             <dt>Email</dt>
-            <dd>
-              {text(userinfo.email ?? userinfo.preferred_username)}
-              {userinfo.email === undefined && userinfo.preferred_username !== undefined && (
-                <span className="muted"> (dari preferred_username)</span>
-              )}
-            </dd>
+            <dd>{text(userinfo.email)}</dd>
             <dt>nice_org_id</dt>
             <dd>
               <code>{text(state.identity?.orgId)}</code>
-              <span className="muted"> (dari access token login)</span>
+              <span className="muted"> (klaim access token client, bukan userinfo)</span>
             </dd>
           </dl>
         ) : (
@@ -88,27 +85,31 @@ export function Home({ session, state }: { session: Session; state: SessionState
           tokennya sendiri.
         </p>
         <div className="grid">
-          {state.loginAccessToken ? (
+          {clientToken ? (
             <TokenCard
-              title="Access token login"
-              note="Hanya di memori; hilang saat halaman dimuat ulang. aud berisi client_id SPA."
-              token={state.loginAccessToken}
+              title="Access token client"
+              note={`aud berisi client_id SPA; dipakai untuk userinfo. Setelah login ini token dari penukaran kode, setelah reload diambil lewat refresh dengan scope dasar saja. Hanya di memori. Dipakai ulang sampai ${reuseUntil(clientToken)}.`}
+              token={clientToken.access}
             />
           ) : (
             <article className="card">
-              <h3>Access token login</h3>
-              <p className="muted">Tidak dipegang lagi: access token hanya di memori dan hilang saat halaman dimuat ulang.</p>
+              <h3>Access token client</h3>
+              <p className="muted">Sedang diambil lewat refresh token dengan scope dasar.</p>
             </article>
           )}
           {state.idToken && <TokenCard title="ID token" note="Disimpan di sessionStorage." token={state.idToken} />}
-          {state.serviceTokens.map((held) => (
-            <TokenCard
-              key={held.key}
-              title={`Token service ${held.service.slug}${held.service.project ? ` (${held.service.project})` : ""}`}
-              note={`Hanya di memori. Dipakai ulang sampai ${time(Math.min(held.refreshAt, held.expiresAt - 60_000))}.`}
-              token={held.access}
-            />
-          ))}
+          {state.tokens.flatMap((held) =>
+            held.service
+              ? [
+                  <TokenCard
+                    key={held.key}
+                    title={`Token service ${held.service.slug}${held.service.project ? ` (${held.service.project})` : ""}`}
+                    note={`Hanya di memori. Dipakai ulang sampai ${reuseUntil(held)}.`}
+                    token={held.access}
+                  />,
+                ]
+              : [],
+          )}
         </div>
       </section>
     </main>
@@ -133,6 +134,10 @@ function TokenCard({ title, note, token }: { title: string; note: string; token:
 
 function text(value: unknown): string {
   return typeof value === "string" && value ? value : "-";
+}
+
+function reuseUntil(held: TokenView): string {
+  return time(Math.min(held.refreshAt, held.expiresAt - 60_000));
 }
 
 function time(ms: number): string {

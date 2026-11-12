@@ -7,7 +7,7 @@ Contoh SPA React yang menjadi public client tenant NICE: login lewat authorizati
 ## ADDED Requirements
 
 ### Requirement: Login dengan authorization code dan PKCE
-SPA SHALL memulai login dengan redirect ke endpoint authorize NICE memakai PKCE `S256`, `state`, dan `nonce` acak, dengan scope `openid profile offline_access`. Di `/callback`, SPA SHALL menolak `state` yang tidak cocok atau sudah dipakai, menukar kode dengan token, dan memeriksa `nonce` ID token. Kegagalan SHALL ditampilkan beserta tombol untuk mencoba lagi.
+SPA SHALL memulai login dengan redirect ke endpoint authorize NICE memakai PKCE `S256`, `state`, dan `nonce` acak, dengan scope dasar `openid profile email offline_access`. Di `/callback`, SPA SHALL menolak `state` yang tidak cocok atau sudah dipakai, menukar kode dengan token, dan memeriksa `nonce` ID token. Kegagalan SHALL ditampilkan beserta tombol untuk mencoba lagi.
 
 #### Scenario: Login berhasil
 - **WHEN** user menekan "Masuk", login di halaman NICE, lalu dikembalikan ke `/callback` dengan kode dan `state` yang cocok
@@ -22,11 +22,15 @@ SPA SHALL memulai login dengan redirect ke endpoint authorize NICE memakai PKCE 
 - **THEN** SPA memulai permintaan otorisasi baru tanpa menampilkan galat
 
 ### Requirement: Identitas user ditampilkan
-Setelah login, SPA SHALL menampilkan identitas dari `/oauth/userinfo` (paling sedikit `sub`, nama, email, dan `nice_org_id`) dan klaim setiap token yang dimilikinya dalam bentuk terdekode, dengan keterangan bahwa klaim yang ditampilkan tidak diverifikasi oleh SPA.
+Setelah login dan setelah reload, SPA SHALL menampilkan identitas dari `/oauth/userinfo` (`sub`, `name`, `email`) yang diambil dengan token client (`aud` = `client_id`), dan organisasi dari klaim `nice_org_id` token itu. SPA SHALL menampilkan klaim setiap token dalam bentuk terdekode, dengan keterangan bahwa klaim tidak diverifikasi SPA. Identitas SHALL NOT disimpan di penyimpanan browser.
 
 #### Scenario: Halaman utama
 - **WHEN** user sudah login
-- **THEN** halaman menampilkan userinfo dan klaim token login, termasuk `aud` yang berisi `client_id` SPA
+- **THEN** halaman menampilkan userinfo (`sub`, `name`, `email`), `nice_org_id` dari klaim token client, dan klaim token login, termasuk `aud` yang berisi `client_id` SPA
+
+#### Scenario: Identitas setelah reload
+- **WHEN** user yang sudah memanggil sebuah service me-reload halaman
+- **THEN** SPA mengambil token client lewat satu refresh dengan scope dasar, memanggil userinfo, dan menampilkan identitas tanpa redirect ke NICE
 
 ### Requirement: Daftar service dari konfigurasi
 SPA SHALL membaca daftar service dari konfigurasi. Setiap entri berisi slug, endpoint, path `GET` yang dipanggil, dan project yang opsional. Untuk setiap entri, SPA SHALL menyediakan aksi panggil yang menampilkan status HTTP, `error_description` bila ada, dan body jawaban. Daftar SHALL NOT diambil dari API NICE, karena token client non-sistem ditolak API NICE.
@@ -40,11 +44,15 @@ SPA SHALL membaca daftar service dari konfigurasi. Setiap entri berisi slug, end
 - **THEN** SPA menampilkan galat itu pada entri tersebut, dan entri lain tetap dapat dipanggil
 
 ### Requirement: Token per service lewat refresh token
-SPA SHALL memperoleh token untuk sebuah service dengan grant `refresh_token` yang memuat scope `nice:aud:<slug>` dan, bila diisi, `nice:prj:<project>`, tanpa login ulang. Token SHALL disimpan per pasangan (service, project) dan dipakai lagi selama berumur kurang dari sekitar 10 menit sejak terbit (dengan jitter) dan belum mendekati `exp`.
+SPA SHALL memperoleh token untuk sebuah service dengan grant `refresh_token` yang memuat scope dasar login ditambah `nice:aud:<slug>` dan, bila diisi, `nice:prj:<project>`, tanpa login ulang. Token SHALL disimpan per pasangan (service, project) dan dipakai lagi selama berumur kurang dari sekitar 10 menit sejak terbit (dengan jitter) dan belum mendekati `exp`.
 
 #### Scenario: Token dipakai lagi
 - **WHEN** user memanggil `inventaris` dua kali dalam satu menit
 - **THEN** SPA hanya sekali meminta token `inventaris` ke NICE
+
+#### Scenario: Grant tetap memuat scope dasar
+- **WHEN** user memanggil `inventaris`, lalu SPA meminta token client dengan scope dasar saja
+- **THEN** NICE menerbitkan token client tanpa `invalid_scope`
 
 #### Scenario: Service kedua tanpa login ulang
 - **WHEN** user yang sudah memanggil `inventaris` kemudian memanggil service kedua dari konfigurasi

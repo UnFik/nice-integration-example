@@ -4,7 +4,6 @@ export const keys = {
   refreshToken: `${PREFIX}refresh_token`,
   idToken: `${PREFIX}id_token`,
   login: `${PREFIX}login`,
-  identity: `${PREFIX}identity`,
 } as const;
 
 export type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;

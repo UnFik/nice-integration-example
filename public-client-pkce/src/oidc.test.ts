@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { InsecureIssuerError, issuerTransport, LOGIN_SCOPE, LoginError, OidcClient } from "./oidc";
+import { InsecureIssuerError, issuerTransport, LoginError, OidcClient } from "./oidc";
+import { BASE_SCOPE } from "./scope";
 import { keys } from "./storage";
 import { CLIENT_ID, FakeNice, POST_LOGOUT_URI, REDIRECT_URI, SUBJECT } from "./test/fake-nice";
 import { MemoryStorage } from "./test/memory-storage";
@@ -28,7 +29,7 @@ async function s256(verifier: string): Promise<string> {
 }
 
 describe("authorization request", () => {
-  it("uses PKCE S256, a random state and nonce, and the login scope", async () => {
+  it("uses PKCE S256, a random state and nonce, and the base scope", async () => {
     const oidc = await client();
     const url = new URL(await oidc.authorizationUrl(storage));
     const transaction = JSON.parse(storage.getItem(keys.login) ?? "{}");
@@ -37,8 +38,8 @@ describe("authorization request", () => {
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("client_id")).toBe(CLIENT_ID);
     expect(url.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
-    expect(url.searchParams.get("scope")).toBe(LOGIN_SCOPE);
-    expect(LOGIN_SCOPE).toBe("openid profile offline_access");
+    expect(url.searchParams.get("scope")).toBe(BASE_SCOPE);
+    expect(BASE_SCOPE).toBe("openid profile email offline_access");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.get("code_challenge")).toBe(await s256(transaction.verifier));
     expect(url.searchParams.get("state")).toBe(transaction.state);
@@ -66,6 +67,7 @@ describe("callback", () => {
     const exchange = nice.tokenRequests[0];
     expect(exchange.get("grant_type")).toBe("authorization_code");
     expect(exchange.get("code_verifier")).toBeTruthy();
+    expect(nice.grantScopes).toEqual(["openid", "profile", "email", "offline_access"]);
   });
 
   it("rejects a state it did not create, without exchanging the code", async () => {

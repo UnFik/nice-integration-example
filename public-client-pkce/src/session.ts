@@ -2,7 +2,7 @@ import type { AppConfig, ServiceConfig } from "./config";
 import { decodeClaims } from "./jwt";
 import { OidcClient } from "./oidc";
 import { clearSession, type KeyValueStorage, keys } from "./storage";
-import { type TokenError, TokenManager, type TokenView } from "./token-manager";
+import { CLIENT_KEY, TokenError, TokenManager, type TokenView } from "./token-manager";
 
 export interface Identity {
   userinfo: Record<string, unknown>;
@@ -16,9 +16,8 @@ export interface SessionState {
   message?: string;
   identity?: Identity;
   identityError?: string;
-  loginAccessToken?: string;
   idToken?: string;
-  serviceTokens: TokenView[];
+  tokens: TokenView[];
 }
 
 export interface SessionDeps {
@@ -31,7 +30,7 @@ export interface SessionDeps {
 }
 
 export class Session {
-  private state: SessionState = { phase: "starting", serviceTokens: [] };
+  private state: SessionState = { phase: "starting", tokens: [] };
   private readonly listeners = new Set<() => void>();
   private started?: Promise<void>;
   private oidc?: OidcClient;
@@ -130,17 +129,12 @@ export class Session {
       this.set({ phase: "login-failed", message: `Sesi tidak dapat disimpan di sessionStorage: ${describe(error)}` });
       return;
     }
-    this.startTokens(oidc);
-    this.set({ phase: "signed-in", loginAccessToken: outcome.accessToken, idToken: outcome.idToken });
-    try {
-      const userinfo = await oidc.userinfo(outcome.accessToken, outcome.subject);
-      const orgId = decodeClaims(outcome.accessToken)?.nice_org_id;
-      const identity: Identity = { userinfo: { ...userinfo }, ...(typeof orgId === "string" ? { orgId } : {}) };
-      storage.setItem(keys.identity, JSON.stringify(identity));
-      this.set({ identity });
-    } catch (error) {
-      this.set({ identityError: `Userinfo tidak dapat dibaca: ${describe(error)}` });
-    }
+    const tokens = this.startTokens(oidc);
+    // The access token of the code exchange has aud = client_id and the base
+    // scope, so it is the first client token.
+    tokens.hold(CLIENT_KEY, outcome.accessToken, outcome.expiresIn);
+    this.set({ phase: "signed-in", idToken: outcome.idToken });
+    await this.loadIdentity(oidc, tokens, outcome.subject);
   }
 
   private async runResume(): Promise<void> {
@@ -152,12 +146,29 @@ export class Session {
       this.set({ phase: "signed-out" });
       return;
     }
-    this.startTokens(oidc);
-    this.set({
-      phase: "signed-in",
-      idToken: storage.getItem(keys.idToken) ?? undefined,
-      identity: readIdentity(storage.getItem(keys.identity)),
-    });
+    const tokens = this.startTokens(oidc);
+    const idToken = storage.getItem(keys.idToken) ?? undefined;
+    this.set({ phase: "signed-in", idToken });
+    const subject = idToken ? decodeClaims(idToken)?.sub : undefined;
+    await this.loadIdentity(oidc, tokens, typeof subject === "string" ? subject : undefined);
+  }
+
+  // loadIdentity asks userinfo with the client token after every login and
+  // reload; the identity is never kept in browser storage.
+  private async loadIdentity(oidc: OidcClient, tokens: TokenManager, subject: string | undefined): Promise<void> {
+    try {
+      const access = await tokens.token(CLIENT_KEY);
+      const claims = decodeClaims(access);
+      const userinfo = await oidc.userinfo(access, subject ?? (typeof claims?.sub === "string" ? claims.sub : undefined));
+      if (this.tokens !== tokens) return;
+      const orgId = claims?.nice_org_id;
+      const identity: Identity = { userinfo: { ...userinfo }, ...(typeof orgId === "string" ? { orgId } : {}) };
+      this.set({ identity, identityError: undefined });
+    } catch (error) {
+      // A session that ended already shows "Sesi berakhir".
+      if (this.tokens !== tokens || (error instanceof TokenError && error.kind === "session_ended")) return;
+      this.set({ identityError: `Userinfo tidak dapat dibaca: ${describe(error)}` });
+    }
   }
 
   private async connect(): Promise<OidcClient | undefined> {
@@ -180,7 +191,7 @@ export class Session {
     }
   }
 
-  private startTokens(oidc: OidcClient): void {
+  private startTokens(oidc: OidcClient): TokenManager {
     const tokens = new TokenManager({
       storage: this.deps.storage,
       grant: oidc.refreshGrant,
@@ -189,14 +200,15 @@ export class Session {
       random: this.deps.random,
       onSessionEnded: (error) => this.ended(error),
     });
-    tokens.subscribe(() => this.set({ serviceTokens: tokens.snapshot() }));
+    tokens.subscribe(() => this.set({ tokens: tokens.snapshot() }));
     this.tokens = tokens;
+    return tokens;
   }
 
   private ended(error: TokenError): void {
     clearSession(this.deps.storage);
     this.tokens = undefined;
-    this.state = { phase: "ended", message: error.message, serviceTokens: [] };
+    this.state = { phase: "ended", message: error.message, tokens: [] };
     this.emit();
   }
 
@@ -207,16 +219,6 @@ export class Session {
 
   private emit(): void {
     for (const listener of this.listeners) listener();
-  }
-}
-
-function readIdentity(raw: string | null): Identity | undefined {
-  if (!raw) return undefined;
-  try {
-    const value = JSON.parse(raw) as Identity | null;
-    return value && typeof value.userinfo === "object" ? value : undefined;
-  } catch {
-    return undefined;
   }
 }
 

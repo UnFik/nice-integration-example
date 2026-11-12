@@ -3,6 +3,10 @@ export const REDIRECT_URI = "http://localhost:5180/callback";
 export const POST_LOGOUT_URI = "http://localhost:5180/";
 export const SUBJECT = "usr_01a17b49-56bc-7632-a32f-d47311c068c1";
 export const ORG = "org_01a17b49-56bc-7632-a32f-d47311c068c1";
+export const EMAIL = "siti@nusapala.id";
+// LOGIN_SCOPES are the grant scopes of a session the tests start without a
+// code exchange, as if the user had signed in with the SPA's base scope.
+export const LOGIN_SCOPES = ["openid", "profile", "email", "offline_access"];
 
 type Handler = (url: URL, init: RequestInit) => Response | Promise<Response> | undefined;
 
@@ -10,6 +14,7 @@ interface PendingCode {
   challenge: string;
   nonce: string;
   redirectUri: string;
+  scope: string;
 }
 
 export class FakeNice {
@@ -22,10 +27,14 @@ export class FakeNice {
   issueRefreshTokenOnLogin = true;
   tokenOverride?: (form: URLSearchParams) => Response | Promise<Response> | undefined;
   service?: Handler;
+  // grantScopes are the scopes of the refresh token family. Like NICE
+  // (SetCurrentScopes), every refresh replaces them with the scopes asked.
+  grantScopes: string[] = [...LOGIN_SCOPES];
 
   readonly tokenRequests: URLSearchParams[] = [];
   readonly revokeRequests: URLSearchParams[] = [];
   readonly serviceRequests: { url: string; authorization: string | null }[] = [];
+  readonly userinfoRequests: { authorization: string | null }[] = [];
   readonly urls: string[] = [];
   inFlight = 0;
   maxInFlight = 0;
@@ -33,6 +42,8 @@ export class FakeNice {
   private rotations = 0;
   private accessCount = 0;
   private readonly codes = new Map<string, PendingCode>();
+  // NICE answers userinfo from the grant scopes the access token was issued with.
+  private readonly accessScopes = new Map<string, string[]>();
 
   constructor(
     readonly now: () => number = Date.now,
@@ -58,6 +69,7 @@ export class FakeNice {
       challenge: params.get("code_challenge") ?? "",
       nonce: params.get("nonce") ?? "",
       redirectUri: params.get("redirect_uri") ?? "",
+      scope: params.get("scope") ?? "",
     });
     const callback = new URL(params.get("redirect_uri") ?? REDIRECT_URI);
     callback.searchParams.set("code", code);
@@ -68,6 +80,7 @@ export class FakeNice {
   accessToken(aud: string, extra: Record<string, unknown> = {}): string {
     const iat = Math.floor(this.now() / 1000);
     this.accessCount += 1;
+    this.accessScopes.set(`at-${this.accessCount}`, [...this.grantScopes]);
     return fakeJwt({
       iss: this.issuer,
       sub: SUBJECT,
@@ -109,8 +122,7 @@ export class FakeNice {
       case "/oauth/token":
         return this.token(form(init));
       case "/oauth/userinfo":
-        if (!new Headers(init.headers).get("authorization")?.startsWith("Bearer ")) return json(401, {});
-        return json(200, { sub: SUBJECT, name: "Siti Rahma", preferred_username: "siti@nusapala.id" });
+        return this.userinfo(new Headers(init.headers).get("authorization"));
       case "/oauth/revoke":
         this.revokeRequests.push(form(init));
         if (this.revokeAnswer === "network") throw new TypeError("Failed to fetch");
@@ -142,6 +154,7 @@ export class FakeNice {
       return json(400, { error: "invalid_grant" });
     }
     if ((await s256(body.get("code_verifier") ?? "")) !== pending.challenge) return json(400, { error: "invalid_grant" });
+    this.grantScopes = scopesOf(pending.scope);
     return json(200, {
       access_token: this.accessToken(CLIENT_ID),
       token_type: "Bearer",
@@ -154,7 +167,13 @@ export class FakeNice {
   private refresh(body: URLSearchParams): Response {
     if (body.get("client_id") !== CLIENT_ID) return json(400, { error: "invalid_client" });
     if (body.get("refresh_token") !== this.refreshToken) return json(400, { error: "invalid_grant" });
-    const scope = body.get("scope") ?? "";
+    const asked = body.has("scope") ? scopesOf(body.get("scope") ?? "") : this.grantScopes;
+    const outside = asked.filter((s) => !this.grantScopes.includes(s) && !/^nice:(aud|prj):/.test(s));
+    if (outside.length > 0) {
+      return json(400, { error: "invalid_scope", error_description: `scope not granted: ${outside.join(" ")}` });
+    }
+    this.grantScopes = asked;
+    const scope = asked.join(" ");
     const aud = /nice:aud:(\S+)/.exec(scope)?.[1] ?? CLIENT_ID;
     const prj = /nice:prj:(\S+)/.exec(scope)?.[1];
     return json(200, {
@@ -164,6 +183,31 @@ export class FakeNice {
       refresh_token: this.rotate(),
       scope,
     });
+  }
+
+  private userinfo(authorization: string | null): Response {
+    this.userinfoRequests.push({ authorization });
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+    const claims = decodeJwt(token);
+    const scopes = typeof claims?.jti === "string" ? this.accessScopes.get(claims.jti) : undefined;
+    if (!scopes || claims?.aud !== CLIENT_ID) return json(401, { error: "invalid_token" });
+    return json(200, {
+      sub: SUBJECT,
+      ...(scopes.includes("profile") ? { name: "Siti Rahma", preferred_username: EMAIL } : {}),
+      ...(scopes.includes("email") ? { email: EMAIL, email_verified: false } : {}),
+    });
+  }
+}
+
+function scopesOf(scope: string): string[] {
+  return scope.split(" ").filter(Boolean);
+}
+
+function decodeJwt(token: string): Record<string, unknown> | undefined {
+  try {
+    return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return undefined;
   }
 }
 

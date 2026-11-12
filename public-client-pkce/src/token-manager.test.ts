@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OidcClient } from "./oidc";
+import { BASE_SCOPE } from "./scope";
 import { keys } from "./storage";
-import { CLIENT_ID, FakeNice, fakeJwt, json, POST_LOGOUT_URI, REDIRECT_URI } from "./test/fake-nice";
+import { CLIENT_ID, FakeNice, fakeJwt, json, LOGIN_SCOPES, POST_LOGOUT_URI, REDIRECT_URI } from "./test/fake-nice";
 import { MemoryStorage } from "./test/memory-storage";
-import { type ServiceKey, TokenError, TokenManager, type TokenManagerOptions } from "./token-manager";
+import { CLIENT_KEY, type ServiceKey, TokenError, TokenManager, type TokenManagerOptions } from "./token-manager";
 
 const MINUTE = 60_000;
 const inventaris: ServiceKey = { slug: "inventaris" };
@@ -46,15 +47,15 @@ const refreshes = () => nice.tokenRequests.filter((form) => form.get("grant_type
 const claimsOf = (token: string) => JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
 
 describe("token per service", () => {
-  it("asks for the service with nice:aud only, and nice:prj when a project is set", async () => {
+  it("asks for the service with the base scope plus nice:aud, and nice:prj when a project is set", async () => {
     const tokens = await manager();
 
     await tokens.token(inventaris);
     await tokens.token({ slug: "inventaris", project: PROJECT });
 
     expect(refreshes().map((form) => form.get("scope"))).toEqual([
-      "nice:aud:inventaris",
-      `nice:aud:inventaris nice:prj:${PROJECT}`,
+      "openid profile email offline_access nice:aud:inventaris",
+      `openid profile email offline_access nice:aud:inventaris nice:prj:${PROJECT}`,
     ]);
     expect(refreshes()[0].get("client_id")).toBe(CLIENT_ID);
   });
@@ -112,7 +113,7 @@ describe("token per service", () => {
   it("keeps a refused pair to its own entry", async () => {
     const tokens = await manager();
     nice.tokenOverride = (form) =>
-      form.get("scope") === "nice:aud:pengiriman"
+      form.get("scope")?.includes("nice:aud:pengiriman")
         ? json(400, { error: "invalid_scope", error_description: "service is not active in the project" })
         : undefined;
 
@@ -123,6 +124,72 @@ describe("token per service", () => {
     expect(refused).toMatchObject({ kind: "refused", code: "invalid_scope" });
     expect(claimsOf(other).aud).toBe("inventaris");
     expect(ended).not.toHaveBeenCalled();
+  });
+});
+
+describe("client token", () => {
+  it.each([
+    ["a service", inventaris],
+    ["a service in a project", { slug: "inventaris", project: PROJECT }],
+  ])("is still issued with the base scope only after a token for %s", async (_, service) => {
+    const tokens = await manager();
+
+    await tokens.token(service);
+    const client = await tokens.token(CLIENT_KEY);
+
+    expect(refreshes().at(-1)?.get("scope")).toBe(BASE_SCOPE);
+    expect(claimsOf(client).aud).toBe(CLIENT_ID);
+    expect(nice.grantScopes).toEqual(LOGIN_SCOPES);
+    await expect(tokens.token(pengiriman)).resolves.toBeTruthy();
+    expect(ended).not.toHaveBeenCalled();
+  });
+
+  it("is refused invalid_scope by NICE when a refresh drops the base scope", async () => {
+    const tokens = await manager();
+    nice.tokenOverride = (form) => {
+      if (form.get("scope") !== BASE_SCOPE) form.set("scope", "nice:aud:inventaris");
+      return undefined;
+    };
+    await tokens.token(inventaris);
+
+    await expect(tokens.token(CLIENT_KEY)).rejects.toMatchObject({ kind: "refused", code: "invalid_scope" });
+  });
+
+  it("goes through the same refresh queue as the service tokens", async () => {
+    nice.latencyMs = 20;
+    const tokens = await manager();
+
+    const [service, client, again] = await Promise.all([
+      tokens.token(inventaris),
+      tokens.token(CLIENT_KEY),
+      tokens.token(CLIENT_KEY),
+    ]);
+
+    expect(claimsOf(service).aud).toBe("inventaris");
+    expect(claimsOf(client).aud).toBe(CLIENT_ID);
+    expect(again).toBe(client);
+    expect(nice.maxInFlight).toBe(1);
+    expect(refreshes().map((form) => form.get("scope"))).toEqual([
+      `${BASE_SCOPE} nice:aud:inventaris`,
+      BASE_SCOPE,
+    ]);
+  });
+
+  it("reuses a held token under the same rules, then renews it with the base scope", async () => {
+    const tokens = await manager();
+    const login = nice.accessToken(CLIENT_ID);
+    tokens.hold(CLIENT_KEY, login, 1800);
+
+    now += 10 * MINUTE - 1_000;
+    expect(await tokens.token(CLIENT_KEY)).toBe(login);
+    expect(refreshes()).toHaveLength(0);
+    now += 1_000;
+    const renewed = await tokens.token(CLIENT_KEY);
+
+    expect(renewed).not.toBe(login);
+    expect(refreshes().map((form) => form.get("scope"))).toEqual([BASE_SCOPE]);
+    expect(tokens.snapshot()).toEqual([expect.objectContaining({ key: "client", access: renewed })]);
+    expect(tokens.snapshot()[0].service).toBeUndefined();
   });
 });
 

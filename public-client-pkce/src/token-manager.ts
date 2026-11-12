@@ -1,15 +1,19 @@
 import { type Claims, decodeClaims, tokenTimes } from "./jwt";
+import { BASE_SCOPE, type ServiceKey, scopeOf } from "./scope";
 import { type KeyValueStorage, keys } from "./storage";
 
-export interface ServiceKey {
-  slug: string;
-  project?: string;
-}
+export type { ServiceKey };
 
-export const keyOf = (service: ServiceKey): string => `${service.slug}|${service.project ?? ""}`;
+// CLIENT_KEY names the token asked with the base scope only: its aud is the
+// client_id, which is the only audience /oauth/userinfo accepts.
+export const CLIENT_KEY = "client";
 
-export const scopeOf = (service: ServiceKey): string =>
-  `nice:aud:${service.slug}` + (service.project ? ` nice:prj:${service.project}` : "");
+export type TokenKey = ServiceKey | typeof CLIENT_KEY;
+
+export const keyOf = (key: TokenKey): string =>
+  key === CLIENT_KEY ? CLIENT_KEY : `${key.slug}|${key.project ?? ""}`;
+
+const scopeFor = (key: TokenKey): string => (key === CLIENT_KEY ? BASE_SCOPE : scopeOf(key));
 
 export type TokenErrorKind = "temporary" | "refused" | "session_ended";
 
@@ -41,7 +45,8 @@ export type RefreshGrant = (
 
 export interface TokenView {
   key: string;
-  service: ServiceKey;
+  // service is undefined for the client token.
+  service?: ServiceKey;
   access: string;
   claims: Claims | undefined;
   issuedAt: number;
@@ -71,7 +76,7 @@ interface Held {
 }
 
 interface Entry {
-  service: ServiceKey;
+  target: TokenKey;
   token?: Held;
   inflight?: Promise<string>;
   retryAt: number;
@@ -79,8 +84,9 @@ interface Entry {
   lastError?: TokenError;
 }
 
-// TokenManager keeps one access token per (service, project) for the signed-in
-// user and gets them with the refresh token, like pkg/niceclient in NICE.
+// TokenManager keeps one access token per (service, project), plus the client
+// token, for the signed-in user and gets them with the refresh token, like
+// pkg/niceclient in NICE.
 export class TokenManager {
   private readonly storage: KeyValueStorage;
   private readonly grant: RefreshGrant;
@@ -116,9 +122,9 @@ export class TokenManager {
     this.maxBackoff = options.maxBackoffMs ?? 60_000;
   }
 
-  async token(service: ServiceKey): Promise<string> {
+  async token(key: TokenKey): Promise<string> {
     this.assertOpen();
-    const entry = this.entryFor(service);
+    const entry = this.entryFor(key);
     const now = this.now();
     const held = entry.token;
     const valid = held !== undefined && now < held.expiresAt - this.safety;
@@ -143,8 +149,20 @@ export class TokenManager {
     return this.send(url, init, await this.token(service));
   }
 
-  invalidate(service: ServiceKey, access: string): void {
-    const entry = this.entries.get(keyOf(service));
+  // hold keeps a token obtained outside the manager, such as the access token
+  // of the code exchange, under the same reuse rules as a refreshed one.
+  hold(key: TokenKey, access: string, expiresIn?: number): void {
+    this.assertOpen();
+    const entry = this.entryFor(key);
+    entry.token = this.held(access, expiresIn);
+    entry.retryAt = 0;
+    entry.backoff = 0;
+    entry.lastError = undefined;
+    this.changed();
+  }
+
+  invalidate(key: TokenKey, access: string): void {
+    const entry = this.entries.get(keyOf(key));
     if (entry?.token?.access !== access) return;
     entry.token = undefined;
     entry.retryAt = 0;
@@ -178,19 +196,20 @@ export class TokenManager {
     if (this.closed) throw new TokenError("session_ended", "Sesi sudah ditutup.");
   }
 
-  private entryFor(service: ServiceKey): Entry {
-    const key = keyOf(service);
-    let entry = this.entries.get(key);
+  private entryFor(key: TokenKey): Entry {
+    const id = keyOf(key);
+    let entry = this.entries.get(id);
     if (!entry) {
-      entry = { service: { slug: service.slug, project: service.project }, retryAt: 0, backoff: 0 };
-      this.entries.set(key, entry);
+      const target: TokenKey = key === CLIENT_KEY ? key : { slug: key.slug, project: key.project };
+      entry = { target, retryAt: 0, backoff: 0 };
+      this.entries.set(id, entry);
     }
     return entry;
   }
 
   private async renew(entry: Entry): Promise<string> {
     try {
-      const fresh = await this.enqueue(() => this.refresh(entry.service));
+      const fresh = await this.enqueue(() => this.refresh(entry.target));
       entry.token = fresh;
       entry.retryAt = 0;
       entry.backoff = 0;
@@ -231,21 +250,18 @@ export class TokenManager {
 
   // refresh runs inside the queue and reads the refresh token only then, so
   // each request carries the one the previous answer left behind.
-  private async refresh(service: ServiceKey): Promise<Held> {
+  private async refresh(target: TokenKey): Promise<Held> {
     this.assertOpen();
     const refreshToken = this.storage.getItem(keys.refreshToken);
     if (!refreshToken) throw new TokenError("session_ended", "Tidak ada refresh token di sessionStorage.");
-    const response = await this.grant(refreshToken, scopeOf(service), (rotated) => this.keep(rotated));
+    const response = await this.grant(refreshToken, scopeFor(target), (rotated) => this.keep(rotated));
+    return this.held(response.access_token, response.expires_in);
+  }
+
+  private held(access: string, expiresIn: number | undefined): Held {
     const now = this.now();
-    const times = tokenTimes(response.access_token) ?? {
-      issuedAt: now,
-      expiresAt: now + (response.expires_in ?? 0) * 1000,
-    };
-    return {
-      access: response.access_token,
-      ...times,
-      refreshAt: times.issuedAt + this.refreshAfter + this.random() * this.jitter,
-    };
+    const times = tokenTimes(access) ?? { issuedAt: now, expiresAt: now + (expiresIn ?? 0) * 1000 };
+    return { access, ...times, refreshAt: times.issuedAt + this.refreshAfter + this.random() * this.jitter };
   }
 
   private keep(rotated: string): void {
@@ -277,7 +293,7 @@ export class TokenManager {
         ? [
             {
               key,
-              service: entry.service,
+              ...(entry.target === CLIENT_KEY ? {} : { service: entry.target }),
               access: entry.token.access,
               claims: decodeClaims(entry.token.access),
               issuedAt: entry.token.issuedAt,

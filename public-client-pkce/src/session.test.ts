@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "./config";
+import { BASE_SCOPE } from "./scope";
 import { Session } from "./session";
 import { keys } from "./storage";
-import { CLIENT_ID, FakeNice, json, ORG, POST_LOGOUT_URI, REDIRECT_URI, SUBJECT } from "./test/fake-nice";
+import { CLIENT_ID, EMAIL, FakeNice, json, ORG, POST_LOGOUT_URI, REDIRECT_URI, SUBJECT } from "./test/fake-nice";
 import { MemoryStorage } from "./test/memory-storage";
 
 let nice: FakeNice;
@@ -46,6 +47,9 @@ async function signedIn(): Promise<Session> {
   return current;
 }
 
+const storedKeys = () => [...Array(storage.length).keys()].map((i) => storage.key(i)).sort();
+const refreshes = () => nice.tokenRequests.filter((form) => form.get("grant_type") === "refresh_token");
+
 describe("login", () => {
   it("signs in from the callback, strips the URL, and keeps only the refresh and ID token", async () => {
     const current = await signedIn();
@@ -53,13 +57,24 @@ describe("login", () => {
 
     expect(replaced).toEqual(["/"]);
     expect(state.phase).toBe("signed-in");
-    expect(state.identity).toMatchObject({ userinfo: { sub: SUBJECT, name: "Siti Rahma" }, orgId: ORG });
-    expect(state.loginAccessToken).toBeTruthy();
+    expect(state.identity).toMatchObject({
+      userinfo: { sub: SUBJECT, name: "Siti Rahma", email: EMAIL },
+      orgId: ORG,
+    });
     expect(storage.getItem(keys.refreshToken)).toBe(nice.refreshToken);
     expect(storage.getItem(keys.idToken)).toBe(state.idToken);
-    expect(storage.getItem(keys.login)).toBeNull();
-    const stored = [...Array(storage.length).keys()].map((i) => storage.getItem(storage.key(i) ?? ""));
-    expect(stored).not.toContain(state.loginAccessToken);
+    expect(storedKeys()).toEqual([keys.idToken, keys.refreshToken].sort());
+    const stored = storedKeys().map((key) => storage.getItem(key ?? ""));
+    for (const held of state.tokens) expect(stored).not.toContain(held.access);
+  });
+
+  it("asks userinfo with the access token of the code exchange as the client token", async () => {
+    const current = await signedIn();
+    const client = current.getState().tokens.find((held) => !held.service);
+
+    expect(client?.claims?.aud).toBe(CLIENT_ID);
+    expect(refreshes()).toHaveLength(0);
+    expect(nice.userinfoRequests).toEqual([{ authorization: `Bearer ${client?.access}` }]);
   });
 
   it("starts a new authorization request without an error on authentication_expired", async () => {
@@ -91,19 +106,55 @@ describe("login", () => {
 });
 
 describe("reload", () => {
-  it("stays signed in from sessionStorage without going to NICE", async () => {
+  it("stays signed in from sessionStorage without a redirect", async () => {
     await signedIn();
 
     const reloaded = session();
     await reloaded.resume();
 
     expect(reloaded.getState().phase).toBe("signed-in");
-    expect(reloaded.getState().loginAccessToken).toBeUndefined();
-    expect(reloaded.getState().identity?.userinfo.sub).toBe(SUBJECT);
     expect(navigations).toEqual([]);
     nice.service = () => json(200, { items: [] });
     expect((await reloaded.call(service)).status).toBe(200);
     expect(nice.tokenRequests.at(-1)?.get("grant_type")).toBe("refresh_token");
+  });
+
+  it("fetches the identity again with one base-scope refresh and userinfo after a service was called", async () => {
+    const current = await signedIn();
+    nice.service = () => json(200, { items: [] });
+    await current.call(service);
+    const refreshesBefore = refreshes().length;
+    const userinfoBefore = nice.userinfoRequests.length;
+    expect(storedKeys()).toEqual([keys.idToken, keys.refreshToken].sort());
+
+    const reloaded = session();
+    await reloaded.resume();
+
+    const state = reloaded.getState();
+    expect(state.identityError).toBeUndefined();
+    expect(state.identity).toEqual({
+      userinfo: { sub: SUBJECT, name: "Siti Rahma", preferred_username: EMAIL, email: EMAIL, email_verified: false },
+      orgId: ORG,
+    });
+    const newRefreshes = refreshes().slice(refreshesBefore);
+    expect(newRefreshes.map((form) => form.get("scope"))).toEqual([BASE_SCOPE]);
+    const client = state.tokens.find((held) => !held.service);
+    expect(client?.claims?.aud).toBe(CLIENT_ID);
+    expect(nice.userinfoRequests.slice(userinfoBefore)).toEqual([{ authorization: `Bearer ${client?.access}` }]);
+    expect(navigations).toEqual([]);
+    expect(storedKeys()).toEqual([keys.idToken, keys.refreshToken].sort());
+  });
+
+  it("ends the session when the refresh for the identity is refused invalid_grant", async () => {
+    await signedIn();
+    nice.refreshToken = "revoked";
+
+    const reloaded = session();
+    await reloaded.resume();
+
+    expect(reloaded.getState()).toMatchObject({ phase: "ended", tokens: [] });
+    expect(reloaded.getState().identityError).toBeUndefined();
+    expect(storage.length).toBe(0);
   });
 
   it("is signed out in a tab without the session", async () => {
@@ -121,7 +172,7 @@ describe("session end", () => {
 
     await expect(current.call(service)).rejects.toMatchObject({ kind: "session_ended" });
 
-    expect(current.getState()).toMatchObject({ phase: "ended", serviceTokens: [] });
+    expect(current.getState()).toMatchObject({ phase: "ended", tokens: [] });
     expect(storage.length).toBe(0);
   });
 });
