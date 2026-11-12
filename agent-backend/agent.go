@@ -31,5 +31,6 @@ func newAgent(cfg Config, hc *http.Client, log *slog.Logger) (*agent, error) {
 		pengiriman: cfg.ProxyURL + "/" + string(pengiriman),
 	}}
 	a.server = mcp.NewServer(&mcp.Implementation{Name: "agen", Title: "Agen (NICE example)", Version: "1.0.0"}, nil)
+	a.addTools()
 	return a, nil
 }
