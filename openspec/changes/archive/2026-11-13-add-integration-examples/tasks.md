@@ -45,9 +45,10 @@
 
 Grup ini butuh NICE dev yang sudah diatur sesuai checklist README; registrasi service dan OAuth client dilakukan pengguna secara manual.
 
-- [ ] 5.1 Jalankan `shared-service-oauth`, lalu `scripts/smoke.sh`; verifikasi keluar dengan kode 0, impor `/openapi.json` di NICE menghasilkan lima operasi, empat izin, dan role `inventaris.viewer`, `inventaris.admin`, `inventaris.operator`, dan pencabutan binding membuat token lama ditolak `token_stale` saat feed aktif
-- [ ] 5.2 Jalankan `shared-service-apikey`, lalu `scripts/smoke.sh`; verifikasi keluar dengan kode 0 dan impor menghasilkan tepat tiga operasi; setelah `upstream/key-operations` diatur, verifikasi `data/keys.json` berisi key untuk Service Account dan smoke tetap lulus lewat proxy
-- [ ] 5.3 Jalankan `public-client-pkce` terhadap `inventaris` dan jalankan checklist uji manual README di browser (login, reload tetap login dan identitas diambil ulang lewat userinfo, panggil service, `invalid_scope` untuk service tanpa hak, logout, tab baru belum login); verifikasi setiap langkah memberi hasil yang diharapkan dan catat revisi `nice` yang dipakai di README ketiga contoh
+- [x] 5.1 Jalankan `shared-service-oauth`, lalu `scripts/smoke.sh`; verifikasi keluar dengan kode 0, impor `/openapi.json` di NICE menghasilkan lima operasi, empat izin, dan role `inventaris.viewer`, `inventaris.admin`, `inventaris.operator`, dan pencabutan binding membuat token lama ditolak `token_stale` saat feed aktif
+- [x] 5.2 Jalankan `shared-service-apikey`, lalu `scripts/smoke.sh`; verifikasi keluar dengan kode 0 dan impor menghasilkan tepat tiga operasi; setelah `upstream/key-operations` diatur, verifikasi `data/keys.json` berisi key untuk Service Account dan smoke tetap lulus lewat proxy
+  - Catatan verifikasi (nice `c7a5086`): key tercipta dan smoke lulus, tetapi proxy NICE masih mengirim kredensial service (`credential=service`) karena `PerAccountKeys` tidak disalin di `nice/internal/bootstrap/proxy.go`. Dengan field itu disalin, smoke lulus dengan `credential=mirrored`. Contoh tidak perlu diubah.
+- [x] 5.3 Jalankan `public-client-pkce` terhadap `inventaris` dan jalankan checklist uji manual README di browser (login, reload tetap login dan identitas diambil ulang lewat userinfo, panggil service, `invalid_scope` untuk service tanpa hak, logout, tab baru belum login); verifikasi setiap langkah memberi hasil yang diharapkan dan catat revisi `nice` yang dipakai di README ketiga contoh
 
 ## Workflow follow-up
 
