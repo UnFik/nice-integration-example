@@ -29,7 +29,7 @@
 
 Grup ini butuh NICE dev dengan `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, dan `add-token-exchange`, serta setup manual dari README.
 
-- [ ] 6.1 Jalankan `shared-service-oauth`, `shared-service-apikey`, dan `agent-backend`, lalu jalankan checklist uji: keempat tool sukses, `acted_by` muncul di `inventaris`, konteks organisasi lain milik user sukses, organisasi bukan milik user menghasilkan galat `access_denied`, dan audit NICE memuat `token.exchange`; verifikasi setiap langkah dan catat revisi `nice` di README
+- [x] 6.1 Jalankan `shared-service-oauth`, `shared-service-apikey`, dan `agent-backend`, lalu jalankan checklist uji: keempat tool sukses, `acted_by` muncul di `inventaris`, konteks organisasi lain milik user sukses, organisasi bukan milik user menghasilkan galat `access_denied`, dan audit NICE memuat `token.exchange`; verifikasi setiap langkah dan catat revisi `nice` di README
 
 ## Workflow follow-up
 
