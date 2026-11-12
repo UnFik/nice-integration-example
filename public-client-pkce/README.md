@@ -4,7 +4,7 @@
 
 SPA React yang menjadi **OAuth client tenant bertipe public** di NICE. SPA masuk dengan authorization code + PKCE (`S256`), menampilkan identitas user, lalu memanggil satu atau lebih service `nice_token` (mis. `inventaris` dari `../shared-service-oauth`) dengan **token terpisah per service** yang diambil lewat refresh token yang berotasi.
 
-Diuji terhadap nice revisi: <isi nanti>
+Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 
 ## Isi
 
@@ -20,7 +20,7 @@ Diuji terhadap nice revisi: <isi nanti>
 ## Prasyarat
 
 - Node 22.18+ dan npm.
-- NICE dev berjalan (`cd nice && make dev`, `http://localhost:8080`).
+- NICE dev berjalan (`cd nice && make dev`, bawaannya `http://localhost:8080`). Untuk NICE di alamat lain, pakai alamat itu di `NICE` di bawah dan di `VITE_NICE_ISSUER`.
 - Service yang dipanggil sudah terdaftar, diimpor, aktif, di-entitle ke organisasi tenant, aktif di project, dan user yang akan login punya binding role di project itu. Untuk `inventaris`, ikuti langkah 1-8 di [`../shared-service-oauth/README.md`](../shared-service-oauth/README.md), lalu jalankan servicenya (`make run`, port 8081).
 
 ## Checklist setup NICE
@@ -28,7 +28,7 @@ Diuji terhadap nice revisi: <isi nanti>
 Jalankan dari direktori `example/public-client-pkce`. Langkah console disebut dengan nama halamannya; potongan `curl` adalah padanannya. Token admin diambil dengan `nice/scripts/dev-token.sh` (bila akun memakai verifikasi dua langkah, set `TOTP_SECRET`, lihat kepala skrip). Password dibaca dari terminal dan tidak pernah ditulis ke berkas.
 
 ```bash
-export NICE=http://localhost:8080
+export NICE=${NICE:-http://localhost:8080}   # alamat NICE, sama dengan VITE_NICE_ISSUER; dev-token.sh juga membacanya
 read -rp 'Email owner organisasi tenant: ' OWNER_EMAIL; read -rsp 'Password: ' OWNER_PASSWORD; echo
 OWNER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD"); unset OWNER_PASSWORD
 
@@ -68,7 +68,7 @@ curl -sS "$NICE/api/v1/projects/$PROJECT_ID/clients" -X POST \
        "grant_types":["authorization_code","refresh_token"]}' | jq '.oauth_client | {id, client_id}'
 ```
 
-Salin `client_id` (bukan `id` yang berawalan `cli_`) ke `VITE_NICE_CLIENT_ID`. Client public tidak punya secret.
+Salin `client_id` ke `VITE_NICE_CLIENT_ID`; untuk OAuth client tenant nilainya sama dengan `id`, berawalan `cli_`. Client public tidak punya secret.
 
 ### 3. Hak user
 
@@ -82,7 +82,7 @@ cp .env.example .env    # lalu isi VITE_NICE_CLIENT_ID
 
 | Variabel | Wajib | Isi |
 | --- | --- | --- |
-| `VITE_NICE_ISSUER` | ya | Alamat NICE. `http` hanya diterima untuk `localhost`, `127.0.0.1`, dan `[::1]`; host lain harus `https` |
+| `VITE_NICE_ISSUER` | ya | Alamat NICE, persis `NICE_ISSUER`-nya. `http` hanya diterima untuk `localhost`, `127.0.0.1`, dan `[::1]`; host lain harus `https` |
 | `VITE_NICE_CLIENT_ID` | ya | `client_id` dari langkah 2 |
 | `VITE_REDIRECT_URI` | tidak | Bawaan `<origin>/callback`; harus menunjuk ke `/callback` di origin SPA |
 | `VITE_POST_LOGOUT_REDIRECT_URI` | tidak | Bawaan `<origin>/` |

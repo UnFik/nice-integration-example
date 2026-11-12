@@ -4,7 +4,7 @@
 
 A React SPA that acts as a **tenant public OAuth client** of NICE. It signs in with authorization code + PKCE (`S256`), shows the user's identity, then calls one or more `nice_token` services (for example `inventaris` from `../shared-service-oauth`) with a **separate token per service**, obtained through the rotating refresh token.
 
-Tested against nice revision: <fill later>
+Tested against nice revision: `c7a5086` (2026-11-13)
 
 ## Contents
 
@@ -20,7 +20,7 @@ Tested against nice revision: <fill later>
 ## Prerequisites
 
 - Node 22.18+ and npm.
-- NICE dev running (`cd nice && make dev`, `http://localhost:8080`).
+- NICE dev running (`cd nice && make dev`, `http://localhost:8080` by default). For NICE at another address, use it in `NICE` below and in `VITE_NICE_ISSUER`.
 - The called service is registered, imported, enabled, entitled to the tenant organization, activated in the project, and the user who signs in has a role binding in that project. For `inventaris`, follow steps 1-8 of [`../shared-service-oauth/README.en.md`](../shared-service-oauth/README.en.md), then run the service (`make run`, port 8081).
 
 ## NICE setup checklist
@@ -28,7 +28,7 @@ Tested against nice revision: <fill later>
 Run from `example/public-client-pkce`. Console steps name the page; the `curl` snippets are the equivalent. The admin token comes from `nice/scripts/dev-token.sh` (if the account uses two-step verification, set `TOTP_SECRET`, see the script header). The password is read from the terminal and never written to a file.
 
 ```bash
-export NICE=http://localhost:8080
+export NICE=${NICE:-http://localhost:8080}   # address of NICE, same as VITE_NICE_ISSUER; dev-token.sh reads it too
 read -rp 'Tenant organization owner email: ' OWNER_EMAIL; read -rsp 'Password: ' OWNER_PASSWORD; echo
 OWNER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD"); unset OWNER_PASSWORD
 
@@ -68,7 +68,7 @@ curl -sS "$NICE/api/v1/projects/$PROJECT_ID/clients" -X POST \
        "grant_types":["authorization_code","refresh_token"]}' | jq '.oauth_client | {id, client_id}'
 ```
 
-Copy `client_id` (not `id`, which starts with `cli_`) to `VITE_NICE_CLIENT_ID`. A public client has no secret.
+Copy `client_id` to `VITE_NICE_CLIENT_ID`; for a tenant OAuth client it has the same `cli_...` value as `id`. A public client has no secret.
 
 ### 3. User rights
 
@@ -82,7 +82,7 @@ cp .env.example .env    # then fill in VITE_NICE_CLIENT_ID
 
 | Variable | Required | Contents |
 | --- | --- | --- |
-| `VITE_NICE_ISSUER` | yes | Address of NICE. `http` is only accepted for `localhost`, `127.0.0.1`, and `[::1]`; any other host must use `https` |
+| `VITE_NICE_ISSUER` | yes | Address of NICE, exactly its `NICE_ISSUER`. `http` is only accepted for `localhost`, `127.0.0.1`, and `[::1]`; any other host must use `https` |
 | `VITE_NICE_CLIENT_ID` | yes | `client_id` from step 2 |
 | `VITE_REDIRECT_URI` | no | Default `<origin>/callback`; must point at `/callback` on the SPA origin |
 | `VITE_POST_LOGOUT_REDIRECT_URI` | no | Default `<origin>/` |
