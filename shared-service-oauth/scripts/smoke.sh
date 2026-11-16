@@ -76,7 +76,7 @@ if [[ $status != 200 ]]; then
     invalid_scope)
       fail "NICE menolak scope nice:aud:inventaris: invalid_scope $(field error_description)." \
         "Kemungkinan langkah yang terlewat: 3 (registrasi), 4 (impor), 5 (aktivasi service), 6 (entitlement organisasi)," \
-        "7 (aktivasi di project milik Service Account), atau 10 (allowed_services API key harus memuat inventaris)." ;;
+        "7 (aktivasi di project milik Service Account), atau 10 (project Service Account harus mengaktifkan inventaris)." ;;
     "")
       fail "permintaan token ke $nice/oauth/token gagal (HTTP $status)." ;;
     *)

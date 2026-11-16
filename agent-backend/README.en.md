@@ -20,18 +20,30 @@ Minimum NICE version: a revision with `add-service-clients`, `add-delegated-nice
 
 Tested against nice revision: `6cc9986` (2026-11-13)
 
-## Contents
+## Folder structure
 
-| File | Contents |
-|---|---|
-| `main.go` | wiring: configuration, `nicetoken`, the agent, the HTTP server |
-| `server.go` | routes, the chain `nicetoken.Middleware` -> `Require("agen.mcp.use")` -> MCP handler, Protected Resource Metadata, `WWW-Authenticate` challenges |
-| `agent.go` | the MCP server and `niceclient.NewExchange` (the confidential client `agen-backend` as actor) |
-| `tools.go` | the four tools and their argument schemas |
-| `call.go` | `callAs` on top of `niceclient.DoAs`, checks of `organization_id` and `project_id`, mapping of failures to tool results |
-| `config.go` | reading env and `.env` |
-| `openapi.json` | catalog document of `agen` (one operation, `POST /mcp`), served at `/openapi.json` |
-| `scripts/smoke.sh` | smoke test against a NICE that is set up |
+The layout follows `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one small service: one resource (`call`: calling another service on behalf of the user), no facade and no repository.
+
+```text
+cmd/agent-backend/main.go            thin: calls bootstrap.Run
+docs/                                openapi.json (hand-written) + a small package that embeds it; OpenAPI and README tests
+internal/
+  domain/                            pure rules: slug, permission, targets, ID format (*_domain.go)
+  app/call/
+    usecase/                         ExecuteCall (execute_call_usecase.go), Service, the Sender contract (call_contract.go)
+    dto/                             Caller, Where, Key, Request, Response, Failure (*_dto.go)
+    internal/{key,failure}/          ID checks and mapping of errors to Failure (*_helper.go)
+  adapter/
+    mcp/                             HTTP routes and the nicetoken chain (routes.go), MCP server and tool schemas (tools_routes.go),
+                                     one handler per tool (*_handler.go); internal/ holds caller, challenge, mapper
+    niceexchange/                    wraps niceclient: token exchange and DoAs (sender_client.go)
+  platform/config/                   env and .env
+  bootstrap/                         assembly; integration tests with a fake NICE
+  arch_test.go                       architecture test: file name endings and import direction
+scripts/smoke.sh                     smoke test against a NICE that is set up
+```
+
+Why: `main.go` only assembles; the rules and the use case do not import `net/http`, the MCP SDK, `niceclient`, or `nicetoken` (the adapters do, enforced by `internal/arch_test.go`); every file carries its layer in the name ending (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named like its file. `openapi.json` stays hand-written and is embedded from `docs/`; `docs/openapi_test.go` keeps the permission in the document equal to the one the code enforces.
 
 ## Endpoints and tools
 
@@ -114,7 +126,7 @@ An empty required variable stops the start with a message that names it.
 ## Run and test
 
 ```bash
-make run          # go run . on 127.0.0.1:8083
+make run          # go run ./cmd/agent-backend on 127.0.0.1:8083
 make test         # go test -race; needs no NICE (fake NICE, inventaris, and pengiriman proxy)
 make smoke        # scripts/smoke.sh, needs a NICE set up with the checklist below
 ```
@@ -157,12 +169,12 @@ curl -sS "$NICE/api/v1/shared-services" -X POST \
   -d '{"slug":"agen","name":"Agen","endpoint":"http://127.0.0.1:8083","health_path":"/healthz"}' | jq '.shared_service | {slug, status}'
 ```
 
-### 3. Import `openapi.json`
+### 3. Import `docs/openapi.json`
 
 Console: the detail of service `agen`, catalog import. The document comes from the file, because the agent can run only after its client exists (step 8).
 
 ```bash
-PREVIEW=$(jq -n --rawfile doc openapi.json '{document: $doc}' | curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports" -X POST \
+PREVIEW=$(jq -n --rawfile doc docs/openapi.json '{document: $doc}' | curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d @-)
 jq '{added: [.diff.added[]? | {key, permission}], roles: [.diff.roles[]? | .key]}' <<<"$PREVIEW"
 curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports/$(jq -r .import_id <<<"$PREVIEW")/apply" -X POST \

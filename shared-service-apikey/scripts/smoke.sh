@@ -85,7 +85,7 @@ if [ "$status" != 200 ]; then
   detail=$(field error_description)
   case $reason in
     invalid_client) fail "token ditolak invalid_client: SMOKE_SA_ID atau SMOKE_SA_API_KEY salah, key dicabut atau kedaluwarsa, atau Service Account nonaktif" "9, 11" ;;
-    invalid_scope) fail "token ditolak invalid_scope${detail:+ ($detail)}: service belum aktif, organisasi belum di-entitle, project belum mengaktifkan pengiriman, atau allowed_services API key tidak memuat pengiriman" "6, 7, 8, 11" ;;
+    invalid_scope) fail "token ditolak invalid_scope${detail:+ ($detail)}: service belum aktif, organisasi belum di-entitle, project belum mengaktifkan pengiriman, atau Service Account tidak punya binding ke role pengiriman" "6, 7, 8, 11" ;;
     *) fail "permintaan token gagal: $(describe)${detail:+ ($detail)}" "9-11" ;;
   esac
 fi

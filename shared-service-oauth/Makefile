@@ -1,10 +1,10 @@
 GO ?= go
-SWAG_FLAGS = -g main.go --outputTypes json --quiet
+SWAG_FLAGS = -g cmd/inventaris/main.go -d ./ --parseInternal --outputTypes json --quiet
 
 .PHONY: run test swag swag-check
 
 run:
-	$(GO) run .
+	$(GO) run ./cmd/inventaris
 
 test:
 	$(GO) test ./... -count=1

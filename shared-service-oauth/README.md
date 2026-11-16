@@ -10,14 +10,37 @@ Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 
 | Berkas | Isi |
 |---|---|
-| `main.go` | wiring `nicetoken` (`New`, `Run`, `StartFeed`), anotasi swag tingkat dokumen termasuk `x-nice-roles` |
-| `routes.go` | tabel rute tunggal (method, path, izin, sensitif) dan rantai handler `CORS -> mux` |
-| `items.go` | handler barang, validasi, bentuk galat, anotasi swag per operasi |
-| `store.go` | penyimpanan barang per organisasi di memori |
-| `config.go` | pembacaan env dan `.env` |
-| `cors.go` | CORS untuk SPA yang terdaftar |
+| `cmd/inventaris/main.go` | titik masuk tipis, anotasi swag tingkat dokumen termasuk `x-nice-roles` |
+| `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), repo, use case, server |
+| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `item/` (tabel rute tunggal, handler, anotasi swag per operasi), `system/` (`/healthz`, `/openapi.json`) |
+| `internal/app/item/` | use case barang dan kontrak `Repo` |
+| `internal/domain/` | `Item`, aturan validasi, nama izin |
+| `internal/adapter/memory/item/` | penyimpanan barang per organisasi di memori |
+| `internal/platform/` | `config` (env dan `.env`) dan `httpx` (CORS untuk SPA yang terdaftar) |
 | `docs/swagger.json` | Swagger 2.0 hasil `make swag`, di-embed dan disajikan di `/openapi.json` |
 | `scripts/smoke.sh` | uji smoke terhadap NICE yang sudah diatur |
+
+## Struktur folder
+
+```text
+cmd/inventaris/main.go             titik masuk: baca config, rakit, jalankan, shutdown
+docs/                              swagger.json hasil make swag + embed.go (//go:embed)
+internal/
+  domain/                          *_domain.go          Item, aturan validasi, izin
+  app/item/
+    usecase/                       *_usecase.go         satu aksi per berkas; item_contract.go = interface Repo
+    dto/                           *_dto.go             data masukan use case
+  adapter/
+    memory/item/                   *_repository.go      implementasi Repo di memori
+    rest/                          routes.go            perakit: verifikasi token, izin, CORS
+    rest/item/                     item_routes.go       tabel rute + <aksi>_item_handler.go
+    rest/system/                   /healthz dan /openapi.json
+  platform/{config,httpx}/         env dan CORS
+  bootstrap/                       perakitan dan tes yang melintasi lapisan
+  arch_test.go                     menegakkan aturan impor dan akhiran nama berkas
+```
+
+Pola ini meniru modul di backend `nice` (`nice/AGENTS.md`, "Struktur satu modul"), diperkecil untuk satu service dengan satu resource (`item`). Satu aksi satu berkas supaya mudah dicari, paket `itemusecase` dan `itemdto` diimpor dengan alias eksplisit, dan ketergantungan hanya mengalir ke dalam: adapter memanggil use case, use case dan domain tidak mengimpor `net/http`. Tabel rute di `adapter/rest/item/item_routes.go` tetap satu-satunya sumber kebenaran yang dibandingkan dengan dokumen OpenAPI oleh tes.
 
 ## Operasi
 
@@ -49,7 +72,7 @@ Barang yang dibuat dengan token seperti itu mencatat keduanya:
 {"id": "itm_...", "name": "Kabel UTP", "quantity": 3, "created_by": "usr_...", "acted_by": "<client_id agen-backend>"}
 ```
 
-Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `nicetoken` (`items.go`), dan tes `TestItemCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
+Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `nicetoken` (`internal/adapter/rest/item/create_item_handler.go`), dan tes `TestItemCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
 
 ## Prasyarat
 
@@ -81,7 +104,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 ## Menjalankan dan tes
 
 ```bash
-make run          # go run . di 127.0.0.1:8081
+make run          # go run ./cmd/inventaris di 127.0.0.1:8081
 make test         # tes unit; tidak butuh NICE (token ditandatangani di tes, JWKS statis, pemeriksa palsu)
 make swag         # bangkitkan ulang docs/swagger.json dari anotasi
 make swag-check   # gagal bila docs/swagger.json tidak sama dengan hasil swag terbaru
@@ -90,7 +113,7 @@ scripts/smoke.sh  # butuh NICE yang sudah diatur dengan checklist di bawah
 
 Bila `go` di `PATH` tidak cocok dengan `GOROOT`, panggil `make GO=/path/ke/go test`.
 
-Tes `TestOpenAPIMatchesTheRouteTable` membandingkan tabel rute di `routes.go` dengan `docs/swagger.json` yang di-embed: izin dan tanda sensitif harus sama, dan dokumen tidak boleh memuat operasi lain. Setelah mengubah anotasi, jalankan `make swag` lalu commit hasilnya.
+Tes `TestOpenAPIMatchesTheRouteTable` membandingkan tabel rute di `internal/adapter/rest/item/item_routes.go` dengan `docs/swagger.json` yang di-embed: izin dan tanda sensitif harus sama, dan dokumen tidak boleh memuat operasi lain. Setelah mengubah anotasi, jalankan `make swag` lalu commit hasilnya.
 
 ## Checklist setup NICE
 
@@ -202,7 +225,7 @@ BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST 
 
 ### 9. Service Account platform `nice.service` (feed dan pemeriksaan online)
 
-Platform Admin membuat Service Account di project organisasi platform (buat project bila belum ada), memberinya role `nice.service`, lalu API key dengan `allowed_services` berisi `nice`. Console: **Service Account** di project organisasi platform, lalu **Pengguna platform** untuk role `nice.service`.
+Platform Admin membuat Service Account di project organisasi platform (buat project bila belum ada), memberinya role `nice.service`, lalu API key (tanpa pembatasan service: API key tidak punya `allowed_services`; hak ditentukan role Service Account). Console: **Service Account** di project organisasi platform, lalu **Pengguna platform** untuk role `nice.service`.
 
 ```bash
 PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
@@ -217,7 +240,7 @@ curl -sS "$NICE/api/v1/admin/role-bindings" -X POST \
   -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$FEED_SA_ID\",\"role\":\"nice.service\"}"
 curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/api-keys" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$FEED_SA_ID\",\"name\":\"inventaris-feed\",\"allowed_services\":[\"nice\"]}" | jq -r .key
+  -d "{\"service_account_id\":\"$FEED_SA_ID\",\"name\":\"inventaris-feed\"}" | jq -r .key
 ```
 
 Key hanya tampil sekali. Isikan ke `NICE_SERVICE_API_KEY` di `.env`, lalu jalankan ulang `make run`; peringatan feed saat start hilang.
@@ -237,7 +260,7 @@ curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST \
   -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$SMOKE_SA_ID\",\"role\":\"inventaris.viewer\"}"
 curl -sS "$NICE/api/v1/projects/$PROJECT_ID/api-keys" -X POST \
   -H "Authorization: Bearer $OWNER_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$SMOKE_SA_ID\",\"name\":\"inventaris-smoke\",\"allowed_services\":[\"inventaris\"]}" | jq -r .key
+  -d "{\"service_account_id\":\"$SMOKE_SA_ID\",\"name\":\"inventaris-smoke\"}" | jq -r .key
 echo "$SMOKE_SA_ID"
 ```
 
@@ -255,7 +278,7 @@ Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: 
 |---|---|
 | `.env` tidak ada, NICE atau service tidak terjangkau | 2 (dan NICE harus berjalan) |
 | `invalid_client` | 10: id Service Account bukan pemilik key, key dicabut atau kedaluwarsa, akun nonaktif |
-| `invalid_scope` | 3 sampai 7, atau 10 (`allowed_services` harus memuat `inventaris`) |
+| `invalid_scope` | 3 sampai 7, atau 10 (project Service Account harus mengaktifkan `inventaris`) |
 | `403 permission_denied` dari service | 10: binding Service Account ke role inventaris |
 
 ## Uji pencabutan (opsional)

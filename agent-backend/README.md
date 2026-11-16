@@ -20,18 +20,30 @@ Versi NICE minimum: revisi yang memuat `add-service-clients`, `add-delegated-nic
 
 Diuji terhadap nice revisi: `6cc9986` (2026-11-13)
 
-## Isi
+## Struktur folder
 
-| Berkas | Isi |
-|---|---|
-| `main.go` | wiring: konfigurasi, `nicetoken`, agen, server HTTP |
-| `server.go` | rute, rantai `nicetoken.Middleware` -> `Require("agen.mcp.use")` -> handler MCP, Protected Resource Metadata, tantangan `WWW-Authenticate` |
-| `agent.go` | MCP server dan `niceclient.NewExchange` (client confidential `agen-backend` sebagai aktor) |
-| `tools.go` | empat tool dan skema argumennya |
-| `call.go` | `callAs` di atas `niceclient.DoAs`, validasi `organization_id` dan `project_id`, pemetaan galat ke hasil tool |
-| `config.go` | pembacaan env dan `.env` |
-| `openapi.json` | dokumen katalog `agen` (satu operasi `POST /mcp`), disajikan di `/openapi.json` |
-| `scripts/smoke.sh` | uji smoke terhadap NICE yang sudah diatur |
+Polanya meniru `nice/internal/modules` (lihat `nice/AGENTS.md`), dipangkas untuk satu service kecil: satu resource (`call`: pemanggilan service lain atas nama user), tanpa facade dan repository.
+
+```text
+cmd/agent-backend/main.go            tipis: memanggil bootstrap.Run
+docs/                                openapi.json (ditulis tangan) + paket kecil yang meng-embed-nya; tes OpenAPI dan README
+internal/
+  domain/                            aturan murni: slug, izin, target, format ID (*_domain.go)
+  app/call/
+    usecase/                         ExecuteCall (execute_call_usecase.go), Service, kontrak Sender (call_contract.go)
+    dto/                             Caller, Where, Key, Request, Response, Failure (*_dto.go)
+    internal/{key,failure}/          validasi ID dan pemetaan galat ke Failure (*_helper.go)
+  adapter/
+    mcp/                             rute HTTP dan rantai nicetoken (routes.go), server MCP dan skema tool (tools_routes.go),
+                                     satu handler per tool (*_handler.go); internal/ untuk caller, challenge, mapper
+    niceexchange/                    pembungkus niceclient: token exchange dan DoAs (sender_client.go)
+  platform/config/                   env dan .env
+  bootstrap/                         perakitan; tes integrasi dengan NICE palsu
+  arch_test.go                       tes arsitektur: akhiran nama berkas dan arah impor
+scripts/smoke.sh                     uji smoke terhadap NICE yang sudah diatur
+```
+
+Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http`, SDK MCP, `niceclient`, atau `nicetoken` (adapter yang mengimpor, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya. `openapi.json` tetap ditulis tangan dan di-embed dari `docs/`; `docs/openapi_test.go` menjaga bahwa izin di dokumen sama dengan yang ditegakkan kode.
 
 ## Endpoint dan tool
 
@@ -114,7 +126,7 @@ Variabel wajib yang kosong menghentikan start dengan pesan yang menyebut namanya
 ## Menjalankan dan tes
 
 ```bash
-make run          # go run . di 127.0.0.1:8083
+make run          # go run ./cmd/agent-backend di 127.0.0.1:8083
 make test         # go test -race; tidak butuh NICE (NICE, inventaris, dan proxy pengiriman palsu)
 make smoke        # scripts/smoke.sh, butuh NICE yang sudah diatur dengan checklist di bawah
 ```
@@ -157,12 +169,12 @@ curl -sS "$NICE/api/v1/shared-services" -X POST \
   -d '{"slug":"agen","name":"Agen","endpoint":"http://127.0.0.1:8083","health_path":"/healthz"}' | jq '.shared_service | {slug, status}'
 ```
 
-### 3. Impor `openapi.json`
+### 3. Impor `docs/openapi.json`
 
 Console: detail service `agen`, impor katalog. Dokumen diambil dari berkas, karena agen baru bisa berjalan setelah client-nya ada (langkah 8).
 
 ```bash
-PREVIEW=$(jq -n --rawfile doc openapi.json '{document: $doc}' | curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports" -X POST \
+PREVIEW=$(jq -n --rawfile doc docs/openapi.json '{document: $doc}' | curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d @-)
 jq '{added: [.diff.added[]? | {key, permission}], roles: [.diff.roles[]? | .key]}' <<<"$PREVIEW"
 curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports/$(jq -r .import_id <<<"$PREVIEW")/apply" -X POST \

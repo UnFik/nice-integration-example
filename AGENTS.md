@@ -48,7 +48,7 @@ Versi NICE minimum per contoh ada di `README.md` akar. `service-client-ui` butuh
 - **Rahasia.** Jangan menulis rahasia ke berkas yang di-commit. `.env` dan `data/` di-ignore, dan `.env.example` hanya berisi placeholder. Nilai kredensial, API key, dan token tidak boleh muncul di log, respons galat, atau keluaran `smoke.sh`.
 - **Tes.** Tes unit tidak boleh butuh NICE yang berjalan. Hanya `scripts/smoke.sh` dan uji manual SPA yang menyentuh NICE.
 - **OpenAPI.** Dokumen ini adalah sumber katalog di NICE:
-  - Izin di dokumen harus sama dengan yang ditegakkan kode (`openapi_test.go` di Go dan `test/openapi.test.ts` di Hono menjaganya). `agent-backend/openapi.json` ditulis tangan, bukan hasil swag.
+  - Izin di dokumen harus sama dengan yang ditegakkan kode (`agent-backend/docs/openapi_test.go` dan `shared-service-oauth/internal/bootstrap/openapi_test.go` di Go, serta `test/openapi.test.ts` di Hono, menjaganya). `agent-backend/docs/openapi.json` ditulis tangan, bukan hasil swag.
   - Operasi key (`/keys*`), `/healthz`, dan `/openapi.json` tidak boleh masuk dokumen.
   - Setelah mengubah anotasi swag, jalankan `make swag`.
 - **Checklist dan smoke.** Nomor langkah checklist di README dirujuk oleh `scripts/smoke.sh`. Mengubah urutan checklist berarti memperbarui skripnya juga.
