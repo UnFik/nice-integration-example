@@ -1,7 +1,7 @@
 import type { ActiveContext, Contexts } from "../contexts";
 
-// ContextPicker offers only what /me/contexts answered: there is no free input,
-// so the UI never guesses an organization or project.
+// ContextPicker offers only what /me/contexts answered: it never guesses an
+// organization or project. Typed ids live in ManualContextForm.
 export function ContextPicker(props: {
   contexts: Contexts;
   active: ActiveContext;
@@ -14,16 +14,16 @@ export function ContextPicker(props: {
       {contexts.organizations.map((org) => {
         const isCurrentOrg = org.id === active.org;
         return (
-          <article key={org.id} className={`card${isCurrentOrg ? " current" : ""}`}>
-            <header className="card-head">
+          <article key={org.id} className={`org${isCurrentOrg ? " current" : ""}`}>
+            <header className="org-head">
               <h3>{org.name}</h3>
-              {isCurrentOrg && !active.project && <span className="badge">Organisasi saat ini</span>}
+              {isCurrentOrg && !active.project && <span className="badge info">Organisasi saat ini</span>}
             </header>
-            <p className="muted">
+            <p className="muted small">
               <code>{org.id}</code>
             </p>
             {org.projects.length === 0 ? (
-              <p className="muted">
+              <p className="muted small">
                 Tidak tersedia: Anda tidak memegang akses inventaris di project mana pun di organisasi ini.
               </p>
             ) : (
@@ -34,23 +34,25 @@ export function ContextPicker(props: {
                     <li key={project.id}>
                       <button
                         type="button"
-                        className={isActive ? "" : "secondary"}
+                        className={`choice${isActive ? " active" : ""}`}
                         data-context={`${org.id}/${project.id}`}
                         aria-current={isActive ? "true" : undefined}
                         disabled={busy}
                         onClick={() => onChoose(org.id, project.id)}
                       >
-                        {project.name}
-                        {isActive && " (aktif)"}
+                        <span className="choice-name">
+                          {project.name}
+                          {isActive && " (aktif)"}
+                        </span>
+                        <span className="muted small">service: {project.services.join(", ")}</span>
                       </button>
-                      <span className="muted"> service: {project.services.join(", ")}</span>
                     </li>
                   );
                 })}
               </ul>
             )}
             {org.projectsTruncated && (
-              <p className="muted">NICE hanya mengirim 100 project pertama dari organisasi ini.</p>
+              <p className="muted small">NICE hanya mengirim 100 project pertama dari organisasi ini.</p>
             )}
           </article>
         );

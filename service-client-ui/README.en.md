@@ -6,7 +6,8 @@ A React UI for the `inventaris` service (`../shared-service-oauth`) that signs i
 
 - the organizations and projects to choose from are read from `GET /api/v1/me/contexts`, with a delegated NICE API token (`aud=nice`);
 - switching organization and project takes one refresh (`nice:org`, `nice:aud`, `nice:prj`), with no redirect to NICE;
-- the `inventaris` items are listed in the chosen context.
+- when NICE does not provide that discovery, the UI shows a notice and a **Pilih konteks manual** (choose context manually) form with the organization ID and the project ID;
+- the `inventaris` items of the chosen context can be added, changed, and deleted, with buttons that follow the `perms` claim of the token.
 
 When to use this example and when to use [`../public-client-pkce`](../public-client-pkce/README.en.md): a tenant client owned by one organization and one project uses `public-client-pkce`. A first-party service UI that serves many organizations uses this example.
 
@@ -22,9 +23,11 @@ Tested against nice revision: `8160ac4` (2026-11-13)
 | `src/oidc.ts` | Discovery, login, callback (including `access_denied`), refresh, userinfo, revoke, and end-session with `oauth4webapi` |
 | `src/token-manager.ts` | Tokens per `(organization, service, project)`: the session organization from the latest token's claim, a single refresh queue, reuse, backoff, session end, one retry on a stale token. No React |
 | `src/contexts.ts` | `GET /api/v1/me/contexts` with the delegated token, every page |
-| `src/session.ts` | Glue: login, reload, identity, contexts, context switch, item list, logout |
+| `src/session.ts` | Glue: login, reload, identity, contexts (discovered and manual), context switch, items, logout |
+| `src/items.ts` | Small client for `GET/POST /items` and `GET/PUT/DELETE /items/{id}` through `tokens.call`, input validation, and error sentences |
+| `src/recent-contexts.ts` | Manual contexts that worked, ids only, in `sessionStorage` |
 | `src/config.ts` | Validation of `VITE_*` |
-| `src/ui/`, `src/App.tsx` | Pages. `App` checks `location.pathname === "/callback"`, no router |
+| `src/ui/`, `src/App.tsx` | Pages: top bar with the active context, the Konteks panel, the items table (cards below 640px), add/edit/delete dialogs, token status. `App` checks `location.pathname === "/callback"`, no router |
 
 The protocol code (`oidc.ts`, the token manager, the fake NICE in `src/test/`) is copied from `public-client-pkce` and adapted, so this example can be copied on its own. A protocol fix in one of them must be applied to both.
 
@@ -135,6 +138,7 @@ npm run build
 - **Base scope on every refresh.** NICE replaces the grant scopes with the requested scopes on every refresh. Only `nice:org`, `nice:aud`, and `nice:prj` may go beyond the grant scopes. So every refresh sends the base scope, and the client token for userinfo can still be obtained.
 - **Session organization.** The refresh token is bound to one organization. A refresh without `nice:org` stays in it, and a refresh with `nice:org:<org>` moves it. The UI reads the session organization from the `nice_org_id` claim of the latest issued token, and adds `nice:org` only when the target organization differs. The decision is made inside the refresh queue, right before the request is sent, because an earlier refresh in the queue may already have moved the session.
 - **Contexts.** After login and every reload: the client token (`aud` = `client_id`) for `/oauth/userinfo`, then the delegated token through a `nice:aud:nice` refresh (no `nice:prj`), then `GET /api/v1/me/contexts?page_size=50`, following `page.next_page_token`. The `service` query is not sent, because NICE answers it with `400 invalid_argument` for a delegated token; the service comes from the `nice_service` claim. The chooser holds only the projects of that answer. An organization with empty `projects` is shown as unavailable.
+- **Manual context.** When reading `/me/contexts` fails (NICE now refuses the `nice:aud:nice` refresh for service clients with `invalid_scope`), the Konteks panel explains it in one neutral sentence and shows a form: the organization ID (prefilled from the `nice_org_id` claim of the session) and the project ID (starting with `prj_`). **Gunakan konteks ini** (use this context) runs the same context-switch logic. Those that work go into the **Terakhir dipakai** (last used) list. An `access_denied`/`invalid_scope` refusal is shown kindly, and the session and previous context stay. The chooser from `/me/contexts` is still used when NICE answers it.
 - **Switching context.** Choosing a project runs one refresh: the base scope, `nice:org:<org>` when the organization changes, `nice:aud:inventaris`, and `nice:prj:<project>` (required for a service client). The page does not change. When NICE refuses (`access_denied` for an organization that may not be used, `invalid_scope` for a project that no longer has `inventaris` active), the refresh token is not rotated. The UI stays on the previous context, shows the reason, and reloads `/me/contexts`.
 - **Tokens per context.** Key `"<org>|<service>|<project>"`. A token is reused while `now < iat + 10 minutes + jitter(0-60 seconds)` and `now < exp - 60 seconds`, so going back to the previous context within 10 minutes sends no token request. The session stays in the last organization until the next refresh to another one.
 - **Errors and rotation** follow `public-client-pkce`: one refresh at a time with the latest refresh token, `invalid_grant`/`invalid_client` end the session, network/5xx/429 keep the old token with a 5-60 second backoff, and a 401 `token_stale`/`expired` from the service is retried once with a new token.
@@ -147,17 +151,21 @@ npm run build
 | Identity, `/me/contexts` answer, active context | memory only; fetched again after a reload |
 | `nice-service-ui.refresh_token`, `nice-service-ui.id_token` | `sessionStorage` |
 | `nice-service-ui.login` (`verifier`, `state`, `nonce`) | `sessionStorage`, only during login |
+| `nice-service-ui.recent_contexts` (list of organization and project ids, no tokens) | `sessionStorage`, gone with the session |
 
 After a reload the UI returns to the organization of the refresh token with no project chosen. The claims shown are decoded in the browser and not verified by the UI.
 
 ## Limits
 
-- Read only. The delegated token of this example only carries `nice.me.contexts.read`.
+- The delegated token (`aud=nice`) of this example only carries `nice.me.contexts.read`. Against a NICE that refuses it for service clients (the `nice:aud:nice` refresh is answered `invalid_scope`), context discovery fails and the UI falls back to manual contexts.
+- Editing and deleting items use the `inventaris` token of the active context. Buttons are disabled when `perms` lacks the permission; the final decision stays with `inventaris`.
 - Only `inventaris` is called, although the `services` of each project are shown.
 - A duplicated tab shares the same refresh token, and reusing a rotated refresh token ends the session in both tabs (see `public-client-pkce`).
 - Dev only: no production build, container, or TLS.
 
 ## Manual test checklist
+
+Steps 3-10 need a NICE that still answers context discovery for service clients. Against a NICE that refuses it, run steps 1, 2, and 11-14: the context is chosen with the manual form.
 
 Open DevTools (Network tab with **Preserve log**, and Application > Session Storage). A and B are the organizations from step 5, P and Q the `inventaris` projects in A, R the `inventaris` project in B.
 
@@ -175,3 +183,5 @@ Open DevTools (Network tab with **Preserve log**, and Application > Session Stor
 | 10 | Organization removed | Choose P in A (the session moves to A), revoke the `inventaris` entitlement of organization B, then choose R from the old chooser. After the reload of step 8, R has no token yet | `POST /oauth/token` with `nice:org:<B>` answers 400 `access_denied` (`the organization is not entitled to the service of this client`), the presented refresh token stays usable, the UI stays on A/P, and B leaves the chooser after the contexts reload. Afterwards grant B the entitlement again, then deactivate and activate `inventaris` in R again: until then `/me/contexts` lists B without projects |
 | 11 | Session ended | In Session Storage, change `nice-service-ui.refresh_token` to `rusak`, then choose a context that has no token yet | `POST /oauth/token` answers `invalid_grant`; the **Sesi berakhir** screen; no `nice-service-ui.*` key is left |
 | 12 | Logout | Press **Keluar** | `POST /oauth/revoke`, then navigation to `/oauth/end_session` with `post_logout_redirect_uri=http://localhost:5181/`; back on the **Masuk** page |
+| 13 | Manual context | Against a NICE that refuses `nice:aud:nice` for service clients, sign in and look at the Konteks panel. Enter the ID of project P and press **Gunakan konteks ini**. Then enter a project ID in an organization the user may not use | The panel shows the notice that NICE no longer provides org/project discovery for public SPAs and the **Pilih konteks manual** form with the organization ID prefilled from `nice_org_id`. A valid choice runs one `POST /oauth/token` with `nice:aud:inventaris nice:prj:<P>`, the items show, and the context joins **Terakhir dipakai** (Session Storage only gains `nice-service-ui.recent_contexts` holding ids). A refused choice shows a kind reason, the previous context stays, and the refresh token does not change |
+| 14 | Manage items | With an active context, press **Tambah barang**, fill in, save. Then **Ubah**, then **Hapus** and confirm. Repeat with a user whose `perms` only holds `inventaris.items.read` | `POST /items`, `PUT /items/<id>`, `DELETE /items/<id>` (204) are answered with success and each shows a notice and reloads the list. The dialog closes with Escape and focus returns to its opener. For the read-only user, Tambah, Ubah, and Hapus are disabled with a note naming the missing permission |

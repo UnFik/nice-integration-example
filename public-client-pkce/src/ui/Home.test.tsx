@@ -23,7 +23,7 @@ describe("identity", () => {
 
     expect(emailCell(markup)).toBe("siti@nusapala.id");
     expect(markup.split("siti.lama")).toHaveLength(2);
-    expect(markup).toContain("<pre>");
+    expect(markup).toMatch(/<pre[ >]/);
     expect(markup).not.toContain("dari preferred_username");
     expect(markup).toContain(ORG);
     expect(markup).toContain("klaim access token client");

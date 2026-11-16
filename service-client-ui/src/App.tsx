@@ -19,7 +19,14 @@ export function App({ session }: { session: Session }) {
       return <Notice title="Mengalihkan ke NICE…" />;
     case "unreachable":
       return (
-        <Problem title="NICE tidak terjangkau" message={state.message} action="Coba lagi" onAction={() => void session.retry()} />
+        <Problem
+          title="NICE tidak terjangkau"
+          message={state.message}
+          icon="offline"
+          tone="warning"
+          action="Coba lagi"
+          onAction={() => void session.retry()}
+        />
       );
     case "signed-out":
       return <SignIn issuer={session.config.issuer} clientId={session.config.clientId} onSignIn={signIn} />;
@@ -28,14 +35,16 @@ export function App({ session }: { session: Session }) {
         <Problem
           title="Service tidak tersedia"
           message={state.message}
+          icon="block"
+          tone="warning"
           action="Masuk dengan akun lain"
           onAction={() => void session.signIn({ selectAccount: true })}
         />
       ) : (
-        <Problem title="Login gagal" message={state.message} action="Masuk lagi" onAction={signIn} />
+        <Problem title="Login gagal" message={state.message} icon="alert" action="Masuk lagi" onAction={signIn} />
       );
     case "ended":
-      return <Problem title="Sesi berakhir" message={state.message} action="Masuk lagi" onAction={signIn} />;
+      return <Problem title="Sesi berakhir" message={state.message} icon="clock" tone="warning" action="Masuk lagi" onAction={signIn} />;
     case "signed-in":
       return <Home session={session} state={state} />;
   }

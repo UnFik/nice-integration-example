@@ -1,9 +1,9 @@
 import type { ConfigError } from "../config";
+import { ConfigScreen } from "./Screens";
 
 export function ConfigErrorPage({ errors }: { errors: ConfigError[] }) {
   return (
-    <main className="page narrow">
-      <h1>Konfigurasi belum benar</h1>
+    <ConfigScreen title="Konfigurasi belum benar">
       <p>
         Login tidak dimulai sampai variabel berikut diperbaiki di <code>.env</code> (salin dari <code>.env.example</code>
         ), lalu <code>npm run dev</code> dijalankan ulang.
@@ -15,6 +15,6 @@ export function ConfigErrorPage({ errors }: { errors: ConfigError[] }) {
           </li>
         ))}
       </ul>
-    </main>
+    </ConfigScreen>
   );
 }

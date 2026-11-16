@@ -19,14 +19,20 @@ export function App({ session }: { session: Session }) {
       return <Notice title="Mengalihkan ke NICE…" />;
     case "unreachable":
       return (
-        <Problem title="NICE tidak terjangkau" message={state.message} action="Coba lagi" onAction={() => void session.retry()} />
+        <Problem
+          title="NICE tidak terjangkau"
+          message={state.message}
+          action="Coba lagi"
+          onAction={() => void session.retry()}
+          icon="plug"
+        />
       );
     case "signed-out":
       return <SignIn issuer={session.config.issuer} clientId={session.config.clientId} onSignIn={signIn} />;
     case "login-failed":
       return <Problem title="Login gagal" message={state.message} action="Masuk lagi" onAction={signIn} />;
     case "ended":
-      return <Problem title="Sesi berakhir" message={state.message} action="Masuk lagi" onAction={signIn} />;
+      return <Problem title="Sesi berakhir" message={state.message} action="Masuk lagi" onAction={signIn} icon="clock" tone="warn" />;
     case "signed-in":
       return <Home session={session} state={state} />;
   }

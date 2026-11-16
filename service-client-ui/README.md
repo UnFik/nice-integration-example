@@ -6,7 +6,8 @@ UI React untuk service `inventaris` (`../shared-service-oauth`) yang masuk ke NI
 
 - organisasi dan project yang bisa dipilih dibaca dari `GET /api/v1/me/contexts`, dengan token API NICE terdelegasi (`aud=nice`);
 - pindah organisasi dan project memakai satu refresh token (`nice:org`, `nice:aud`, `nice:prj`), tanpa redirect ke NICE;
-- daftar barang `inventaris` ditampilkan di konteks yang dipilih.
+- bila NICE tidak menyediakan penemuan itu, UI menampilkan pemberitahuan dan form **Pilih konteks manual** (ID organisasi dan ID project);
+- daftar barang `inventaris` di konteks yang dipilih bisa ditambah, diubah, dan dihapus, dengan tombol yang mengikuti klaim `perms` token.
 
 Kapan memakai contoh ini dan kapan [`../public-client-pkce`](../public-client-pkce/README.md): client tenant milik satu organisasi dan satu project memakai `public-client-pkce`. UI service first-party yang melayani banyak organisasi memakai contoh ini.
 
@@ -22,9 +23,11 @@ Diuji terhadap nice revisi: `8160ac4` (2026-11-13)
 | `src/oidc.ts` | Discovery, login, callback (termasuk `access_denied`), refresh, userinfo, revoke, dan end-session dengan `oauth4webapi` |
 | `src/token-manager.ts` | Token per `(organisasi, service, project)`: organisasi sesi dari klaim token terakhir, antrean satu refresh, pakai ulang, backoff, sesi berakhir, ulang sekali pada token basi. Tanpa React |
 | `src/contexts.ts` | `GET /api/v1/me/contexts` dengan token terdelegasi, semua halaman |
-| `src/session.ts` | Perekat: login, muat ulang, identitas, konteks, pindah konteks, daftar barang, logout |
+| `src/session.ts` | Perekat: login, muat ulang, identitas, konteks (penemuan dan manual), pindah konteks, barang, logout |
+| `src/items.ts` | Klien kecil `GET/POST /items` dan `GET/PUT/DELETE /items/{id}` lewat `tokens.call`, validasi isian, dan kalimat galat |
+| `src/recent-contexts.ts` | Konteks manual yang berhasil, hanya ID, di `sessionStorage` |
 | `src/config.ts` | Validasi `VITE_*` |
-| `src/ui/`, `src/App.tsx` | Halaman. `App` memeriksa `location.pathname === "/callback"`, tanpa router |
+| `src/ui/`, `src/App.tsx` | Halaman: bilah atas dengan konteks aktif, panel Konteks, tabel barang (kartu di bawah 640px), dialog tambah/ubah/hapus, status token. `App` memeriksa `location.pathname === "/callback"`, tanpa router |
 
 Kode protokol (`oidc.ts`, token manager, NICE palsu di `src/test/`) disalin dari `public-client-pkce` lalu disesuaikan, supaya contoh ini bisa disalin sendiri. Perbaikan protokol di salah satunya perlu diterapkan ke keduanya.
 
@@ -135,6 +138,7 @@ npm run build
 - **Scope dasar di setiap refresh.** NICE mengganti scope grant dengan scope yang diminta pada setiap refresh. Hanya `nice:org`, `nice:aud`, dan `nice:prj` yang boleh di luar scope grant. Karena itu setiap refresh mengirim scope dasar, supaya token client untuk userinfo tetap bisa diambil.
 - **Organisasi sesi.** Refresh token terikat ke satu organisasi. Refresh tanpa `nice:org` tetap di organisasi itu, dan refresh dengan `nice:org:<org>` memindahkannya. UI membaca organisasi sesi dari klaim `nice_org_id` token terakhir yang diterbitkan, dan menambah `nice:org` hanya bila organisasi tujuan berbeda. Keputusan itu diambil di dalam antrean refresh, tepat sebelum request dikirim, karena refresh sebelumnya di antrean bisa sudah memindahkan sesi.
 - **Konteks.** Setelah login dan setiap muat ulang: token client (`aud` = `client_id`) untuk `/oauth/userinfo`, lalu token terdelegasi lewat refresh `nice:aud:nice` (tanpa `nice:prj`), lalu `GET /api/v1/me/contexts?page_size=50`, mengikuti `page.next_page_token`. Query `service` tidak dikirim, karena NICE menjawabnya `400 invalid_argument` untuk token terdelegasi; service diambil dari klaim `nice_service`. Pemilih hanya berisi project dari jawaban itu. Organisasi dengan `projects` kosong ditampilkan tidak tersedia.
+- **Konteks manual.** Bila membaca `/me/contexts` gagal (NICE kini menolak refresh `nice:aud:nice` untuk service client dengan `invalid_scope`), panel Konteks menjelaskan itu dalam satu kalimat netral dan menampilkan form: ID organisasi (terisi dari klaim `nice_org_id` sesi) dan ID project (diawali `prj_`). **Gunakan konteks ini** memakai logika pindah konteks yang sama. Yang berhasil masuk daftar **Terakhir dipakai**. Penolakan `access_denied`/`invalid_scope` ditampilkan ramah, dan sesi serta konteks sebelumnya tetap. Pemilih dari `/me/contexts` tetap dipakai bila NICE menjawabnya.
 - **Pindah konteks.** Memilih project menjalankan satu refresh: scope dasar, `nice:org:<org>` bila organisasinya berubah, `nice:aud:inventaris`, dan `nice:prj:<project>` (wajib untuk service client). Halaman tidak berpindah. Bila NICE menolak (`access_denied` untuk organisasi yang tidak boleh dipakai, `invalid_scope` untuk project yang tidak lagi mengaktifkan `inventaris`), refresh token tidak diputar. UI tetap di konteks sebelumnya, menampilkan alasannya, dan memuat ulang `/me/contexts`.
 - **Token per konteks.** Kunci `"<org>|<service>|<project>"`. Token dipakai ulang selama `now < iat + 10 menit + jitter(0-60 detik)` dan `now < exp - 60 detik`, jadi kembali ke konteks sebelumnya dalam 10 menit tidak mengirim request token. Sesi tetap di organisasi terakhir sampai refresh berikutnya ke organisasi lain.
 - **Galat dan rotasi** mengikuti `public-client-pkce`: satu refresh sekaligus dengan refresh token terbaru, `invalid_grant`/`invalid_client` mengakhiri sesi, jaringan/5xx/429 memakai token lama dengan backoff 5-60 detik, dan 401 `token_stale`/`expired` dari service diulang sekali dengan token baru.
@@ -147,17 +151,21 @@ npm run build
 | Identitas, jawaban `/me/contexts`, konteks aktif | memori saja; diambil ulang setelah muat ulang |
 | `nice-service-ui.refresh_token`, `nice-service-ui.id_token` | `sessionStorage` |
 | `nice-service-ui.login` (`verifier`, `state`, `nonce`) | `sessionStorage`, hanya selama login |
+| `nice-service-ui.recent_contexts` (daftar ID organisasi dan project, tanpa token) | `sessionStorage`, hilang bersama sesi |
 
 Setelah muat ulang, UI kembali ke organisasi refresh token tanpa project terpilih. Klaim yang ditampilkan didekode di browser dan tidak diverifikasi oleh UI.
 
 ## Batas
 
-- Hanya membaca. Token terdelegasi contoh ini hanya membawa `nice.me.contexts.read`.
+- Token terdelegasi (`aud=nice`) contoh ini hanya membawa `nice.me.contexts.read`. Terhadap NICE yang menolaknya untuk service client (refresh `nice:aud:nice` dijawab `invalid_scope`), penemuan konteks gagal dan UI beralih ke konteks manual.
+- Ubah dan hapus barang memakai token `inventaris` konteks aktif. Tombol dinonaktifkan bila `perms` tidak memuat izinnya; keputusan akhir tetap di `inventaris`.
 - Hanya `inventaris` yang dipanggil, walaupun `services` per project ditampilkan.
 - Tab yang diduplikasi berbagi refresh token yang sama, dan pemakaian ulang refresh token yang sudah dirotasi mengakhiri sesi di kedua tab (lihat `public-client-pkce`).
 - Hanya untuk dev: tidak ada build produksi, kontainer, atau TLS.
 
 ## Checklist uji manual
+
+Langkah 3-10 butuh NICE yang masih menjawab penemuan konteks untuk service client. Terhadap NICE yang menolaknya, jalankan langkah 1, 2, 11-14: konteks dipilih dengan form manual.
 
 Buka DevTools (tab Network dengan **Preserve log**, dan Application > Session Storage). A dan B adalah organisasi dari langkah 5, P dan Q project `inventaris` di A, R project `inventaris` di B.
 
@@ -175,3 +183,5 @@ Buka DevTools (tab Network dengan **Preserve log**, dan Application > Session St
 | 10 | Organisasi dicabut | Pilih P di A (sesi pindah ke A), cabut entitlement `inventaris` organisasi B, lalu pilih R dari pemilih lama. Setelah muat ulang di langkah 8, R belum punya token | `POST /oauth/token` dengan `nice:org:<B>` dijawab 400 `access_denied` (`the organization is not entitled to the service of this client`), refresh token yang dikirim tetap berlaku, UI tetap di A/P, dan B hilang dari pemilih setelah konteks dimuat ulang. Sesudahnya berikan lagi entitlement B, lalu nonaktifkan dan aktifkan lagi `inventaris` di R: sebelum itu `/me/contexts` menampilkan B tanpa project |
 | 11 | Sesi berakhir | Di Session Storage, ubah `nice-service-ui.refresh_token` menjadi `rusak`, lalu pilih konteks yang belum punya token | `POST /oauth/token` dijawab `invalid_grant`; layar **Sesi berakhir**; tidak ada kunci `nice-service-ui.*` tersisa |
 | 12 | Logout | Tekan **Keluar** | `POST /oauth/revoke`, lalu navigasi ke `/oauth/end_session` dengan `post_logout_redirect_uri=http://localhost:5181/`; kembali ke halaman **Masuk** |
+| 13 | Konteks manual | Terhadap NICE yang menolak `nice:aud:nice` untuk service client, login dan lihat panel Konteks. Isi ID project P, tekan **Gunakan konteks ini**. Lalu isi ID project di organisasi yang tidak berhak | Panel menampilkan pemberitahuan bahwa NICE tidak lagi menyediakan penemuan org/project untuk SPA publik dan form **Pilih konteks manual** dengan ID organisasi terisi dari `nice_org_id`. Pilihan yang sah menjalankan satu `POST /oauth/token` dengan `nice:aud:inventaris nice:prj:<P>`, barang tampil, dan konteksnya masuk **Terakhir dipakai** (Session Storage hanya menambah `nice-service-ui.recent_contexts` berisi ID). Pilihan yang ditolak menampilkan alasan yang ramah, konteks sebelumnya tetap, dan refresh token tidak berubah |
+| 14 | Kelola barang | Dengan konteks aktif, tekan **Tambah barang**, isi, simpan. Lalu **Ubah**, lalu **Hapus** dan konfirmasi. Ulangi dengan user yang `perms`-nya hanya memuat `inventaris.items.read` | `POST /items`, `PUT /items/<id>`, `DELETE /items/<id>` (204) dijawab sukses dan masing-masing memunculkan pemberitahuan serta memuat ulang daftar. Dialog tertutup dengan Escape dan fokus kembali ke tombol pembukanya. Untuk user hanya-baca, Tambah, Ubah, dan Hapus nonaktif dengan keterangan izin yang kurang |

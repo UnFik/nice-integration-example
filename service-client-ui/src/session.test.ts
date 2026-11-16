@@ -246,3 +246,181 @@ describe("switching context", () => {
     expect(current.getState().itemsError).toMatch(/403/);
   });
 });
+
+// NICE no longer answers the delegated nice:aud:nice refresh for service clients.
+const noDiscovery = (form: URLSearchParams) =>
+  form.get("grant_type") === "refresh_token" && form.get("scope")?.includes("nice:aud:nice")
+    ? json(400, { error: "invalid_scope", error_description: "nice:aud:nice is not allowed" })
+    : undefined;
+
+describe("without context discovery", () => {
+  it("stays signed in with the contexts error and no picker data", async () => {
+    nice.tokenOverride = noDiscovery;
+
+    const current = await signedIn();
+    const state = current.getState();
+
+    expect(state.phase).toBe("signed-in");
+    expect(state.contexts).toBeUndefined();
+    expect(state.contextsError).toMatch(/Konteks tidak dapat dibaca/);
+    expect(state.active).toEqual({ org: ORG_A });
+    expect(state.recent).toEqual([]);
+  });
+
+  it("moves to a typed context, loads its items and remembers it as ids only", async () => {
+    nice.tokenOverride = noDiscovery;
+    const current = await signedIn();
+
+    const accepted = await current.chooseManual(ORG_B, PRJ_R);
+
+    const state = current.getState();
+    expect(accepted).toBe(true);
+    expect(state.active).toEqual({ org: ORG_B, project: PRJ_R });
+    expect(state.items?.map((entry) => entry.id)).toEqual([`itm-${ORG_B}-${PRJ_R}`]);
+    expect(state.recent).toEqual([{ org: ORG_B, project: PRJ_R }]);
+    const stored = storage.getItem("nice-service-ui.recent_contexts") ?? "";
+    expect(JSON.parse(stored)).toEqual([{ org: ORG_B, project: PRJ_R }]);
+    expect(stored).not.toMatch(/\./);
+    expect(refreshes().at(-1)?.get("scope")).toBe(`${BASE_SCOPE} nice:org:${ORG_B} nice:aud:inventaris nice:prj:${PRJ_R}`);
+  });
+
+  it("shows access_denied kindly, keeps the context and remembers nothing", async () => {
+    nice.tokenOverride = noDiscovery;
+    const current = await signedIn();
+    await current.chooseManual(ORG_A, PRJ_P);
+    nice.org(ORG_B)!.entitled = false;
+    const before = storage.getItem(keys.refreshToken);
+    const asked = nice.contextsRequests.length;
+
+    const accepted = await current.chooseManual(ORG_B, PRJ_R);
+
+    const state = current.getState();
+    expect(accepted).toBe(false);
+    expect(state.switchError).toMatch(/NICE menolak: akun Anda tidak boleh memakai inventaris/);
+    expect(state.switchError).toMatch(/access_denied/);
+    expect(state.active).toEqual({ org: ORG_A, project: PRJ_P });
+    expect(state.recent).toEqual([{ org: ORG_A, project: PRJ_P }]);
+    expect(storage.getItem(keys.refreshToken)).toBe(before);
+    expect(nice.contextsRequests.length).toBe(asked);
+  });
+
+  it("shows invalid_scope kindly for a project that does not use inventaris", async () => {
+    nice.tokenOverride = noDiscovery;
+    const current = await signedIn();
+    nice.org(ORG_B)!.projects[0].services = [];
+
+    await current.chooseManual(ORG_B, PRJ_R);
+
+    expect(current.getState().switchError).toMatch(/project itu tidak ada, tidak mengaktifkan inventaris/);
+    expect(current.getState().switchError).toMatch(/invalid_scope/);
+    expect(current.getState().active).toEqual({ org: ORG_A });
+  });
+
+  it("forgets the recent contexts with the session", async () => {
+    nice.tokenOverride = noDiscovery;
+    const current = await signedIn();
+    await current.chooseManual(ORG_A, PRJ_P);
+
+    await current.logout();
+
+    expect(storage.length).toBe(0);
+  });
+
+  it("keeps the recent contexts of the tab after a reload", async () => {
+    nice.tokenOverride = noDiscovery;
+    const first = await signedIn();
+    await first.chooseManual(ORG_A, PRJ_P);
+
+    const reloaded = session();
+
+    expect(reloaded.getState().recent).toEqual([{ org: ORG_A, project: PRJ_P }]);
+  });
+});
+
+describe("managing items", () => {
+  const stored: { id: string; name: string; quantity: number }[] = [];
+
+  function inventaris(): NonNullable<FakeNice["service"]> {
+    return (url: URL, init: RequestInit) => {
+      if (url.origin !== INVENTARIS_URL) return undefined;
+      const method = init.method ?? "GET";
+      if (method === "GET") return json(200, { items: stored });
+      if (method === "POST") {
+        const input = JSON.parse(String(init.body)) as { name: string; quantity: number };
+        if (!input.name) return json(400, { error: "invalid_argument", error_description: "name" });
+        stored.push({ id: `itm_${stored.length + 1}`, ...input });
+        return json(201, stored.at(-1));
+      }
+      const id = url.pathname.split("/").pop();
+      const index = stored.findIndex((entry) => entry.id === id);
+      if (index < 0) return json(404, { error: "not_found" });
+      if (method === "DELETE") {
+        stored.splice(index, 1);
+        return new Response(null, { status: 204 });
+      }
+      stored[index] = { ...stored[index], ...JSON.parse(String(init.body)) };
+      return json(200, stored[index]);
+    };
+  }
+
+  beforeEach(() => {
+    stored.length = 0;
+    nice.service = inventaris();
+  });
+
+  it("creates, edits and deletes in the active context and reloads the list each time", async () => {
+    const current = await signedIn();
+    await current.choose(ORG_A, PRJ_P);
+
+    expect(await current.saveItem({ name: "Kabel", quantity: 3 })).toEqual({ ok: true });
+    expect(current.getState().items?.map((entry) => entry.name)).toEqual(["Kabel"]);
+
+    expect(await current.saveItem({ name: "Kabel UTP", quantity: 5 }, "itm_1")).toEqual({ ok: true });
+    expect(current.getState().items?.[0]).toMatchObject({ name: "Kabel UTP", quantity: 5 });
+
+    expect(await current.removeItem("itm_1")).toEqual({ ok: true });
+    expect(current.getState().items).toEqual([]);
+    expect(claimsOf(nice.serviceRequests.at(-1)?.authorization ?? null)).toMatchObject({ aud: "inventaris", prj: PRJ_P });
+  });
+
+  it("answers a refused change in a sentence and leaves the list as it was", async () => {
+    const current = await signedIn();
+    await current.choose(ORG_A, PRJ_P);
+    stored.push({ id: "itm_1", name: "Kabel", quantity: 1 });
+    await current.loadItems();
+
+    const result = await current.saveItem({ name: "", quantity: 1 });
+
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("(name)") });
+    expect(current.getState().items?.map((entry) => entry.id)).toEqual(["itm_1"]);
+  });
+
+  it("reloads the list when the item is already gone", async () => {
+    const current = await signedIn();
+    await current.choose(ORG_A, PRJ_P);
+    stored.push({ id: "itm_1", name: "Kabel", quantity: 1 });
+    await current.loadItems();
+    stored.length = 0;
+
+    const result = await current.removeItem("itm_1");
+
+    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/tidak ditemukan/) });
+    expect(current.getState().items).toEqual([]);
+  });
+
+  it("says a revoked access on delete came from NICE's online check", async () => {
+    const current = await signedIn();
+    await current.choose(ORG_A, PRJ_P);
+    nice.service = () => json(403, { error: "access_denied" });
+
+    const result = await current.removeItem("itm_1");
+
+    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/dicabut.*diperiksa langsung ke NICE/) });
+  });
+
+  it("asks for a project before any change", async () => {
+    const current = await signedIn();
+
+    expect(await current.removeItem("itm_1")).toMatchObject({ ok: false, message: expect.stringMatching(/Pilih project/) });
+  });
+});
