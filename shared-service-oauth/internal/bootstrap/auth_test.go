@@ -175,3 +175,14 @@ func TestOpenAPINeedsNoToken(t *testing.T) {
 		t.Fatal("/openapi.json is not the embedded document")
 	}
 }
+
+func TestDocsPageNeedsNoTokenAndPointsAtTheDocument(t *testing.T) {
+	e := newTestEnv(t, nil)
+	r := e.do(http.MethodGet, "/docs", "", nil)
+	if r.Status != http.StatusOK || !strings.HasPrefix(r.Header.Get("Content-Type"), "text/html") {
+		t.Fatalf("/docs = %d %q", r.Status, r.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(r.Body, `"/openapi.json"`) {
+		t.Fatal("/docs does not load /openapi.json")
+	}
+}

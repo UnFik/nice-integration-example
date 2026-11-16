@@ -78,7 +78,7 @@ func TestOpenAPIMatchesTheRouteTable(t *testing.T) {
 			t.Errorf("%s: x-nice-sensitive = %v on an operation that is not sensitive", key, sensitive)
 		}
 	}
-	for _, public := range []string{"/healthz", "/openapi.json"} {
+	for _, public := range []string{"/healthz", "/openapi.json", "/docs"} {
 		if _, ok := doc.Paths[public]; ok {
 			t.Errorf("the document declares %s, which is not an operation of the catalog", public)
 		}

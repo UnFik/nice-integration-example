@@ -12,7 +12,7 @@ Tested against nice revision: `c7a5086` (2026-11-13)
 |---|---|
 | `cmd/inventaris/main.go` | thin entry point, document-level swag annotations including `x-nice-roles` |
 | `internal/bootstrap/` | assembly: configuration, `nicetoken` (`New`, `Run`, `StartFeed`), repo, use cases, server |
-| `internal/adapter/rest/` | `routes.go` (the `CORS -> mux` chain), `item/` (the single route table, handlers, per-operation swag annotations), `system/` (`/healthz`, `/openapi.json`) |
+| `internal/adapter/rest/` | `routes.go` (the `CORS -> mux` chain), `item/` (the single route table, handlers, per-operation swag annotations), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
 | `internal/app/item/` | item use cases and the `Repo` contract |
 | `internal/domain/` | `Item`, validation rules, permission names |
 | `internal/adapter/memory/item/` | in-memory item storage per organization |
@@ -34,7 +34,7 @@ internal/
     memory/item/                   *_repository.go      in-memory Repo implementation
     rest/                          routes.go            assembler: token verification, permission, CORS
     rest/item/                     item_routes.go       route table + <action>_item_handler.go
-    rest/system/                   /healthz and /openapi.json
+    rest/system/                   /healthz, /openapi.json, and /docs
   platform/{config,httpx}/         environment and CORS
   bootstrap/                       assembly and the tests that cross layers
   arch_test.go                     enforces the import rules and file name suffixes
@@ -52,7 +52,7 @@ The layout follows a module of the `nice` backend (`nice/AGENTS.md`, "Struktur s
 | `PUT /items/{id}` | `inventaris.items.edit` | |
 | `DELETE /items/{id}` | `inventaris.items.delete` | yes, checked online with NICE |
 
-`GET /healthz` and `GET /openapi.json` are open without a token and are not in the OpenAPI document. After the import, the NICE catalog has the roles `inventaris.viewer` (read), `inventaris.admin` (every permission), and `inventaris.operator` (read, create, edit; from `x-nice-roles`).
+`GET /healthz`, `GET /openapi.json`, and `GET /docs` (Swagger UI; its assets load from the jsdelivr CDN) are open without a token and are not in the OpenAPI document. On `/docs`, press **Authorize** and enter `Bearer <JWT>` to try an operation. After the import, the NICE catalog has the roles `inventaris.viewer` (read), `inventaris.admin` (every permission), and `inventaris.operator` (read, create, edit; from `x-nice-roles`).
 
 Item body: `{"name": "...", "quantity": 0}`. `name` is 1 to 120 characters after trimming surrounding spaces, `quantity` is an integer of at least 0. Application errors use the same shape as `nicetoken`: `{"error": "...", "error_description": "..."}`, e.g. `400 {"error":"invalid_argument","error_description":"name"}` and `404 {"error":"not_found"}`.
 

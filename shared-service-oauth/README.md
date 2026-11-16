@@ -12,7 +12,7 @@ Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 |---|---|
 | `cmd/inventaris/main.go` | titik masuk tipis, anotasi swag tingkat dokumen termasuk `x-nice-roles` |
 | `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), repo, use case, server |
-| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `item/` (tabel rute tunggal, handler, anotasi swag per operasi), `system/` (`/healthz`, `/openapi.json`) |
+| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `item/` (tabel rute tunggal, handler, anotasi swag per operasi), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
 | `internal/app/item/` | use case barang dan kontrak `Repo` |
 | `internal/domain/` | `Item`, aturan validasi, nama izin |
 | `internal/adapter/memory/item/` | penyimpanan barang per organisasi di memori |
@@ -34,7 +34,7 @@ internal/
     memory/item/                   *_repository.go      implementasi Repo di memori
     rest/                          routes.go            perakit: verifikasi token, izin, CORS
     rest/item/                     item_routes.go       tabel rute + <aksi>_item_handler.go
-    rest/system/                   /healthz dan /openapi.json
+    rest/system/                   /healthz, /openapi.json, dan /docs
   platform/{config,httpx}/         env dan CORS
   bootstrap/                       perakitan dan tes yang melintasi lapisan
   arch_test.go                     menegakkan aturan impor dan akhiran nama berkas
@@ -52,7 +52,7 @@ Pola ini meniru modul di backend `nice` (`nice/AGENTS.md`, "Struktur satu modul"
 | `PUT /items/{id}` | `inventaris.items.edit` | |
 | `DELETE /items/{id}` | `inventaris.items.delete` | ya, diperiksa online ke NICE |
 
-`GET /healthz` dan `GET /openapi.json` terbuka tanpa token dan tidak ada di dokumen OpenAPI. Setelah impor, katalog NICE memuat role `inventaris.viewer` (baca), `inventaris.admin` (semua izin), dan `inventaris.operator` (baca, buat, ubah; dari `x-nice-roles`).
+`GET /healthz`, `GET /openapi.json`, dan `GET /docs` (Swagger UI; asetnya dimuat dari CDN jsdelivr) terbuka tanpa token dan tidak ada di dokumen OpenAPI. Di `/docs`, tekan **Authorize** lalu isi `Bearer <JWT>` untuk mencoba operasi. Setelah impor, katalog NICE memuat role `inventaris.viewer` (baca), `inventaris.admin` (semua izin), dan `inventaris.operator` (baca, buat, ubah; dari `x-nice-roles`).
 
 Body barang: `{"name": "...", "quantity": 0}`. `name` 1 sampai 120 karakter setelah spasi di tepi dipangkas, `quantity` bilangan bulat paling kecil 0. Galat aplikasi memakai bentuk yang sama dengan `nicetoken`: `{"error": "...", "error_description": "..."}`, mis. `400 {"error":"invalid_argument","error_description":"name"}` dan `404 {"error":"not_found"}`.
 

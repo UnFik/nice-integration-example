@@ -17,7 +17,7 @@ func ItemRoutes(items *itemusecase.Service) []item.Route {
 	return item.New(items).Routes()
 }
 
-// NewHandler assembles CORS -> mux. /healthz and /openapi.json are public;
+// NewHandler assembles CORS -> mux. /healthz, /openapi.json and /docs are public;
 // every item route verifies the token and then its permission.
 func NewHandler(v *nicetoken.Verifier, items *itemusecase.Service, corsOrigins []string) http.Handler {
 	mux := http.NewServeMux()
