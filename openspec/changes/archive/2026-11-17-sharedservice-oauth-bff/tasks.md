@@ -44,7 +44,7 @@
 ## 9. Dokumentasi dan uji manual
 
 - [x] 9.1 Tulis `sharedservice-oauth/README.md` dan `README.en.md` (isi folder, cara kerja BFF, konfigurasi, checklist setup NICE: client confidential di project organisasi platform diikat ke `inventaris`, dua redirect URI, dua organisasi yang memakai `inventaris`; checklist uji browser per requirement; catatan Store produksi, tabel data per org dan project, dan bahwa token memberi scope sedangkan nama org dan project dibaca dari NICE); verifikasi: kedua README setara isinya dan setiap langkah menyebut hasil yang diharapkan.
-- [ ] 9.2 Jalankan checklist terhadap NICE dev, `scripts/smoke.sh`, dan isi baris "Diuji terhadap nice revisi"; verifikasi: semua langkah uji sesuai hasil yang diharapkan dan smoke keluar dengan kode 0.
+- [x] 9.2 Jalankan checklist terhadap NICE dev, `scripts/smoke.sh`, dan isi baris "Diuji terhadap nice revisi"; verifikasi: semua langkah uji sesuai hasil yang diharapkan dan smoke keluar dengan kode 0.
 
 ## Workflow follow-up
 
