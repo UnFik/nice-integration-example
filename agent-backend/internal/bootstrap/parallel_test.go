@@ -32,7 +32,7 @@ func TestTenCallsInOneContextShareOneExchange(t *testing.T) {
 	}
 }
 
-func TestTwoServicesExchangeAtTheSameTime(t *testing.T) {
+func TestTwoContextsExchangeAtTheSameTime(t *testing.T) {
 	e := newTestEnv(t)
 	var inFlight, most atomic.Int32
 	both := make(chan struct{})
@@ -57,15 +57,18 @@ func TestTwoServicesExchangeAtTheSameTime(t *testing.T) {
 	}
 	s := e.connect(e.userToken(orgA, prjP))
 	var wg sync.WaitGroup
-	for _, name := range []string{"inventaris_list_items", "pengiriman_list_shipments"} {
+	for _, where := range []map[string]any{nil, {"organization_id": orgB, "project_id": prjQ}} {
 		wg.Go(func() {
-			if res, _ := callTool(t, s, name, nil); res.IsError {
-				t.Errorf("%s failed: %s", name, resultText(t, res))
+			if res, _ := callTool(t, s, "inventaris_list_items", where); res.IsError {
+				t.Errorf("call for %v failed: %s", where, resultText(t, res))
 			}
 		})
 	}
 	wg.Wait()
 	if most.Load() != 2 {
-		t.Fatalf("at most %d exchange in flight, want 2: calls for different services must not wait for each other", most.Load())
+		t.Fatalf("at most %d exchange in flight, want 2: calls for different contexts must not wait for each other", most.Load())
+	}
+	if n := len(e.nice.Exchanges()); n != 2 {
+		t.Fatalf("exchanges = %d, want one per context", n)
 	}
 }

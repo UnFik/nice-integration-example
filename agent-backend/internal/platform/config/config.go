@@ -16,7 +16,6 @@ const (
 	EnvClientID      = "NICE_CLIENT_ID"
 	EnvClientSecret  = "NICE_CLIENT_SECRET"
 	EnvInventarisURL = "INVENTARIS_URL"
-	EnvProxyURL      = "NICE_PROXY_URL"
 	EnvListen        = "LISTEN_ADDR"
 	EnvPublicURL     = "PUBLIC_URL"
 	EnvJWKSFile      = "JWKS_FILE"
@@ -36,9 +35,8 @@ type Config struct {
 	// token exchange. The secret goes to the token endpoint of NICE only.
 	ClientID     string
 	ClientSecret string
-	// InventarisURL is called directly; ProxyURL is the NICE address whose /pengiriman/... reaches pengiriman.
+	// InventarisURL is called directly with the exchanged token.
 	InventarisURL string
-	ProxyURL      string
 	Listen        string
 	// PublicURL is the address MCP clients use; the resource of the metadata is PublicURL + /mcp.
 	PublicURL string
@@ -49,7 +47,7 @@ type Config struct {
 func (c Config) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("issuer", c.Issuer), slog.String("client_id", c.ClientID),
-		slog.String("inventaris_url", c.InventarisURL), slog.String("proxy_url", c.ProxyURL),
+		slog.String("inventaris_url", c.InventarisURL),
 		slog.String("listen", c.Listen), slog.String("public_url", c.PublicURL))
 }
 
@@ -80,10 +78,6 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		PublicURL:     strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
 		JWKSFile:      get(EnvJWKSFile, defaultJWKSFile),
 	}
-	// Empty means the proxy of the same NICE, so .env.example can list the variable without a value.
-	if cfg.ProxyURL = strings.TrimRight(get(EnvProxyURL, ""), "/"); cfg.ProxyURL == "" {
-		cfg.ProxyURL = cfg.Issuer
-	}
 	required := []struct{ key, value, hint string }{
 		{EnvIssuer, cfg.Issuer, "the issuer of NICE, e.g. http://localhost:8080"},
 		{EnvClientID, cfg.ClientID, "the client_id of the confidential service client agen-backend"},
@@ -96,7 +90,7 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		}
 	}
 	for _, u := range []struct{ key, value string }{
-		{EnvIssuer, cfg.Issuer}, {EnvInventarisURL, cfg.InventarisURL}, {EnvProxyURL, cfg.ProxyURL}, {EnvPublicURL, cfg.PublicURL},
+		{EnvIssuer, cfg.Issuer}, {EnvInventarisURL, cfg.InventarisURL}, {EnvPublicURL, cfg.PublicURL},
 	} {
 		if p, err := url.Parse(u.value); err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" {
 			return Config{}, fmt.Errorf("config: %s must be an http or https URL, got %q", u.key, u.value)
