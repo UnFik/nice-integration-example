@@ -4,7 +4,7 @@
 
 Contoh SharedService fullstack untuk NICE dengan slug `inventaris`. Backend Go adalah service `nice_token` yang memverifikasi token NICE sendiri, sekaligus backend-for-frontend (BFF) UI-nya: ia login ke NICE sebagai OAuth client **confidential** yang diikat ke `inventaris`, menyimpan refresh token di server, dan memberi browser cookie sesi saja. UI React hanya berbicara ke backend di origin yang sama: tidak memegang token, tidak memanggil NICE, dan tidak memuat pustaka OAuth.
 
-Diuji terhadap nice revisi: belum diuji manual (tes unit memakai `niceclient` dari `4282316`).
+Diuji terhadap nice revisi `4282316` (NICE dev dibangun dari revisi itu): login, callback, penemuan konteks, pindah org dan project, isolasi data per org dan project (memori dan PostgreSQL), CSRF, keluar, dan `scripts/smoke.sh` lulus lewat HTTP. Langkah klik di browser belum diuji manual.
 
 Versi NICE minimum: `4282316` (`add-client-org-switch` dan `add-signin-token-exchange`).
 
