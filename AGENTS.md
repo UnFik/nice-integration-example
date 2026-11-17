@@ -7,7 +7,7 @@ Repo ini berisi empat contoh integrasi dengan NICE yang **berdiri sendiri**. Con
 | `sharedservice-oauth/` | SharedService `nice_token`, slug `inventaris`: `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice/pkg/nicetoken` + `nice/pkg/niceclient`; Vite + React 19 + TypeScript | 8081 (UI build juga di 8081); 5181 saat dev |
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
-| `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service lain lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceclient` | 8083 |
+| `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service `nice_token` (`inventaris`) lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceclient` | 8083 |
 
 `agent-backend` memakai `replace github.com/nice-platform/nice => ../../nice` dan `sharedservice-oauth/backend` memakai `=> ../../../nice`, jadi repo `nice` harus berada di sebelah `example/`. `compose.yml` di akar menjalankan `sharedservice-oauth` dan PostgreSQL-nya di samping stack NICE di Docker.
 
@@ -37,7 +37,7 @@ make run | make test               jalankan agen / tes unit dengan -race (tanpa 
 make smoke                         uji terhadap NICE yang sudah diatur (baca .env dan AGENT_USER_TOKEN)
 ```
 
-Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` butuh `nice` `4282316` atau sesudahnya, dan `agent-backend` butuh `6cc9986` atau sesudahnya.
+Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` butuh `nice` `4282316` atau sesudahnya, `shared-service-apikey` butuh `40ddb20` atau sesudahnya, dan `agent-backend` butuh `6cc9986` atau sesudahnya.
 
 ## Aturan
 
