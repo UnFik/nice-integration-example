@@ -16,17 +16,6 @@ The agent SHALL serve MCP over Streamable HTTP at `/mcp` and SHALL accept only r
 - **WHEN** an MCP client calls `/mcp` with a token whose `aud` is `inventaris`
 - **THEN** the agent answers 401 `wrong_audience`
 
-### Requirement: Tool memanggil service atas nama user
-Each tool SHALL obtain a token for its target with token exchange (`pkg/niceclient` exchange mode), using the user's token from the MCP request as subject token and the agent's confidential service client as actor, and SHALL call the target with that token only. The user's own token SHALL NOT be sent to any service other than NICE's token endpoint.
-
-#### Scenario: Daftar barang
-- **WHEN** the user calls `inventaris_list_items` without arguments
-- **THEN** the agent exchanges for `nice:aud:inventaris` in the user's token organization and project, calls `inventaris` with the exchanged token, and returns the items
-
-#### Scenario: Pengiriman lewat proxy
-- **WHEN** the user calls `pengiriman_create_shipment`
-- **THEN** the agent exchanges for `nice:aud:pengiriman`, calls `<NICE>/pengiriman/shipments` with the exchanged token, and returns the created shipment
-
 ### Requirement: Konteks tool
 Tools SHALL accept optional `organization_id` and `project_id`, defaulting to the organization and project of the user's token, and SHALL pass them to the exchange as `nice:org` and `nice:prj`. The agent SHALL NOT pick a context the user did not name or hold.
 
@@ -45,17 +34,6 @@ Failures of the exchange or of the target service SHALL be returned as MCP tool 
 - **WHEN** the user lacks `inventaris.items.create` and calls `inventaris_create_item`
 - **THEN** the tool result is an error naming `permission_denied`
 
-### Requirement: Exchange hemat dan paralel
-The agent SHALL reuse an exchanged token per `(user, organization, project, service)` until it nears expiry or the subject token ends, SHALL let calls for different targets run concurrently, and SHALL retry a call once after a fresh exchange when the target answers 401 `token_stale`.
-
-#### Scenario: Banyak panggilan
-- **WHEN** the user calls `inventaris_list_items` ten times in one minute in the same context
-- **THEN** the agent sends one exchange request
-
-#### Scenario: Dua service sekaligus
-- **WHEN** the MCP client calls an `inventaris` tool and a `pengiriman` tool at the same time
-- **THEN** both exchanges are in flight together
-
 ### Requirement: Tanpa tool sensitif
 The agent SHALL NOT expose tools for operations marked sensitive in the target catalog, such as deleting an item in `inventaris`.
 
@@ -64,8 +42,30 @@ The agent SHALL NOT expose tools for operations marked sensitive in the target c
 - **THEN** no tool deletes an item
 
 ### Requirement: Panduan setup dan uji
-The example SHALL carry `README.md` and `README.en.md` with the NICE version it needs, the manual setup checklist (service `agen` and its import, public and confidential service clients bound to `agen`, dependencies on `inventaris` and `pengiriman` with read and create permissions, role binding), how to obtain a user token, how to call the tools with MCP Inspector and `curl`, and a test checklist that shows `acted_by` in `inventaris`.
+The example SHALL carry `README.md` and `README.en.md` with the NICE version it needs, the manual setup checklist (service `agen` and its import, public and confidential service clients bound to `agen`, a dependency on `inventaris` with read and create permissions, role binding), how to obtain a user token, how to call the tools with MCP Inspector and `curl`, and a test checklist that shows `acted_by` in `inventaris`. The README SHALL explain that `api_key` services use a key per Service Account and refuse user tokens, so this agent offers tools for `nice_token` services only.
 
 #### Scenario: Mitra mengikuti README
 - **WHEN** a partner follows the setup and calls `inventaris_create_item`
 - **THEN** the created item in `inventaris` shows the agent's client as `acted_by`
+
+### Requirement: Tool memanggil inventaris atas nama user
+Each tool SHALL obtain a token for `inventaris` with token exchange (`pkg/niceclient` exchange mode), using the user's token from the MCP request as subject token and the agent's confidential service client as actor, and SHALL call `inventaris` with that token only. The user's own token SHALL NOT be sent to any service other than NICE's token endpoint. The agent SHALL NOT expose tools for `api_key` services.
+
+#### Scenario: Daftar barang
+- **WHEN** the user calls `inventaris_list_items` without arguments
+- **THEN** the agent exchanges for `nice:aud:inventaris` in the user's token organization and project, calls `inventaris` with the exchanged token, and returns the items
+
+#### Scenario: Tidak ada tool pengiriman
+- **WHEN** an MCP client lists the tools
+- **THEN** no tool targets `pengiriman`
+
+### Requirement: Exchange hemat dan paralel antar konteks
+The agent SHALL reuse an exchanged token per `(user, organization, project, service)` until it nears expiry or the subject token ends, SHALL let calls for different contexts run concurrently, and SHALL retry a call once after a fresh exchange when the target answers 401 `token_stale`.
+
+#### Scenario: Banyak panggilan
+- **WHEN** the user calls `inventaris_list_items` ten times in one minute in the same context
+- **THEN** the agent sends one exchange request
+
+#### Scenario: Dua konteks sekaligus
+- **WHEN** the MCP client calls `inventaris_list_items` for two different projects at the same time
+- **THEN** both exchanges are in flight together

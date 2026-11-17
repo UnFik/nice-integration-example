@@ -15,7 +15,7 @@
 ## 3. Akar repo dan penutup
 
 - [x] 3.1 Perbarui `README.md`, `README.en.md`, dan `AGENTS.md` di akar: peran `agent-backend` (tool `inventaris` saja), versi NICE minimum `shared-service-apikey` (`40ddb20`), dan rujukan checklist. Verifikasi: tabel dan kalimat konsisten dengan README contoh; dokumen id dan en setara.
-- [ ] 3.2 Catat revisi NICE yang diuji (`40ddb20`) di baris "Diuji terhadap nice revisi" README `shared-service-apikey` (dan `agent-backend` bila tes manualnya dijalankan). Verifikasi: baris sama di versi id dan en.
+- [x] 3.2 Catat revisi NICE yang diuji (`40ddb20`) di baris "Diuji terhadap nice revisi" README `shared-service-apikey` (dan `agent-backend` bila tes manualnya dijalankan). Verifikasi: baris sama di versi id dan en.
 
 ## Workflow follow-up
 

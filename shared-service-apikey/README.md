@@ -15,7 +15,7 @@ Tiga operasi key (`POST /keys`, `POST /keys/{key_id}/rotate`, `DELETE /keys/{key
 
 Kontrak NICE yang diikuti: `nice/docs/api.md` bagian "Service api_key dan proxy", "Kunci per Service Account (mirrored key)", dan "Service Account: `client_credentials`", serta `nice/docs/gateway-integration.md` bagian "Service lama yang tidak bisa diubah".
 
-Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
+Diuji terhadap nice revisi: `40ddb20` (2026-11-18)
 
 ## Peringatan: header `X-Nice-*`
 
