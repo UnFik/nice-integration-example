@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -18,12 +19,22 @@ const (
 	EnvCORSOrigins   = "CORS_ALLOWED_ORIGINS"
 	EnvServiceAPIKey = "NICE_SERVICE_API_KEY"
 	EnvDatabaseURL   = "DATABASE_URL"
+	EnvClientID      = "NICE_CLIENT_ID"
+	EnvClientSecret  = "NICE_CLIENT_SECRET"
+	EnvPublicURL     = "PUBLIC_URL"
+	EnvSessionIdle   = "SESSION_IDLE_TIMEOUT"
+	EnvWebDir        = "WEB_DIR"
 )
 
 const (
 	DefaultListen      = "127.0.0.1:8081"
 	defaultJWKSFile    = "data/jwks.json"
 	defaultCORSOrigins = "http://localhost:5180"
+	defaultPublicURL   = "http://localhost:8081"
+	defaultSessionIdle = "8h"
+	defaultWebDir      = "../web/dist"
+	// CallbackPath is where NICE sends the browser back after the sign-in.
+	CallbackPath = "/auth/callback"
 )
 
 // Config is what the service needs to run. The slug is not configurable: the
@@ -39,6 +50,20 @@ type Config struct {
 	// DatabaseURL is the PostgreSQL URL of the item store. Empty keeps the
 	// items in memory. It may hold a password, so it is never printed.
 	DatabaseURL string
+	// ClientID and ClientSecret are those of the confidential OAuth client bound
+	// to inventaris, used by the backend to sign users in. The secret is sent to
+	// NICE only and never printed.
+	ClientID     string
+	ClientSecret string
+	// PublicURL is the origin the browser sees (scheme, host and port, no path):
+	// the Vite dev server in development, the backend itself in a build.
+	PublicURL string
+	// RedirectURI is PublicURL + CallbackPath; it must be registered on the client.
+	RedirectURI string
+	// SessionIdle ends a browser session that was not used for this long.
+	SessionIdle time.Duration
+	// WebDir holds the built UI (web/dist); a missing directory serves no UI.
+	WebDir string
 }
 
 type LookupFunc func(key string) (string, bool)
@@ -66,6 +91,10 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		JWKSFile:      get(EnvJWKSFile, defaultJWKSFile),
 		ServiceAPIKey: get(EnvServiceAPIKey, ""),
 		DatabaseURL:   get(EnvDatabaseURL, ""),
+		ClientID:      get(EnvClientID, ""),
+		ClientSecret:  get(EnvClientSecret, ""),
+		PublicURL:     strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
+		WebDir:        get(EnvWebDir, defaultWebDir),
 	}
 	for o := range strings.SplitSeq(get(EnvCORSOrigins, defaultCORSOrigins), ",") {
 		if o = strings.TrimSpace(o); o != "" {
@@ -90,6 +119,23 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 			return Config{}, fmt.Errorf("config: %s must be a postgres:// URL (e.g. postgres://user:password@localhost:5432/inventaris), or empty to keep items in memory", EnvDatabaseURL)
 		}
 	}
+	if cfg.ClientID == "" {
+		return Config{}, fmt.Errorf("config: %s is required (the client_id of the confidential OAuth client bound to inventaris); set it in the environment or in %s", EnvClientID, dotenv)
+	}
+	if cfg.ClientSecret == "" {
+		return Config{}, fmt.Errorf("config: %s is required (the secret of the OAuth client %s); set it in the environment or in %s", EnvClientSecret, EnvClientID, dotenv)
+	}
+	if u, err := url.Parse(cfg.PublicURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		u.Path != "" || u.RawQuery != "" || u.User != nil {
+		return Config{}, fmt.Errorf("config: %s must be an origin such as http://localhost:8081 (scheme, host and port only), got %q", EnvPublicURL, cfg.PublicURL)
+	}
+	cfg.RedirectURI = cfg.PublicURL + CallbackPath
+	idle := get(EnvSessionIdle, defaultSessionIdle)
+	d, err := time.ParseDuration(idle)
+	if err != nil || d <= 0 {
+		return Config{}, fmt.Errorf("config: %s must be a positive duration such as 8h, got %q", EnvSessionIdle, idle)
+	}
+	cfg.SessionIdle = d
 	return cfg, nil
 }
 

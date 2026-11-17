@@ -1,11 +1,11 @@
-import type { Claims } from "./jwt";
-import type { TokenKey, TokenManager } from "./token-manager";
+import { ApiError } from "./api";
 
 export interface Item {
   id: string;
   name: string;
   quantity: number;
   createdBy: string;
+  actedBy?: string;
   createTime?: string;
   updateTime?: string;
 }
@@ -25,78 +25,6 @@ export const ITEM_PERMISSIONS = {
 export type ItemAction = keyof typeof ITEM_PERMISSIONS;
 
 export const NAME_MAX = 120;
-
-// ItemsApiError carries the {"error","error_description"} body of inventaris.
-export class ItemsApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code?: string,
-    readonly description?: string,
-  ) {
-    super(`inventaris menjawab HTTP ${status}${code ? ` ${code}` : ""}.`);
-    this.name = "ItemsApiError";
-  }
-}
-
-type Caller = Pick<TokenManager, "call">;
-
-// itemsApi goes through tokens.call, so a 401 token_stale is retried once by the token manager.
-export function itemsApi(tokens: Caller, baseUrl: string, target: TokenKey) {
-  const send = async (path: string, method: string, body?: ItemInput): Promise<unknown> => {
-    const response = await tokens.call(target, `${baseUrl}${path}`, {
-      method,
-      headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    if (response.status === 204) return undefined;
-    const answer = (await response.json().catch(() => undefined)) as Record<string, unknown> | undefined;
-    if (!response.ok) {
-      throw new ItemsApiError(
-        response.status,
-        typeof answer?.error === "string" ? answer.error : undefined,
-        typeof answer?.error_description === "string" ? answer.error_description : undefined,
-      );
-    }
-    return answer;
-  };
-  const path = (id: string) => `/items/${encodeURIComponent(id)}`;
-  return {
-    async list(): Promise<Item[]> {
-      const answer = (await send("/items", "GET")) as { items?: unknown } | undefined;
-      if (!Array.isArray(answer?.items)) throw new ItemsApiError(200, "invalid_body");
-      return answer.items.map(toItem);
-    },
-    async create(input: ItemInput): Promise<Item> {
-      return toItem(await send("/items", "POST", input));
-    },
-    async update(id: string, input: ItemInput): Promise<Item> {
-      return toItem(await send(path(id), "PUT", input));
-    },
-    async remove(id: string): Promise<void> {
-      await send(path(id), "DELETE");
-    },
-  };
-}
-
-export function toItem(raw: unknown): Item {
-  const value = (raw ?? {}) as Record<string, unknown>;
-  const text = (field: unknown) => (typeof field === "string" && field ? field : undefined);
-  return {
-    id: typeof value.id === "string" ? value.id : "",
-    name: typeof value.name === "string" ? value.name : "",
-    quantity: typeof value.quantity === "number" ? value.quantity : 0,
-    createdBy: typeof value.created_by === "string" ? value.created_by : "",
-    createTime: text(value.create_time),
-    updateTime: text(value.update_time),
-  };
-}
-
-// permissionsOf reads perms from the claims shown by the UI; the service
-// still decides, so this only explains a button that would be refused.
-export function permissionsOf(claims: Claims | undefined): string[] | undefined {
-  const perms = claims?.perms;
-  return Array.isArray(perms) ? perms.filter((perm): perm is string => typeof perm === "string") : undefined;
-}
 
 export type ItemFormError = { field: "name" | "quantity"; message: string };
 
@@ -119,23 +47,28 @@ const VERBS: Record<ItemAction, string> = {
   delete: "menghapus barang",
 };
 
-// describeItemsError turns an answer of inventaris into one sentence for the user.
+// describeItemsError turns an answer of the backend into one sentence for the user.
 export function describeItemsError(error: unknown, action: ItemAction): string {
-  if (!(error instanceof ItemsApiError)) {
+  if (!(error instanceof ApiError)) {
     const reason = error instanceof Error ? error.message : String(error);
-    return `inventaris tidak dapat dipanggil: ${reason}. Pastikan service berjalan dan CORS-nya mengizinkan origin UI ini.`;
+    return `Backend inventaris tidak dapat dipanggil: ${reason}. Pastikan backend berjalan.`;
   }
   switch (error.status) {
     case 400:
       return `Isian ditolak inventaris${error.description ? ` (${error.description})` : ""}. Periksa nama dan jumlahnya.`;
     case 401:
-      return `Token ditolak inventaris${error.code ? ` (${error.code})` : ""}. Muat ulang halaman bila berulang.`;
+      return "Sesi Anda tidak dikenali lagi. Masuk lagi untuk melanjutkan.";
     case 403:
+      if (error.code === "csrf") return "Permintaan ditolak karena token CSRF sesi tidak cocok. Muat ulang halaman.";
       return error.code === "access_denied"
         ? `Akses Anda ke project ini dicabut, jadi gagal ${VERBS[action]}. Operasi ini diperiksa langsung ke NICE.`
         : `Anda tidak punya izin untuk ${VERBS[action]} di project ini.`;
     case 404:
       return "Barang itu tidak ditemukan, mungkin sudah dihapus. Daftar dimuat ulang.";
+    case 409:
+      return error.code === "context_required"
+        ? "Belum ada konteks aktif. Pilih project di panel Konteks."
+        : `NICE menolak token untuk konteks aktif${error.description ? ` (${error.description})` : ""}. Pilih konteks lain.`;
     case 503:
       return "inventaris belum bisa memeriksa akses ke NICE. Coba lagi sebentar lagi.";
     default:

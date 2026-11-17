@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Smoke test of the inventaris example against a NICE set up with the README
-# checklist: 401 without a token, then 200 on GET /items with a Service Account
-# token (client_credentials, scope nice:aud:inventaris). It reads only .env and
-# never prints a key or a token; secrets never reach the argv of curl or jq.
+# checklist: 401 without a token, 200 on GET /items with a Service Account token
+# (client_credentials, scope nice:aud:inventaris), 401 on GET /auth/session
+# without a cookie, and GET /auth/login redirecting to NICE. It reads only .env
+# and never prints a key or a token; secrets never reach the argv of curl or jq.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -27,6 +28,9 @@ source ./.env
 set +a
 
 [[ -n ${NICE_ISSUER:-} ]] || fail "NICE_ISSUER kosong di .env (checklist langkah 2)."
+[[ -n ${NICE_CLIENT_ID:-} && -n ${NICE_CLIENT_SECRET:-} ]] ||
+  fail "NICE_CLIENT_ID atau NICE_CLIENT_SECRET kosong di .env." \
+    "Buat OAuth client confidential untuk UI dan isi keduanya (checklist langkah 2)."
 [[ -n ${SMOKE_SA_ID:-} && -n ${SMOKE_API_KEY:-} ]] ||
   fail "SMOKE_SA_ID atau SMOKE_API_KEY kosong di .env." \
     "Buat Service Account tenant beserta API key-nya (checklist langkah 10)."
@@ -48,13 +52,29 @@ field() { jq -r --arg f "$1" '.[$f] // empty' "$body" 2>/dev/null || true; }
 
 status=$(get "$nice/.well-known/openid-configuration")
 [[ $status == 200 ]] || fail "NICE tidak terjangkau di $nice (HTTP $status)." \
-  "Jalankan NICE (cd ../../nice && make dev) dan pastikan NICE_ISSUER di .env sama dengan NICE_ISSUER NICE."
+  "Jalankan NICE (cd ../../../nice && make dev) dan pastikan NICE_ISSUER di .env sama dengan NICE_ISSUER NICE."
 ok "NICE menjawab di $nice"
 
 status=$(get "$service/healthz")
 [[ $status == 2* ]] || fail "service tidak terjangkau di $service (HTTP $status)." \
   "Jalankan service dengan 'make run' (checklist langkah 2)."
 ok "service menjawab /healthz di $service"
+
+status=$(get "$service/auth/session")
+[[ $status == 401 && $(field error) == unauthenticated ]] ||
+  fail "GET /auth/session tanpa cookie dijawab HTTP $status $(field error), seharusnya 401 unauthenticated."
+ok "GET /auth/session tanpa cookie: 401 unauthenticated"
+
+# The redirect is not followed: only where it points is checked.
+login=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 10 "$service/auth/login" || true)
+case $login in
+  "302 $nice/oauth/authorize?"*) ;;
+  *) fail "GET /auth/login dijawab ${login%% *}, seharusnya 302 ke $nice/oauth/authorize." \
+       "Periksa NICE_ISSUER dan NICE_CLIENT_ID di .env (checklist langkah 2)." ;;
+esac
+[[ $login == *"client_id=${NICE_CLIENT_ID}"* || $login == *"client_id=$(jq -rn --arg v "$NICE_CLIENT_ID" '$v|@uri')"* ]] ||
+  fail "GET /auth/login tidak membawa client_id dari NICE_CLIENT_ID (checklist langkah 2)."
+ok "GET /auth/login mengarahkan ke NICE"
 
 status=$(get "$service/items")
 [[ $status == 401 && $(field error_description) == missing_token ]] ||

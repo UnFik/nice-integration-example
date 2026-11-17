@@ -29,8 +29,11 @@ const (
 	testIssuer = "http://nice.test"
 	testKID    = "test-key"
 	testOrigin = "http://localhost:5180"
-	orgA       = "org_aaaaaaaa"
-	orgB       = "org_bbbbbbbb"
+	// testClientID and testClientSecret are the confidential client of the UI.
+	testClientID     = "cli_inventaris_web"
+	testClientSecret = "s3cret-client"
+	orgA             = "org_aaaaaaaa"
+	orgB             = "org_bbbbbbbb"
 	// testProject is the prj of claims.
 	testProject = "prj_test"
 )
@@ -240,5 +243,5 @@ func wantError(t *testing.T, r response, status int, code, description string) {
 }
 
 func newHandler(v *nicetoken.Verifier, repo itemusecase.Repo, origins []string) http.Handler {
-	return rest.NewHandler(v, &itemusecase.Service{Repo: repo}, origins)
+	return rest.NewHandler(v, &itemusecase.Service{Repo: repo}, rest.Options{CORSOrigins: origins})
 }

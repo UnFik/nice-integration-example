@@ -45,38 +45,31 @@ export function Problem(props: {
   );
 }
 
-export function SignIn(props: { issuer: string; clientId: string; onSignIn: () => void }) {
+export function SignIn(props: { signedOut?: boolean; onSignIn: () => void; onSelectAccount: () => void }) {
   return (
     <ScreenCard icon="box" title="Inventaris">
-      <p>Masuk lewat NICE untuk mengelola barang di organisasi dan project Anda.</p>
+      {props.signedOut ? (
+        <p role="status">
+          Anda sudah keluar dari inventaris. Sesi NICE di browser ini tetap ada, jadi Masuk bisa langsung kembali tanpa kata
+          sandi.
+        </p>
+      ) : (
+        <p>Masuk lewat NICE untuk mengelola barang di organisasi dan project Anda.</p>
+      )}
       <button type="button" className="primary block" onClick={props.onSignIn}>
         Masuk
       </button>
+      <button type="button" className="quiet block" onClick={props.onSelectAccount}>
+        Masuk dengan akun lain
+      </button>
       <details className="plain-details">
-        <summary>Detail koneksi</summary>
-        <dl className="facts">
-          <dt>Issuer</dt>
-          <dd>
-            <code>{props.issuer}</code>
-          </dd>
-          <dt>client_id</dt>
-          <dd>
-            <code>{props.clientId}</code>
-          </dd>
-        </dl>
+        <summary>Cara kerjanya</summary>
         <p className="muted">
-          UI ini masuk sebagai service client dengan authorization code + PKCE, lalu berpindah organisasi dan project lewat
-          refresh token tanpa login ulang.
+          Halaman ini tidak memegang token dan tidak memanggil NICE. Backend inventaris masuk ke NICE sebagai service client
+          confidential, menyimpan refresh token di sisi server, dan memberi browser cookie sesi. Pindah organisasi dan project
+          dijalankan backend lewat refresh token tanpa login ulang.
         </p>
       </details>
-    </ScreenCard>
-  );
-}
-
-export function ConfigScreen(props: { title: string; children: ReactNode }) {
-  return (
-    <ScreenCard icon="gear" tone="warning" title={props.title} wide>
-      {props.children}
     </ScreenCard>
   );
 }

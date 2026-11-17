@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { Contexts } from "../contexts";
+import type { ActiveContext, Contexts } from "../api";
 import { ContextPicker } from "./ContextPicker";
 
 const contexts: Contexts = {
@@ -11,23 +11,17 @@ const contexts: Contexts = {
       name: "Nusapala",
       slug: "nusapala",
       projects: [
-        { id: "prj-p", name: "Parkir", slug: "parkir", services: ["inventaris"] },
-        { id: "prj-q", name: "Gudang", slug: "gudang", services: ["inventaris", "pengiriman"] },
+        { id: "prj-p", name: "Parkir", slug: "parkir" },
+        { id: "prj-q", name: "Gudang", slug: "gudang" },
       ],
       projectsTruncated: false,
     },
-    {
-      id: "org-b",
-      name: "Bintang Laut",
-      slug: "bintang-laut",
-      projects: [{ id: "prj-r", name: "Retail", slug: "retail", services: ["inventaris"] }],
-      projectsTruncated: true,
-    },
+    { id: "org-b", name: "Bintang Laut", slug: "bintang-laut", projects: [{ id: "prj-r", name: "Retail", slug: "retail" }], projectsTruncated: true },
     { id: "org-c", name: "Cakrawala", slug: "cakrawala", projects: [], projectsTruncated: false },
   ],
 };
 
-function render(active: { org: string; project?: string }, busy = false): string {
+function render(active: ActiveContext | undefined, busy = false): string {
   return renderToStaticMarkup(<ContextPicker contexts={contexts} active={active} busy={busy} onChoose={() => {}} />);
 }
 
@@ -41,32 +35,33 @@ describe("ContextPicker", () => {
     expect(choices(markup)).toEqual(["org-a/prj-p", "org-a/prj-q", "org-b/prj-r"]);
     expect(current(markup)).toEqual(["org-a/prj-p"]);
     expect(markup).toContain("Parkir");
-    expect(markup).toContain("pengiriman");
+  });
+
+  it("marks a project of another organization as active after a switch", () => {
+    expect(current(render({ org: "org-b", project: "prj-r" }))).toEqual(["org-b/prj-r"]);
   });
 
   it("shows an organization without projects as unavailable with the reason", () => {
     const markup = render({ org: "org-a", project: "prj-p" });
     const section = markup.slice(markup.indexOf("Cakrawala"));
 
-    expect(section).toMatch(/Tidak tersedia/);
-    expect(section).toMatch(/tidak memegang akses inventaris di project mana pun/);
+    expect(section).toContain('data-unavailable="org-c"');
+    expect(section).toMatch(/Tidak tersedia: Anda tidak punya akses inventaris di project mana pun/);
   });
 
-  it("marks the current organization before a project is chosen", () => {
-    const markup = render({ org: "org-b" });
+  it("marks the organization of the login before a project is chosen", () => {
+    const markup = render(undefined);
 
     expect(current(markup)).toEqual([]);
-    expect(markup).toMatch(/Bintang Laut[^]*?Organisasi saat ini/);
+    expect(markup).toMatch(/Nusapala[^]*?Organisasi saat ini/);
     expect(markup.match(/Organisasi saat ini/g)).toHaveLength(1);
   });
 
   it("says when NICE left projects out", () => {
-    expect(render({ org: "org-a" })).toMatch(/hanya mengirim 100 project pertama/);
+    expect(render(undefined)).toMatch(/tidak mengirim semua project/);
   });
 
   it("disables every choice while a switch runs", () => {
-    const markup = render({ org: "org-a", project: "prj-p" }, true);
-
-    expect(markup.match(/<button[^>]*disabled=""/g)).toHaveLength(3);
+    expect(render({ org: "org-a", project: "prj-p" }, true).match(/<button[^>]*disabled=""/g)).toHaveLength(3);
   });
 });

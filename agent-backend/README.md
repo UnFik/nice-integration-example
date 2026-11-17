@@ -103,7 +103,7 @@ access_denied (organization is not usable): NICE refused a token for inventaris 
 - Susunan direktori: `replace github.com/nice-platform/nice => ../../nice` di `go.mod` hanya berjalan bila repo `nice` berada di sebelah `example/`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dengan versi minimum di atas, bawaannya di `http://localhost:8080`.
-- `inventaris` berjalan dan sudah diatur sampai langkah 8 [`../shared-service-oauth/README.md`](../shared-service-oauth/README.md), dan `pengiriman` sampai langkah 11 [`../shared-service-apikey/README.md`](../shared-service-apikey/README.md), **tanpa langkah 12** (mirrored key menolak token user). User uji memegang role `inventaris.operator` dan `pengiriman.admin` di project yang sama.
+- `inventaris` berjalan dan sudah diatur sampai langkah 8 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md), dan `pengiriman` sampai langkah 11 [`../shared-service-apikey/README.md`](../shared-service-apikey/README.md), **tanpa langkah 12** (mirrored key menolak token user). User uji memegang role `inventaris.operator` dan `pengiriman.admin` di project yang sama.
 - Untuk uji organisasi lain: user uji juga anggota organisasi kedua, dengan project yang mengaktifkan `inventaris` dan binding `inventaris.operator` di sana.
 
 ## Konfigurasi

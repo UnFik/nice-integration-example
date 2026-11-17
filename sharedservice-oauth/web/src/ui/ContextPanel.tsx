@@ -1,24 +1,16 @@
-import type { Session, SessionState } from "../session";
+import { refusalReason, type Session, type SessionState } from "../session";
 import { ContextPicker } from "./ContextPicker";
-import { ManualContextForm } from "./ManualContextForm";
 import { Icon } from "./icons";
 
 export function ContextPanel({ session, state }: { session: Session; state: SessionState }) {
-  const active = state.active;
   const busy = state.switching !== undefined;
-  const discovered = state.contexts && active;
-  const unavailable = !discovered && state.contextsError !== undefined;
+  const contexts = state.contexts;
 
   return (
     <section id="konteks" className="card" aria-labelledby="konteks-title">
       <header className="card-head">
         <h2 id="konteks-title">Konteks</h2>
-        <button
-          type="button"
-          className="quiet"
-          disabled={state.contextsLoading}
-          onClick={() => void session.reloadContexts()}
-        >
+        <button type="button" className="quiet" disabled={state.contextsLoading} onClick={() => void session.reloadContexts()}>
           <Icon name="refresh" />
           Muat ulang
         </button>
@@ -28,7 +20,7 @@ export function ContextPanel({ session, state }: { session: Session; state: Sess
         {state.switching && (
           <p className="inline-status">
             <Icon name="spinner" className="spin" />
-            Meminta token untuk konteks baru…
+            Meminta backend pindah ke konteks baru…
           </p>
         )}
         {state.switchError && (
@@ -37,42 +29,39 @@ export function ContextPanel({ session, state }: { session: Session; state: Sess
             <span>{state.switchError}</span>
           </p>
         )}
+        {state.contextError && (
+          <p className="callout warning" role="alert" data-context-error={state.contextError}>
+            <Icon name="alert" />
+            <span>Token untuk konteks aktif tidak dapat diperoleh. {refusalReason(state.contextError)} Pilih konteks lain.</span>
+          </p>
+        )}
+        {state.contextsError && (
+          <p className="callout warning" role="alert">
+            <Icon name="alert" />
+            <span>{state.contextsError}</span>
+          </p>
+        )}
       </div>
 
-      {discovered ? (
+      {contexts ? (
         <>
           <p className="muted small">
-            Pilihan berasal dari <code>GET /api/v1/me/contexts</code>. Memilih project menjalankan satu refresh token,
-            tanpa meninggalkan halaman ini.
+            {state.active ? "" : "Pilih project untuk melihat barangnya. "}
+            Pilihan berasal dari <code>GET /auth/contexts</code>, yang dibaca backend dari NICE. Memilih project meminta backend
+            menjalankan satu refresh token, tanpa meninggalkan halaman ini.
           </p>
-          <ContextPicker
-            contexts={state.contexts!}
-            active={active}
-            busy={busy}
-            onChoose={(orgId, projectId) => void session.choose(orgId, projectId)}
-          />
+          {contexts.organizations.length === 0 ? (
+            <p className="muted small">NICE tidak mengembalikan organisasi apa pun untuk akun ini.</p>
+          ) : (
+            <ContextPicker
+              contexts={contexts}
+              active={state.active}
+              busy={busy}
+              onChoose={(org, project) => void session.choose(org, project)}
+            />
+          )}
         </>
-      ) : unavailable ? (
-        <>
-          <p className="callout info">
-            <Icon name="info" />
-            <span>
-              NICE tidak lagi menyediakan penemuan organisasi dan project untuk SPA publik, jadi konteks dipilih dengan
-              memasukkan ID-nya.
-            </span>
-          </p>
-          <details className="plain-details">
-            <summary>Detail teknis</summary>
-            <p className="muted small">{state.contextsError}</p>
-          </details>
-          <ManualContextForm
-            defaultOrg={state.identity?.orgId ?? active?.org}
-            recent={state.recent ?? []}
-            busy={busy}
-            onUse={(orgId, projectId) => session.chooseManual(orgId, projectId)}
-          />
-        </>
-      ) : (
+      ) : state.contextsError ? null : (
         <p className="inline-status">
           <Icon name="spinner" className="spin" />
           Memuat konteks…

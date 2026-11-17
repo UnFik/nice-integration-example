@@ -1,22 +1,28 @@
-# shared-service-oauth (`inventaris`)
+# sharedservice-oauth/backend (`inventaris`)
 
 [English](README.en.md)
 
-Contoh SharedService NICE bermode `nice_token` dengan slug `inventaris`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/nicetoken`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../nice/docs/token-verification.md), memisahkan data per organisasi, dan memeriksa operasi sensitif secara online ke NICE.
+Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `inventaris`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/nicetoken`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice/pkg/niceclient`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
 
-Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
+Diuji terhadap nice revisi: belum diuji manual (lihat [`../README.md`](../README.md)); service Bearer terakhir diuji terhadap `c7a5086` (2026-11-13).
 
 ## Isi
 
 | Berkas | Isi |
 |---|---|
 | `cmd/inventaris/main.go` | titik masuk tipis, anotasi swag tingkat dokumen termasuk `x-nice-roles` |
-| `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), repo, use case, server |
-| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `item/` (tabel rute tunggal, handler, anotasi swag per operasi), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
-| `internal/app/item/` | use case barang dan kontrak `Repo` |
-| `internal/domain/` | `Item`, aturan validasi, nama izin |
-| `internal/adapter/memory/item/` | penyimpanan barang per organisasi di memori |
-| `internal/platform/` | `config` (env dan `.env`) dan `httpx` (CORS untuk SPA yang terdaftar) |
+| `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), pemilihan penyimpanan barang, `niceclient` dan sesi, use case, server |
+| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `item/` (tabel rute tunggal, handler, anotasi swag per operasi), `auth/` (`/auth/*` dan middleware sesi yang memasang token konteks aktif), `web/` (penyaji `web/dist`), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
+| `internal/app/item/` | use case barang dan kontrak `Repo` yang menerima kunci scope |
+| `internal/app/session/` | use case sesi browser (login, konteks, pindah konteks, keluar) dan port `NICE` serta `Store` |
+| `internal/domain/` | `Item`, `Scope` (kunci org, project, user, aktor), `Session`, aturan validasi, nama izin |
+| `internal/adapter/memory/item/` | penyimpanan barang per organisasi dan project di memori |
+| `internal/adapter/postgres/item/` | penyimpanan yang sama di PostgreSQL, dipilih bila `DATABASE_URL` diisi |
+| `internal/adapter/memory/session/` | sesi browser di memori |
+| `internal/adapter/nice/` | port `NICE` lewat `niceclient` (`Client` `KindBFF` dan `ExchangeClient`), `/oauth/userinfo`, dan `/api/v1/me/contexts` |
+| `migrations/` | migrasi SQL (`tenants`, `items`, beserta `down`), di-embed dan dijalankan saat start bila `DATABASE_URL` diisi |
+| `internal/platform/` | `config` (env dan `.env`), `httpx` (CORS untuk SPA lain yang terdaftar), dan `postgres` (pool dan runner migrasi) |
+| `Dockerfile` | image backend beserta hasil build UI (dipakai `compose.yml` di akar repo) |
 | `docs/swagger.json` | Swagger 2.0 hasil `make swag`, di-embed dan disajikan di `/openapi.json` |
 | `scripts/smoke.sh` | uji smoke terhadap NICE yang sudah diatur |
 
@@ -26,16 +32,25 @@ Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 cmd/inventaris/main.go             titik masuk: baca config, rakit, jalankan, shutdown
 docs/                              swagger.json hasil make swag + embed.go (//go:embed)
 internal/
-  domain/                          *_domain.go          Item, aturan validasi, izin
+  domain/                          *_domain.go          Item, Scope, Session, aturan validasi, izin
   app/item/
     usecase/                       *_usecase.go         satu aksi per berkas; item_contract.go = interface Repo
     dto/                           *_dto.go             data masukan use case
+  app/session/
+    usecase/                       *_usecase.go         login, sesi, konteks, keluar; session_contract.go = port NICE dan Store
+    dto/                           *_dto.go             userinfo dan konteks dari NICE
   adapter/
     memory/item/                   *_repository.go      implementasi Repo di memori
-    rest/                          routes.go            perakit: verifikasi token, izin, CORS
+    postgres/item/                 *_repository.go      implementasi Repo di PostgreSQL
+    memory/session/                *_repository.go      sesi browser di memori
+    nice/                          *_gateway.go         port NICE lewat niceclient
+    rest/                          routes.go            perakit: verifikasi token, izin, sesi, CORS
     rest/item/                     item_routes.go       tabel rute + <aksi>_item_handler.go
+    rest/auth/                     auth_routes.go       /auth/* + middleware sesi dan CSRF
+    rest/web/                      web_routes.go        penyaji web/dist
     rest/system/                   /healthz, /openapi.json, dan /docs
-  platform/{config,httpx}/         env dan CORS
+  platform/{config,httpx,postgres}/ env, CORS, pool dan migrasi
+migrations/                        *.up.sql, *.down.sql  skema PostgreSQL barang
   bootstrap/                       perakitan dan tes yang melintasi lapisan
   arch_test.go                     menegakkan aturan impor dan akhiran nama berkas
 ```
@@ -58,13 +73,26 @@ Body barang: `{"name": "...", "quantity": 0}`. `name` 1 sampai 120 karakter sete
 
 Perilaku yang perlu diketahui:
 
-- Tenant adalah `nice_org_id` dari token terverifikasi, tidak pernah dari header, parameter, atau body. Organisasi yang memanggil pertama kali langsung dibuatkan tenant (`ProvisionOnFirstUse`). Data hanya di memori dan hilang saat service berhenti.
+- Tenant adalah `nice_org_id` dan project adalah `prj` dari token terverifikasi, tidak pernah dari header, parameter, atau body. Organisasi yang memanggil pertama kali langsung dibuatkan tenant (`ProvisionOnFirstUse`). Token tanpa `prj` dijawab `403 {"error":"insufficient_scope","error_description":"project_required"}`. Tanpa `DATABASE_URL` data hanya di memori dan hilang saat service berhenti.
 - Salinan JWKS disimpan di `JWKS_FILE`, sehingga service yang restart ketika NICE mati tetap memverifikasi token yang masih berlaku.
 - Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit) dan `DELETE /items/{id}` dijawab `503`.
 
+## Data per organisasi dan project
+
+Barang milik satu organisasi dan satu project. Handler membangun kunci scope `domain.Scope{OrgID, ProjectID, Subject, Actor}` dari klaim token terverifikasi (`nice_org_id`, `prj`, `sub`, `act.sub`), use case meneruskannya ke repository, dan repository tidak punya cara lain untuk menyebut organisasi atau project. Barang dari scope lain dijawab `404`. `project_id` di query diabaikan, dan field yang tidak dikenal di body, termasuk `project_id`, ditolak `400 invalid_argument` `body`.
+
+Bila `DATABASE_URL` diisi, service menjalankan `migrations/` saat start (tabel `schema_migrations`, advisory lock supaya dua proses tidak menjalankannya bersamaan), lalu menyimpan barang di PostgreSQL:
+
+| Tabel | Kolom |
+|---|---|
+| `tenants` | `org_id` (kunci, dari `nice_org_id`), `created_at` |
+| `items` | `id` (uuid, ditampilkan `itm_<32 hex>`), `org_id`, `project_id` (dari `prj`), `created_by` (dari `sub`), `acted_by` (dari `act`, `NULL` bila tidak ada), `name`, `quantity`, `create_time`, `update_time`; indeks `(org_id, project_id)` |
+
+Setiap query memakai `WHERE org_id = $1 AND project_id = $2`, termasuk baca, ubah, dan hapus per id. Tenant dibuat dengan `INSERT ... ON CONFLICT DO NOTHING`, jadi dua request pertama yang serentak menghasilkan satu baris. Tidak ada foreign key ke NICE: ID organisasi, project, dan user disimpan sebagai teks, dan nama organisasi atau project tidak disimpan. Jangan mengubah migrasi yang sudah dirilis; tambahkan pasangan berkas baru.
+
 ## Atribusi agen (`acted_by`)
 
-Backend yang menukar token user lewat token exchange, misalnya [`../agent-backend`](../agent-backend/README.md), memanggil service ini dengan token yang `sub`-nya tetap user dan klaim `act.sub`-nya `client_id` service client backend itu. Service memverifikasi token itu dengan langkah yang sama. Aktor tidak mendapat hak tambahan: izinnya tetap `perms` di token, yaitu izin user yang dipotong deklarasi dependensi service backend.
+Backend yang menukar token user lewat token exchange, misalnya [`../../agent-backend`](../../agent-backend/README.md), memanggil service ini dengan token yang `sub`-nya tetap user dan klaim `act.sub`-nya `client_id` service client backend itu. Service memverifikasi token itu dengan langkah yang sama. Aktor tidak mendapat hak tambahan: izinnya tetap `perms` di token, yaitu izin user yang dipotong deklarasi dependensi service backend.
 
 Barang yang dibuat dengan token seperti itu mencatat keduanya:
 
@@ -76,17 +104,18 @@ Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` mil
 
 ## Prasyarat
 
-- Susunan direktori: `replace github.com/nice-platform/nice => ../../nice` di `go.mod` hanya berjalan bila repo `nice` berada di sebelah `example/`:
+- Susunan direktori: `replace github.com/nice-platform/nice => ../../../nice` di `go.mod` hanya berjalan bila repo `nice` berada di sebelah `example/`:
 
   ```text
   <induk>/
     nice/
     example/
-      shared-service-oauth/
+      sharedservice-oauth/
+        backend/
   ```
 
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
-- NICE dev berjalan, bawaannya di `http://localhost:8080` (`cd ../../nice && make db && make migrate && make dev`). NICE di alamat lain juga bisa: isikan ke `NICE_ISSUER` di `.env` dan ke `NICE` di shell checklist.
+- NICE dev berjalan, bawaannya di `http://localhost:8080` (`cd ../../../nice && make db && make migrate && make dev`). NICE di alamat lain juga bisa: isikan ke `NICE_ISSUER` di `.env` dan ke `NICE` di shell checklist.
 
 ## Konfigurasi
 
@@ -97,7 +126,12 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `NICE_ISSUER` | wajib | issuer NICE, sama persis dengan klaim `iss` token. Tanpa nilai ini service berhenti dengan pesan yang menyebut `NICE_ISSUER` |
 | `LISTEN_ADDR` | `127.0.0.1:8081` | alamat listen |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser yang boleh memanggil, dipisah koma. `.env.example` mengisinya `http://localhost:5180,http://localhost:5181`, untuk `public-client-pkce` dan `service-client-ui` |
+| `NICE_CLIENT_ID`, `NICE_CLIENT_SECRET` | wajib | OAuth client confidential UI (langkah 2). Tanpa keduanya service berhenti dengan pesan yang menyebut nama variabelnya; secret tidak pernah dicetak |
+| `PUBLIC_URL` | `http://localhost:8081` | origin UI yang dilihat browser; redirect URI = `PUBLIC_URL/auth/callback`. Dev dengan Vite: `http://localhost:5181` |
+| `SESSION_IDLE_TIMEOUT` | `8h` | umur sesi browser tanpa pemakaian |
+| `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/` |
+| `DATABASE_URL` | kosong | URL `postgres://` untuk barang; kosong berarti memori. Nilainya tidak pernah dicetak |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser lain yang boleh memanggil dengan Bearer, dipisah koma, untuk `public-client-pkce`. UI contoh ini tidak butuh CORS karena satu origin |
 | `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed dan pemeriksaan online |
 | `SMOKE_SA_ID`, `SMOKE_API_KEY` | kosong | hanya dibaca `scripts/smoke.sh`: Service Account tenant dan API key-nya (langkah 10) |
 
@@ -105,7 +139,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 
 ```bash
 make run          # go run ./cmd/inventaris di 127.0.0.1:8081
-make test         # tes unit; tidak butuh NICE (token ditandatangani di tes, JWKS statis, pemeriksa palsu)
+make test         # tes unit; tidak butuh NICE (token ditandatangani di tes, JWKS statis, NICE palsu httptest)
 make swag         # bangkitkan ulang docs/swagger.json dari anotasi
 make swag-check   # gagal bila docs/swagger.json tidak sama dengan hasil swag terbaru
 scripts/smoke.sh  # butuh NICE yang sudah diatur dengan checklist di bawah
@@ -113,11 +147,19 @@ scripts/smoke.sh  # butuh NICE yang sudah diatur dengan checklist di bawah
 
 Bila `go` di `PATH` tidak cocok dengan `GOROOT`, panggil `make GO=/path/ke/go test`.
 
+Tes repository PostgreSQL dilewati bila `TEST_DATABASE_URL` kosong. Untuk menjalankannya, pakai database kosong milik tes sendiri:
+
+```bash
+docker run -d --name inventaris-test-pg -e POSTGRES_USER=inventaris -e POSTGRES_PASSWORD=inventaris -e POSTGRES_DB=inventaris -p 127.0.0.1:55460:5432 postgres:17-alpine
+TEST_DATABASE_URL='postgres://inventaris:inventaris@127.0.0.1:55460/inventaris?sslmode=disable' go test -race ./internal/... -count=1
+docker rm -f inventaris-test-pg
+```
+
 Tes `TestOpenAPIMatchesTheRouteTable` membandingkan tabel rute di `internal/adapter/rest/item/item_routes.go` dengan `docs/swagger.json` yang di-embed: izin dan tanda sensitif harus sama, dan dokumen tidak boleh memuat operasi lain. Setelah mengubah anotasi, jalankan `make swag` lalu commit hasilnya.
 
 ## Checklist setup NICE
 
-Jalankan dari direktori `example/shared-service-oauth`. Langkah console disebut dengan nama halamannya; potongan `curl` adalah padanannya.
+Jalankan dari direktori `example/sharedservice-oauth/backend`. Langkah console disebut dengan nama halamannya; potongan `curl` adalah padanannya.
 
 Sebelum mulai, siapkan variabel shell. Token diambil dengan `nice/scripts/dev-token.sh` (client `nice-console` dengan redirect bawaan NICE dev `http://localhost:5173/callback`; bila akun memakai verifikasi dua langkah, set `TOTP_SECRET`, lihat kepala skrip). Token berlaku 30 menit; ulangi bila kedaluwarsa.
 
@@ -126,11 +168,11 @@ export NICE=${NICE:-http://localhost:8080}   # alamat NICE, sama dengan NICE_ISS
 
 # akun Platform Admin dev Anda
 read -rp 'Email Platform Admin: ' ADMIN_EMAIL; read -rsp 'Password: ' ADMIN_PASSWORD; echo
-ADMIN_TOKEN=$(../../nice/scripts/dev-token.sh "$ADMIN_EMAIL" "$ADMIN_PASSWORD"); unset ADMIN_PASSWORD
+ADMIN_TOKEN=$(../../../nice/scripts/dev-token.sh "$ADMIN_EMAIL" "$ADMIN_PASSWORD"); unset ADMIN_PASSWORD
 
 # akun owner organisasi tenant dev Anda
 read -rp 'Email owner organisasi tenant: ' OWNER_EMAIL; read -rsp 'Password: ' OWNER_PASSWORD; echo
-OWNER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD"); unset OWNER_PASSWORD
+OWNER_TOKEN=$(../../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD"); unset OWNER_PASSWORD
 
 ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $OWNER_TOKEN" | jq -r .organization.id)
 curl -sS "$NICE/api/v1/organizations/$ORG_ID/projects" -H "Authorization: Bearer $OWNER_TOKEN" | jq '.projects[] | {id, name}'
@@ -147,17 +189,35 @@ NICE_OUTBOUND_ALLOW_HTTP=true
 NICE_OUTBOUND_ALLOW_CIDRS=127.0.0.0/8
 ```
 
-`NICE_OUTBOUND_ALLOW_CIDRS` berupa daftar CIDR dipisah koma. Service ini tidak butuh `NICE_CORS_ALLOWED_ORIGINS`. Contoh SPA (`public-client-pkce` di 5180, `service-client-ui` di 5181) juga tidak, pada NICE yang memuat `add-delegated-nice-api`: NICE mengizinkan origin redirect URI setiap OAuth client `public`.
+`NICE_OUTBOUND_ALLOW_CIDRS` berupa daftar CIDR dipisah koma. Service ini dan UI-nya tidak butuh `NICE_CORS_ALLOWED_ORIGINS`: browser hanya bernavigasi ke halaman login NICE.
 
-### 2. Jalankan service
+### 2. OAuth client UI dan jalankan service
+
+Service tidak mau start tanpa OAuth client UI, jadi client dibuat lebih dulu: client **confidential** di project organisasi platform (client di organisasi tenant tidak bisa diikat ke service). Ikatan ke `inventaris` menyusul setelah service terdaftar (langkah 2 di [`../README.md`](../README.md#checklist-setup-nice)). Console: Platform Admin, organisasi platform, **Project**, lalu halaman **OAuth client** project itu: tipe confidential, grant `authorization_code` dan `refresh_token`, dan dua redirect URI.
 
 ```bash
-cp .env.example .env
+PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
+UI_PROJECT_ID=$(curl -sS "$NICE/api/v1/organizations/$PLATFORM_ORG_ID/projects" -X POST \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Inventaris UI","slug":"inventaris-ui"}' | jq -r .project.id)
+CLIENT=$(curl -sS "$NICE/api/v1/projects/$UI_PROJECT_ID/clients" -X POST \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"inventaris","client_type":"CLIENT_TYPE_CONFIDENTIAL",
+       "redirect_uris":["http://localhost:5181/auth/callback","http://localhost:8081/auth/callback"],
+       "grant_types":["authorization_code","refresh_token"]}')
+OAUTH_CLIENT_ID=$(jq -r .oauth_client.id <<<"$CLIENT")
+jq -r .oauth_client.client_id <<<"$CLIENT"   # ke NICE_CLIENT_ID
+jq -r .client_secret <<<"$CLIENT"            # ke NICE_CLIENT_SECRET; hanya tampil sekali
+unset CLIENT
+```
+
+```bash
+cp .env.example .env   # lalu isi NICE_CLIENT_ID dan NICE_CLIENT_SECRET
 make run
 curl -sS http://127.0.0.1:8081/healthz
 ```
 
-Biarkan berjalan di terminal lain. Kunci di `.env` diisi pada langkah 9 dan 10.
+Biarkan berjalan di terminal lain. Untuk dev dengan Vite, isi juga `PUBLIC_URL=http://localhost:5181`. Kunci lain di `.env` diisi pada langkah 9 dan 10.
 
 ### 3. Daftarkan `inventaris`
 
@@ -272,11 +332,12 @@ Isikan id Service Account ke `SMOKE_SA_ID` dan key ke `SMOKE_API_KEY` di `.env`.
 scripts/smoke.sh
 ```
 
-Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: NICE menjawab, `/healthz` menjawab, `GET /items` tanpa token dijawab `401 missing_token`, token Service Account diterbitkan lewat `client_credentials` dengan scope `nice:aud:inventaris` (`client_id` id Service Account, `client_secret` API key), lalu `GET /items` dengan token itu dijawab `200`. Keluar dengan kode 0 bila semuanya lulus. Kegagalan dipetakan ke langkah checklist:
+Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: NICE menjawab, `/healthz` menjawab, `GET /auth/session` tanpa cookie dijawab `401 unauthenticated`, `GET /auth/login` mengarahkan ke `$NICE/oauth/authorize` dengan `client_id` dari `NICE_CLIENT_ID`, `GET /items` tanpa token dijawab `401 missing_token`, token Service Account diterbitkan lewat `client_credentials` dengan scope `nice:aud:inventaris` (`client_id` id Service Account, `client_secret` API key), lalu `GET /items` dengan token itu dijawab `200`. Keluar dengan kode 0 bila semuanya lulus. Kegagalan dipetakan ke langkah checklist:
 
 | Jawaban | Langkah yang kemungkinan terlewat |
 |---|---|
 | `.env` tidak ada, NICE atau service tidak terjangkau | 2 (dan NICE harus berjalan) |
+| `NICE_CLIENT_ID` atau `NICE_CLIENT_SECRET` kosong, `/auth/login` tidak mengarah ke NICE | 2 |
 | `invalid_client` | 10: id Service Account bukan pemilik key, key dicabut atau kedaluwarsa, akun nonaktif |
 | `invalid_scope` | 3 sampai 7, atau 10 (project Service Account harus mengaktifkan `inventaris`) |
 | `403 permission_denied` dari service | 10: binding Service Account ke role inventaris |
@@ -287,7 +348,7 @@ Butuh `NICE_SERVICE_API_KEY` terisi (langkah 9). Token user yang terbit sebelum 
 
 ```bash
 read -rsp 'Password owner: ' OWNER_PASSWORD; echo
-USER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD" "" "openid nice:aud:inventaris nice:prj:$PROJECT_ID"); unset OWNER_PASSWORD
+USER_TOKEN=$(../../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD" "" "openid nice:aud:inventaris nice:prj:$PROJECT_ID"); unset OWNER_PASSWORD
 curl -sS http://127.0.0.1:8081/items -H "Authorization: Bearer $USER_TOKEN"     # 200
 sleep 2
 curl -sS -X DELETE "$NICE/api/v1/projects/$PROJECT_ID/role-bindings/$BINDING_ID" -H "Authorization: Bearer $OWNER_TOKEN"

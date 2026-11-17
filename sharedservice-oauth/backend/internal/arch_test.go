@@ -16,11 +16,12 @@ const module = "github.com/nice-platform/example/sharedservice-oauth/backend/int
 
 // forbidden lists, per layer folder, the import prefixes that layer may not use.
 var forbidden = map[string][]string{
-	"domain/":      {module + "app", module + "adapter", module + "bootstrap", module + "platform", "net/http"},
-	"app/":         {module + "adapter", module + "bootstrap", "net/http"},
-	"app/item/dto": {module + "app/item/usecase"},
-	"adapter/":     {module + "bootstrap"},
-	"platform/":    {module + "app", module + "adapter", module + "domain", module + "bootstrap"},
+	"domain/":         {module + "app", module + "adapter", module + "bootstrap", module + "platform", "net/http"},
+	"app/":            {module + "adapter", module + "bootstrap", "net/http"},
+	"app/item/dto":    {module + "app/item/usecase"},
+	"app/session/dto": {module + "app/session/usecase"},
+	"adapter/":        {module + "bootstrap"},
+	"platform/":       {module + "app", module + "adapter", module + "domain", module + "bootstrap"},
 }
 
 // suffixes lists, per folder, the file name endings allowed for a non-test file.
@@ -31,6 +32,13 @@ var suffixes = []struct {
 	{"domain/", []string{"_domain.go"}},
 	{"app/item/usecase/", []string{"_usecase.go", "_contract.go"}},
 	{"app/item/dto/", []string{"_dto.go"}},
+	{"app/session/usecase/", []string{"_usecase.go", "_contract.go"}},
+	{"app/session/dto/", []string{"_dto.go"}},
+	{"adapter/memory/session/", []string{"_repository.go"}},
+	{"adapter/nice/", []string{"_gateway.go"}},
+	{"adapter/rest/auth/dto/", []string{"_dto.go"}},
+	{"adapter/rest/auth/", []string{"_handler.go", "_routes.go", "_middleware.go", "_helper.go"}},
+	{"adapter/rest/web/", []string{"_handler.go", "_routes.go"}},
 	{"adapter/memory/item/", []string{"_repository.go"}},
 	{"adapter/postgres/item/", []string{"_repository.go"}},
 	{"adapter/rest/dto/", []string{"_dto.go"}},

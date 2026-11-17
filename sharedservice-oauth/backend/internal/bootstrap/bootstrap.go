@@ -42,7 +42,12 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 		return err
 	}
 
-	handler := rest.NewHandler(v, &itemusecase.Service{Repo: repo}, cfg.CORSOrigins)
+	a, err := NewAuth(cfg, v, log)
+	if err != nil {
+		return err
+	}
+	a.Start(ctx)
+	handler := rest.NewHandler(v, &itemusecase.Service{Repo: repo}, rest.Options{Auth: a.Handler, WebDir: cfg.WebDir, CORSOrigins: cfg.CORSOrigins})
 	srv := &http.Server{Addr: cfg.Listen, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -51,9 +56,15 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 		_ = srv.Shutdown(shutdown)
 	}()
 	log.Info("inventaris listening", slog.String("addr", cfg.Listen), slog.String("issuer", cfg.Issuer),
+		slog.String("public_url", cfg.PublicURL), slog.String("client_id", cfg.ClientID), slog.Bool("ui", hasUI(cfg.WebDir)),
 		slog.Any("cors_origins", cfg.CORSOrigins), slog.Bool("feed", cfg.ServiceAPIKey != ""), slog.String("store", StoreName(cfg)))
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+func hasUI(dir string) bool {
+	st, err := os.Stat(filepath.Join(dir, "index.html"))
+	return err == nil && !st.IsDir()
 }

@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Konfigurasi lewat env
-Service SHALL membaca konfigurasi dari variabel lingkungan atau berkas `.env` (issuer NICE, alamat listen, berkas JWKS, origin CORS, API key `nice.service` yang opsional, `client_id` dan `client_secret` OAuth client confidential, redirect URI callback, direktori penyimpanan refresh token, dan kunci tanda tangan cookie sesi; slug `inventaris` tetap karena nama izin bergantung padanya; `DATABASE_URL` PostgreSQL yang opsional, bila kosong data barang disimpan di memori), dan SHALL menyediakan `.env.example` berisi semua variabel dengan placeholder. Bila variabel wajib tidak ada, service SHALL berhenti saat start dengan pesan yang menyebut variabel itu, tanpa menampilkan nilai rahasia.
+Service SHALL membaca konfigurasi dari variabel lingkungan atau berkas `.env` (issuer NICE, alamat listen, berkas JWKS, origin CORS, API key `nice.service` yang opsional, `client_id` dan `client_secret` OAuth client confidential, origin publik UI (`PUBLIC_URL`) yang menurunkan redirect URI callback, umur sesi, dan direktori hasil build UI; slug `inventaris` tetap karena nama izin bergantung padanya; `DATABASE_URL` PostgreSQL yang opsional, bila kosong data barang disimpan di memori), dan SHALL menyediakan `.env.example` berisi semua variabel dengan placeholder. Bila variabel wajib tidak ada, service SHALL berhenti saat start dengan pesan yang menyebut variabel itu, tanpa menampilkan nilai rahasia.
 
 #### Scenario: Issuer tidak diisi
 - **WHEN** service dijalankan tanpa issuer NICE
@@ -57,8 +57,12 @@ Service SHALL memakai `nice_org_id` dari token terverifikasi sebagai kunci tenan
 - **THEN** daftar tidak memuat barang project P, dan `GET /items/{id}` barang itu dijawab 404
 
 #### Scenario: Project dari klien diabaikan
-- **WHEN** request membawa `project_id` di query atau body yang berbeda dari `prj` token
+- **WHEN** request membawa `project_id` di query yang berbeda dari `prj` token
 - **THEN** service memakai `prj` token dan mengabaikan nilai dari klien
+
+#### Scenario: Project di body ditolak
+- **WHEN** body `POST /items` atau `PUT /items/{id}` membawa `project_id`
+- **THEN** service menjawab 400 dengan body `{"error":"invalid_argument","error_description":"body"}` karena field itu tidak dikenal, tidak membuat atau mengubah barang, dan scope tetap hanya dari token
 
 #### Scenario: Token tanpa project
 - **WHEN** klien memanggil `GET /items` dengan token sah yang tidak membawa `prj`

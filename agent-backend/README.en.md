@@ -103,7 +103,7 @@ access_denied (organization is not usable): NICE refused a token for inventaris 
 - Directory layout: `replace github.com/nice-platform/nice => ../../nice` in `go.mod` works only when the `nice` repository sits next to `example/`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
-- `inventaris` running and set up through step 8 of [`../shared-service-oauth/README.en.md`](../shared-service-oauth/README.en.md), and `pengiriman` through step 11 of [`../shared-service-apikey/README.en.md`](../shared-service-apikey/README.en.md), **without step 12** (mirrored keys refuse user tokens). The test user holds `inventaris.operator` and `pengiriman.admin` in the same project.
+- `inventaris` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md), and `pengiriman` through step 11 of [`../shared-service-apikey/README.en.md`](../shared-service-apikey/README.en.md), **without step 12** (mirrored keys refuse user tokens). The test user holds `inventaris.operator` and `pengiriman.admin` in the same project.
 - For the other-organization test: the test user is also a member of a second organization, with a project that has `inventaris` active and an `inventaris.operator` binding there.
 
 ## Configuration

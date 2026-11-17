@@ -1,6 +1,7 @@
-// Command shared-service-oauth is an example NICE SharedService in nice_token
-// mode: clients call it directly with a NICE access token, and it verifies the
-// token itself with pkg/nicetoken.
+// Command inventaris is the backend of the sharedservice-oauth example: a NICE
+// SharedService in nice_token mode that clients call directly with a NICE
+// access token, verified with pkg/nicetoken, and the backend-for-frontend of
+// its UI, which signs users in with pkg/niceclient and keeps their tokens.
 //
 //	@title						Inventaris
 //	@version					1.0

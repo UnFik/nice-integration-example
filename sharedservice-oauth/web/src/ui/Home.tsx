@@ -4,19 +4,15 @@ import { initials, shortId } from "./format";
 import { Icon } from "./icons";
 import { ItemsSection } from "./ItemsSection";
 import { ToastRegion, useToasts } from "./Toasts";
-import { TokensSection } from "./TokensSection";
 
 export function Home({ session, state }: { session: Session; state: SessionState }) {
-  const { config } = session;
-  const userinfo = state.identity?.userinfo;
-  const name = typeof userinfo?.name === "string" && userinfo.name ? userinfo.name : undefined;
+  const name = state.user?.name || undefined;
   const active = state.active;
   const org = state.contexts?.organizations.find((candidate) => candidate.id === active?.org);
   const project = org?.projects.find((candidate) => candidate.id === active?.project);
-  const orgLabel = active ? (org?.name ?? shortId(active.org)) : undefined;
-  const projectLabel = active?.project ? (project?.name ?? shortId(active.project)) : undefined;
+  const orgLabel = active ? (org?.name || shortId(active.org)) : undefined;
+  const projectLabel = active ? (project?.name || shortId(active.project)) : undefined;
   const { toasts, notify, dismiss } = useToasts();
-  const activeKey = active?.project ? `${active.org}|inventaris|${active.project}` : undefined;
 
   return (
     <div className="app">
@@ -29,11 +25,11 @@ export function Home({ session, state }: { session: Session; state: SessionState
             <Icon name="box" />
             <div>
               <strong>Inventaris</strong>
-              <span className="muted small">Contoh service client NICE</span>
+              <span className="muted small">Contoh SharedService NICE</span>
             </div>
           </div>
           <ul className="context-chips" aria-label="Konteks aktif">
-            <li className="chip-context" title={active?.org}>
+            <li className={`chip-context${orgLabel ? "" : " empty"}`} title={active?.org}>
               <Icon name="org" />
               <span className="visually-hidden">Organisasi: </span>
               {orgLabel ?? "Belum ada"}
@@ -49,9 +45,9 @@ export function Home({ session, state }: { session: Session; state: SessionState
               {initials(name)}
             </span>
             <span className="user-name">{name ?? "user"}</span>
-            <button type="button" onClick={() => void session.logout()}>
-              <Icon name="logout" />
-              Keluar
+            <button type="button" disabled={state.loggingOut} onClick={() => void session.logout()}>
+              <Icon name={state.loggingOut ? "spinner" : "logout"} className={state.loggingOut ? "spin" : undefined} />
+              {state.loggingOut ? "Keluar…" : "Keluar"}
             </button>
           </div>
         </div>
@@ -70,14 +66,24 @@ export function Home({ session, state }: { session: Session; state: SessionState
             </ol>
           </nav>
           <p className="muted small">
-            Masuk sebagai {name ?? "user"} · service client <code>{config.clientId}</code>
+            Masuk sebagai {name ?? "user"}
+            {state.user?.email ? ` (${state.user.email})` : ""}
           </p>
         </div>
+
+        {state.logoutError && (
+          <div className="callout warning logout-error" role="alert">
+            <Icon name="alert" />
+            <span>{state.logoutError}</span>
+            <button type="button" disabled={state.loggingOut} onClick={() => void session.logout()}>
+              Coba lagi
+            </button>
+          </div>
+        )}
 
         <div className="layout">
           <div className="stack">
             <ItemsSection session={session} state={state} notify={notify} />
-            <TokensSection tokens={state.tokens} activeKey={activeKey} />
           </div>
           <aside className="stack side" aria-label="Konteks dan identitas">
             <ContextPanel session={session} state={state} />
@@ -91,43 +97,41 @@ export function Home({ session, state }: { session: Session; state: SessionState
 }
 
 function Identity({ state }: { state: SessionState }) {
-  const userinfo = state.identity?.userinfo;
+  const user = state.user;
   return (
     <section className="card" aria-labelledby="identitas-title">
       <header className="card-head">
         <h2 id="identitas-title">Identitas</h2>
       </header>
-      {userinfo ? (
-        <dl className="facts">
-          <dt>sub</dt>
-          <dd>
-            <code>{text(userinfo.sub)}</code>
-          </dd>
-          <dt>Nama</dt>
-          <dd>{text(userinfo.name)}</dd>
-          <dt>Email</dt>
-          <dd>{text(userinfo.email)}</dd>
-          <dt>nice_org_id</dt>
-          <dd>
-            <code>{text(state.identity?.orgId)}</code>
-            <span className="muted small"> organisasi pilihan NICE saat login, dari klaim access token client</span>
-          </dd>
-        </dl>
-      ) : state.identityError ? (
-        <p className="callout error" role="alert">
-          <Icon name="alert" />
-          <span>{state.identityError}</span>
-        </p>
-      ) : (
-        <p className="inline-status">
-          <Icon name="spinner" className="spin" />
-          Memuat userinfo…
-        </p>
-      )}
+      <dl className="facts">
+        <dt>ID user</dt>
+        <dd>
+          <code>{text(user?.id)}</code>
+        </dd>
+        <dt>Nama</dt>
+        <dd>{text(user?.name)}</dd>
+        <dt>Email</dt>
+        <dd>{text(user?.email)}</dd>
+        <dt>Izin</dt>
+        <dd>
+          {state.perms.length > 0 ? (
+            <ul className="chips" aria-label="Izin token konteks aktif">
+              {state.perms.map((perm) => (
+                <li key={perm}>
+                  <code>{perm}</code>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span className="muted">-</span>
+          )}
+          <span className="muted small"> dari token konteks aktif, dibaca backend dan dikirim lewat /auth/session</span>
+        </dd>
+      </dl>
     </section>
   );
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" && value ? value : "-";
+function text(value: string | undefined): string {
+  return value || "-";
 }

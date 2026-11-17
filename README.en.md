@@ -2,50 +2,48 @@
 
 [Bahasa Indonesia](README.md)
 
-Five runnable examples of the ways a system connects to NICE. Each example stands alone with its own README, `.env.example`, tests, and NICE setup checklist.
+Four runnable examples of the ways a system connects to NICE. Each example stands alone with its own README, `.env.example`, tests, and NICE setup checklist.
 
 | Example | Use it when | Stack |
 |---|---|---|
-| [`shared-service-oauth/`](shared-service-oauth/README.en.md) | Your service can be changed to verify NICE tokens. Clients call it directly, and NICE is not on the request path (`auth_mode: nice_token`). | Go + `nice/pkg/nicetoken`, port 8081 |
+| [`sharedservice-oauth/`](sharedservice-oauth/README.en.md) | Your service can be changed to verify NICE tokens. Clients call it directly, and NICE is not on the request path (`auth_mode: nice_token`). Its UI talks to the service backend only: the backend signs in to NICE as a confidential service client, holds the tokens, and switches organization and project (backend-for-frontend). Items per organization and project, optional PostgreSQL. | `backend/`: Go + `nice/pkg/nicetoken` + `nice/pkg/niceclient`, port 8081; `web/`: Vite + React, port 5181 in development |
 | [`shared-service-apikey/`](shared-service-apikey/README.en.md) | A legacy service that only knows its own API key. Clients call it through the NICE proxy `/<slug>/...` (`auth_mode: api_key`). | TypeScript + Hono, port 8082 |
 | [`public-client-pkce/`](public-client-pkce/README.en.md) | A browser app owned by one organization (tenant client) that signs in with a NICE account and calls `nice_token` services on the user's behalf. | Vite + React + `oauth4webapi`, port 5180 |
-| [`service-client-ui/`](service-client-ui/README.en.md) | A first-party service UI that serves many organizations (service client): contexts from `/api/v1/me/contexts`, organization and project switched by refresh. | Vite + React + `oauth4webapi`, port 5181 |
 | [`agent-backend/`](agent-backend/README.en.md) | An AI agent backend (MCP server) that runs tools against other services on behalf of the user through token exchange, without passing the user's token on. | Go + MCP Go SDK + `nice/pkg/niceclient`, port 8083 |
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
- SPA --Bearer JWT (aud=inventaris)--> shared-service-oauth      (direct, local verification)
+ SPA --Bearer JWT (aud=inventaris)--> sharedservice-oauth/backend      (direct, local verification)
  Service Account --Bearer JWT (aud=pengiriman)--> NICE /pengiriman/... --X-Api-Key--> shared-service-apikey
 ```
 
 ```text
- UI (service client) --PKCE, then refresh nice:aud:nice--> NICE /api/v1/me/contexts
- UI --refresh nice:org nice:aud:inventaris nice:prj--> NICE /oauth/token --> UI --Bearer JWT--> shared-service-oauth
+ UI --session cookie--> sharedservice-oauth/backend --PKCE + client_secret, refresh nice:org nice:aud:inventaris nice:prj--> NICE /oauth/token
+ sharedservice-oauth/backend --sign-in token exchanged for nice:aud:nice--> NICE /api/v1/me/contexts
 ```
 
 ```text
  MCP client --Bearer JWT (aud=agen)--> agent-backend --token exchange--> NICE /oauth/token
- agent-backend --Bearer exchanged JWT (aud=inventaris, act)--> shared-service-oauth
+ agent-backend --Bearer exchanged JWT (aud=inventaris, act)--> sharedservice-oauth/backend
  agent-backend --Bearer exchanged JWT (aud=pengiriman)--> NICE /pengiriman/... --> shared-service-apikey
 ```
 
 The SPA does not call the `api_key` service because CORS does not cover the NICE proxy path `/<slug>/...`.
 
-The SPA protocol code (`oidc.ts`, the token manager, the fake NICE for tests) is duplicated on purpose in `public-client-pkce` and `service-client-ui`, so each example can be copied on its own. A protocol fix in one of them must be applied to both.
+The OAuth protocol code in the browser (`oidc.ts`, the token manager) lives only in `public-client-pkce`. The `sharedservice-oauth` UI has no protocol code: it is all in the backend, through `nice/pkg/niceclient`.
 
 ### Minimum NICE version
 
 | Example | NICE version |
 |---|---|
-| `shared-service-oauth` | `c7a5086` |
+| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); the Bearer path alone needs `c7a5086` |
 | `shared-service-apikey` | `2638605` (mirrored keys reach the upstream through the proxy) |
 | `public-client-pkce` | `c7a5086`; without `NICE_CORS_ALLOWED_ORIGINS` from `60939ed` (`add-delegated-nice-api`) |
-| `service-client-ui` | `8160ac4` (`add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`) |
-| `agent-backend` | `6cc9986` (plus `add-token-exchange`); `acted_by` in `shared-service-oauth` needs this revision too |
+| `agent-backend` | `6cc9986` (plus `add-token-exchange`); `acted_by` in `sharedservice-oauth` needs this revision too |
 
 ## Prerequisites
 
-- Directory layout: `nice/` must sit next to `example/`. The Go examples use `nice/pkg/nicetoken` and `nice/pkg/niceclient` through `replace ../../nice`.
+- Directory layout: `nice/` must sit next to `example/`. The Go examples use `nice/pkg/nicetoken` and `nice/pkg/niceclient` through `replace ../../nice` (`agent-backend`) and `replace ../../../nice` (`sharedservice-oauth/backend`).
 - A dev NICE running on the host (`cd nice && make db && make migrate && make dev`, `http://localhost:8080`).
 - Settings in `nice/.env` (restart NICE after changing them):
 
@@ -58,6 +56,8 @@ The SPA protocol code (`oidc.ts`, the token manager, the fake NICE for tests) is
 - Go 1.27 (Go example), Node 22.18+ and npm (TypeScript examples), and `bash`, `curl`, and `jq` (smoke scripts).
 
 Register service endpoints with `127.0.0.1`, not `localhost`, so NICE never tries `::1`.
+
+For a NICE that runs in Docker (`make up` in `nice/`), `docker compose up -d --build` at the root of this repository runs `sharedservice-oauth` (the backend with the UI at `http://localhost:8081`) and its PostgreSQL; register the service as `http://inventaris:8081`. See the comments in `compose.yml`.
 
 ## Setup in NICE
 

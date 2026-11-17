@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func env(vars map[string]string) LookupFunc {
@@ -13,6 +14,15 @@ func env(vars map[string]string) LookupFunc {
 		v, ok := vars[k]
 		return v, ok
 	}
+}
+
+// client adds the OAuth client every start needs to vars.
+func client(vars map[string]string) map[string]string {
+	out := map[string]string{EnvClientID: "cli_test", EnvClientSecret: "s3cret-client"}
+	for k, v := range vars {
+		out[k] = v
+	}
+	return out
 }
 
 func writeDotEnv(t *testing.T, content string) string {
@@ -25,7 +35,7 @@ func writeDotEnv(t *testing.T, content string) string {
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
-	cfg, err := Load(env(map[string]string{EnvIssuer: "http://localhost:8080"}), filepath.Join(t.TempDir(), ".env"))
+	cfg, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080"})), filepath.Join(t.TempDir(), ".env"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +54,7 @@ CORS_ALLOWED_ORIGINS= http://localhost:5180 , http://127.0.0.1:5180,
 NICE_SERVICE_API_KEY='nice_sk_from_file'
 JWKS_FILE=/tmp/from-file.json
 `)
-	cfg, err := Load(env(map[string]string{EnvJWKSFile: "/tmp/from-env.json"}), dotenv)
+	cfg, err := Load(env(client(map[string]string{EnvJWKSFile: "/tmp/from-env.json"})), dotenv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +70,7 @@ JWKS_FILE=/tmp/from-file.json
 
 func TestLoadConfigRefusesAnIssuerThatIsNotAURL(t *testing.T) {
 	for _, iss := range []string{"localhost:8080", "ftp://nice", "http://"} {
-		_, err := Load(env(map[string]string{EnvIssuer: iss}), filepath.Join(t.TempDir(), ".env"))
+		_, err := Load(env(client(map[string]string{EnvIssuer: iss})), filepath.Join(t.TempDir(), ".env"))
 		if err == nil || !strings.Contains(err.Error(), "NICE_ISSUER") {
 			t.Errorf("issuer %q: err = %v, want an error naming NICE_ISSUER", iss, err)
 		}
@@ -72,17 +82,18 @@ func TestEnvExampleListsEveryVariableAndStarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{EnvIssuer, EnvListen, EnvJWKSFile, EnvCORSOrigins, EnvServiceAPIKey, EnvDatabaseURL, "SMOKE_SA_ID", "SMOKE_API_KEY"} {
+	for _, k := range []string{EnvIssuer, EnvListen, EnvJWKSFile, EnvCORSOrigins, EnvServiceAPIKey, EnvDatabaseURL,
+		EnvClientID, EnvClientSecret, EnvPublicURL, EnvSessionIdle, EnvWebDir, "SMOKE_SA_ID", "SMOKE_API_KEY"} {
 		if _, ok := file[k]; !ok {
 			t.Errorf(".env.example does not list %s", k)
 		}
 	}
-	for _, secret := range []string{EnvServiceAPIKey, EnvDatabaseURL, "SMOKE_API_KEY"} {
+	for _, secret := range []string{EnvServiceAPIKey, EnvDatabaseURL, EnvClientSecret, "SMOKE_API_KEY"} {
 		if file[secret] != "" {
 			t.Errorf(".env.example holds a value for the secret %s", secret)
 		}
 	}
-	cfg, err := Load(env(nil), "../../../.env.example")
+	cfg, err := Load(env(map[string]string{EnvClientID: "cli_test", EnvClientSecret: "s3cret-client"}), "../../../.env.example")
 	if err != nil {
 		t.Fatalf(".env.example as .env: %v", err)
 	}
@@ -92,7 +103,7 @@ func TestEnvExampleListsEveryVariableAndStarts(t *testing.T) {
 }
 
 func TestLoadConfigRefusesAMalformedDotEnv(t *testing.T) {
-	_, err := Load(env(nil), writeDotEnv(t, "NICE_ISSUER\n"))
+	_, err := Load(env(client(nil)), writeDotEnv(t, "NICE_ISSUER\n"))
 	if err == nil || !strings.Contains(err.Error(), "line 1") {
 		t.Fatalf("err = %v, want the bad line", err)
 	}
@@ -100,7 +111,7 @@ func TestLoadConfigRefusesAMalformedDotEnv(t *testing.T) {
 
 func TestLoadConfigReadsTheDatabaseURL(t *testing.T) {
 	const db = "postgres://inventaris:s3cret@localhost:5432/inventaris?sslmode=disable"
-	cfg, err := Load(env(map[string]string{EnvIssuer: "http://localhost:8080", EnvDatabaseURL: db}), filepath.Join(t.TempDir(), ".env"))
+	cfg, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvDatabaseURL: db})), filepath.Join(t.TempDir(), ".env"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +122,7 @@ func TestLoadConfigReadsTheDatabaseURL(t *testing.T) {
 
 func TestLoadConfigRefusesADatabaseURLWithoutPrintingIt(t *testing.T) {
 	for _, db := range []string{"mysql://root:s3cret@localhost/inventaris", "host=localhost password=s3cret", "postgres://:s3cret@"} {
-		_, err := Load(env(map[string]string{EnvIssuer: "http://localhost:8080", EnvDatabaseURL: db}), filepath.Join(t.TempDir(), ".env"))
+		_, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvDatabaseURL: db})), filepath.Join(t.TempDir(), ".env"))
 		if err == nil || !strings.Contains(err.Error(), EnvDatabaseURL) {
 			t.Errorf("%s: err = %v, want an error naming %s", db, err, EnvDatabaseURL)
 			continue
@@ -119,5 +130,46 @@ func TestLoadConfigRefusesADatabaseURLWithoutPrintingIt(t *testing.T) {
 		if strings.Contains(err.Error(), "s3cret") {
 			t.Errorf("the error prints the value of %s: %v", EnvDatabaseURL, err)
 		}
+	}
+}
+
+func TestLoadConfigDerivesTheRedirectURI(t *testing.T) {
+	cfg, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvPublicURL: "http://localhost:5181/"})), filepath.Join(t.TempDir(), ".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PublicURL != "http://localhost:5181" || cfg.RedirectURI != "http://localhost:5181/auth/callback" {
+		t.Fatalf("public %q redirect %q", cfg.PublicURL, cfg.RedirectURI)
+	}
+	if cfg.SessionIdle != 8*time.Hour || cfg.WebDir != "../web/dist" {
+		t.Fatalf("session idle %v web dir %q", cfg.SessionIdle, cfg.WebDir)
+	}
+}
+
+func TestLoadConfigRefusesToStartWithoutTheClient(t *testing.T) {
+	for _, missing := range []string{EnvClientID, EnvClientSecret} {
+		vars := client(map[string]string{EnvIssuer: "http://localhost:8080"})
+		delete(vars, missing)
+		_, err := Load(env(vars), filepath.Join(t.TempDir(), ".env"))
+		if err == nil || !strings.Contains(err.Error(), missing) {
+			t.Errorf("without %s: err = %v, want an error naming it", missing, err)
+			continue
+		}
+		if strings.Contains(err.Error(), "s3cret-client") {
+			t.Errorf("without %s: the error prints the secret: %v", missing, err)
+		}
+	}
+}
+
+func TestLoadConfigRefusesAPublicURLThatIsNotAnOrigin(t *testing.T) {
+	for _, pub := range []string{"localhost:8081", "http://localhost:8081/app", "ftp://x", "http://u:p@localhost:8081"} {
+		_, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvPublicURL: pub})), filepath.Join(t.TempDir(), ".env"))
+		if err == nil || !strings.Contains(err.Error(), EnvPublicURL) {
+			t.Errorf("%s: err = %v, want an error naming %s", pub, err, EnvPublicURL)
+		}
+	}
+	_, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvSessionIdle: "forever"})), filepath.Join(t.TempDir(), ".env"))
+	if err == nil || !strings.Contains(err.Error(), EnvSessionIdle) {
+		t.Errorf("err = %v, want an error naming %s", err, EnvSessionIdle)
 	}
 }

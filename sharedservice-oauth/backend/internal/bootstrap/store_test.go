@@ -46,6 +46,7 @@ func TestUnreachableDatabaseStopsTheServiceWithoutPrintingTheURL(t *testing.T) {
 	var logs strings.Builder
 	err = Run(context.Background(), env(map[string]string{
 		config.EnvIssuer: testIssuer, config.EnvDatabaseURL: unreachableDB,
+		config.EnvClientID: testClientID, config.EnvClientSecret: testClientSecret,
 		config.EnvJWKSFile: filepath.Join(t.TempDir(), "jwks.json"),
 	}), filepath.Join(t.TempDir(), ".env"), slog.New(slog.NewTextHandler(&logs, nil)))
 	if err == nil || !strings.Contains(err.Error(), config.EnvDatabaseURL) || strings.Contains(err.Error()+logs.String(), "s3cret") {

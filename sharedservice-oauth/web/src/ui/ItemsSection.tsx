@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ITEM_PERMISSIONS, type Item, type ItemAction, permissionsOf } from "../items";
+import { ITEM_PERMISSIONS, type Item, type ItemAction } from "../items";
 import type { Session, SessionState } from "../session";
 import { absoluteTime, relativeTime, shortId } from "./format";
 import { Icon } from "./icons";
@@ -18,17 +18,12 @@ export function ItemsSection(props: {
   const { session, state, notify } = props;
   const [dialog, setDialog] = useState<Dialog>();
   const now = useNow(30_000);
-  const active = state.active;
-  const project = active?.project;
+  // A context whose token the backend could not get lists nothing until another is chosen.
+  const project = state.contextError ? undefined : state.active?.project;
 
-  const held = state.tokens.find(
-    (token) => token.service === "inventaris" && token.org === active?.org && token.project === project,
-  );
-  const perms = permissionsOf(held?.claims);
-  const can = (action: ItemAction): boolean => perms?.includes(ITEM_PERMISSIONS[action]) ?? false;
+  const can = (action: ItemAction): boolean => state.perms.includes(ITEM_PERMISSIONS[action]);
   const missing = (["create", "edit", "delete"] as const).filter((action) => !can(action));
-  const why = (action: ItemAction) =>
-    perms ? `Token project ini tidak memuat ${ITEM_PERMISSIONS[action]}.` : "Izin di token belum diketahui.";
+  const why = (action: ItemAction) => `Token konteks ini tidak memuat ${ITEM_PERMISSIONS[action]}.`;
 
   const save = (item: Item | undefined) => async (input: { name: string; quantity: number }) => {
     const result = await session.saveItem(input, item?.id);
@@ -83,9 +78,7 @@ export function ItemsSection(props: {
         <p className="callout info perm-note">
           <Icon name="info" />
           <span>
-            {perms
-              ? `${missing.map((action) => ACTION_LABEL[action]).join(", ")} dinonaktifkan: token project ini tidak memuat ${missing.map((action) => ITEM_PERMISSIONS[action]).join(", ")}.`
-              : "Tambah, Ubah, dan Hapus ditahan: izin di token belum diketahui."}
+            {`${missing.map((action) => ACTION_LABEL[action]).join(", ")} dinonaktifkan: token konteks ini tidak memuat ${missing.map((action) => ITEM_PERMISSIONS[action]).join(", ")}.`}
           </span>
         </p>
       )}
@@ -93,7 +86,7 @@ export function ItemsSection(props: {
       {!project ? (
         <div className="empty">
           <Icon name="box" />
-          <h3>Belum ada konteks</h3>
+          <h3>{state.contextError ? "Konteks aktif tidak dapat dipakai" : "Belum ada konteks"}</h3>
           <p className="muted">
             Pilih project di panel <a href="#konteks">Konteks</a> untuk melihat barangnya.
           </p>
@@ -110,7 +103,7 @@ export function ItemsSection(props: {
       ) : !items ? (
         <p className="inline-status loading" role="status">
           <Icon name="spinner" className="spin" />
-          Memuat barang dari inventaris…
+          Memuat barang…
         </p>
       ) : items.length === 0 ? (
         <div className="empty">

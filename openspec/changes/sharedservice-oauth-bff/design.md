@@ -89,18 +89,22 @@ Scope berasal dari token, bukan dari request. Handler membaca `nicetoken.FromCon
 ```sql
 CREATE TABLE tenants (org_id text PRIMARY KEY, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE items (
-  id         uuid PRIMARY KEY,
-  org_id     text NOT NULL REFERENCES tenants(org_id),
-  project_id text NOT NULL,
-  created_by text NOT NULL,
-  acted_by   text,
-  name       text NOT NULL,
-  quantity   integer NOT NULL
+  id          uuid PRIMARY KEY,
+  org_id      text NOT NULL REFERENCES tenants(org_id),
+  project_id  text NOT NULL,
+  created_by  text NOT NULL,
+  acted_by    text,
+  name        text NOT NULL,
+  quantity    bigint NOT NULL CHECK (quantity >= 0),
+  create_time timestamptz NOT NULL DEFAULT now(),
+  update_time timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX items_scope_idx ON items (org_id, project_id);
 ```
 
 - Setiap query memakai `WHERE org_id = $1 AND project_id = $2`; `GET/PUT/DELETE` by id juga menyertakan keduanya, sehingga id dari scope lain menjadi 404.
+- `quantity` `bigint` mengikuti `int64` di domain, dan `create_time`/`update_time` dibutuhkan API serta urutan daftar. ID uuid ditampilkan sebagai `itm_<32 hex>`, bentuk yang sama dengan adapter memori.
+- `project_id` di query diabaikan. Body tetap ditolak 400 `invalid_argument` `body` bila memuat field yang tidak dikenal, termasuk `project_id`, sehingga klien tidak pernah memilih scope.
 - Provisioning tenant: `INSERT INTO tenants ... ON CONFLICT DO NOTHING` sebelum operasi pertama org itu, aman untuk request serentak.
 - `DATABASE_URL` memilih adapter PostgreSQL; kosong berarti adapter memori dengan aturan scope yang sama. Tes dan compose lama tetap jalan tanpa database.
 - Tanpa foreign key ke NICE: ID org, project, dan user hanyalah teks. Row-level security (`SET LOCAL app.org_id`) disebut di README sebagai pengaman tambahan, tidak diwajibkan.

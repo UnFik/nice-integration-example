@@ -1,26 +1,23 @@
 import { useEffect, useSyncExternalStore } from "react";
-import type { Session } from "./session";
+import { describeLoginError, type Session } from "./session";
 import { Home } from "./ui/Home";
 import { Notice, Problem, SignIn } from "./ui/Screens";
 
 export function App({ session }: { session: Session }) {
-  const state = useSyncExternalStore(session.subscribe, session.getState);
+  const state = useSyncExternalStore(session.subscribe, session.getState, session.getState);
 
   useEffect(() => {
-    if (window.location.pathname === "/callback") void session.completeLogin(window.location.href);
-    else void session.resume();
+    void session.start(window.location.href);
   }, [session]);
 
-  const signIn = () => void session.signIn();
+  const signIn = () => session.signIn();
   switch (state.phase) {
     case "starting":
-      return <Notice title="Menghubungi NICE…" />;
-    case "redirecting":
-      return <Notice title="Mengalihkan ke NICE…" />;
+      return <Notice title="Memeriksa sesi…" />;
     case "unreachable":
       return (
         <Problem
-          title="NICE tidak terjangkau"
+          title="Backend inventaris tidak terjangkau"
           message={state.message}
           icon="offline"
           tone="warning"
@@ -29,22 +26,33 @@ export function App({ session }: { session: Session }) {
         />
       );
     case "signed-out":
-      return <SignIn issuer={session.config.issuer} clientId={session.config.clientId} onSignIn={signIn} />;
-    case "login-failed":
-      return state.reason === "service_unavailable" ? (
+      return <SignIn signedOut={state.signedOut} onSignIn={signIn} onSelectAccount={() => session.signIn({ selectAccount: true })} />;
+    case "login-failed": {
+      const failure = describeLoginError(state.loginError ?? "unknown");
+      return failure.selectAccount ? (
         <Problem
-          title="Service tidak tersedia"
-          message={state.message}
+          title={failure.title}
+          message={failure.message}
           icon="block"
           tone="warning"
           action="Masuk dengan akun lain"
-          onAction={() => void session.signIn({ selectAccount: true })}
+          onAction={() => session.signIn({ selectAccount: true })}
         />
       ) : (
-        <Problem title="Login gagal" message={state.message} icon="alert" action="Masuk lagi" onAction={signIn} />
+        <Problem title={failure.title} message={failure.message} icon="alert" action="Masuk lagi" onAction={signIn} />
       );
+    }
     case "ended":
-      return <Problem title="Sesi berakhir" message={state.message} icon="clock" tone="warning" action="Masuk lagi" onAction={signIn} />;
+      return (
+        <Problem
+          title="Sesi berakhir"
+          message="NICE mengakhiri sesi Anda, mis. karena Anda keluar di tempat lain atau aksesnya dicabut. Masuk lagi untuk melanjutkan."
+          icon="clock"
+          tone="warning"
+          action="Masuk"
+          onAction={signIn}
+        />
+      );
     case "signed-in":
       return <Home session={session} state={state} />;
   }
