@@ -16,15 +16,13 @@ import (
 	"github.com/nice-platform/nice/pkg/nicetoken"
 )
 
-// fakeNICE plays the parts of NICE the agent talks to: the token endpoint (token exchange only) and the proxy
-// /pengiriman/... in front of a fake pengiriman. Its rules follow docs/api.md, "Token exchange: backend atas nama
-// user", in the small: confidential actor, subject for agen, target among the dependencies, organization of the
-// user, project of that organization.
+// fakeNICE plays the part of NICE the agent talks to: the token endpoint (token exchange only). Its rules follow
+// docs/api.md, "Token exchange: backend atas nama user", in the small: confidential actor, subject for agen, target
+// among the dependencies, organization of the user, project of that organization.
 type fakeNICE struct {
-	t          *testing.T
-	srv        *httptest.Server
-	subject    *nicetoken.Verifier
-	pengiriman *fakeService
+	t       *testing.T
+	srv     *httptest.Server
+	subject *nicetoken.Verifier
 
 	mu sync.Mutex
 	// projects are the organizations the user belongs to and their projects.
@@ -53,13 +51,11 @@ func newFakeNICE(t *testing.T) *fakeNICE {
 		projects: map[string][]string{orgA: {prjP}, orgB: {prjQ}},
 		perms: map[string][]string{
 			"inventaris": {"inventaris.items.read", "inventaris.items.create"},
-			"pengiriman": {"pengiriman.shipments.read", "pengiriman.shipments.create"},
 		},
 		refuse: map[string]refusal{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /oauth/token", f.token)
-	mux.HandleFunc("/pengiriman/", f.proxy)
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	v, err := nicetoken.New(nicetoken.Config{Issuer: f.srv.URL, Service: domain.ServiceSlug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
@@ -178,15 +174,6 @@ func (f *fakeNICE) token(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// proxy stands for the NICE proxy of the api_key service pengiriman: it refuses with the error body of NICE, and
-// forwards the rest to the fake pengiriman.
-func (f *fakeNICE) proxy(w http.ResponseWriter, r *http.Request) {
-	r2 := r.Clone(r.Context())
-	r2.URL.Path = strings.TrimPrefix(r.URL.Path, "/pengiriman")
-	f.pengiriman.niceErrors = true
-	f.pengiriman.ServeHTTP(w, r2)
-}
-
 // fakeService is a nice_token service with one collection, verified with nicetoken as inventaris does.
 type fakeService struct {
 	t          *testing.T
@@ -194,7 +181,6 @@ type fakeService struct {
 	collection string
 	srv        *httptest.Server
 	v          *nicetoken.Verifier
-	niceErrors bool
 
 	mu        sync.Mutex
 	received  []map[string]any
@@ -205,7 +191,7 @@ type fakeService struct {
 }
 
 func newFakeService(t *testing.T, issuer, slug string) *fakeService {
-	s := &fakeService{t: t, slug: slug, collection: map[string]string{"inventaris": "items", "pengiriman": "shipments"}[slug]}
+	s := &fakeService{t: t, slug: slug, collection: "items"}
 	v, err := nicetoken.New(nicetoken.Config{Issuer: issuer, Service: slug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
@@ -227,10 +213,6 @@ func (s *fakeService) StaleOnce() { s.mu.Lock(); s.staleOnce = true; s.mu.Unlock
 func (s *fakeService) fail(w http.ResponseWriter, status int, code, description string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if s.niceErrors {
-		_ = json.NewEncoder(w).Encode(map[string]any{"code": status, "error_code": description, "message": "permission denied"})
-		return
-	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code, "error_description": description})
 }
 

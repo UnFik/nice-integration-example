@@ -13,7 +13,6 @@ An example AI agent backend: an MCP server (Streamable HTTP transport) for the N
 MCP client --Bearer user token (aud=agen)--> agen /mcp
 agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer exchanged token (aud=inventaris, act.sub=agen-backend)--> inventaris /items
-agen --Bearer exchanged token (aud=pengiriman)--> NICE /pengiriman/shipments --X-Api-Key--> pengiriman
 ```
 
 Minimum NICE version: a revision with `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, and `add-token-exchange` (`nice` `6cc9986` or later). The MCP SDK is pinned in `go.mod` at `v1.8.0`.
@@ -59,19 +58,21 @@ Without a token, `/mcp` answers `401` with `WWW-Authenticate: Bearer resource_me
 |---|---|---|
 | `inventaris_list_items` | `GET <INVENTARIS_URL>/items` | `inventaris.items.read` |
 | `inventaris_create_item` (`name`, `quantity`) | `POST <INVENTARIS_URL>/items` | `inventaris.items.create` |
-| `pengiriman_list_shipments` | `GET <NICE_PROXY_URL>/pengiriman/shipments` | `pengiriman.shipments.read` |
-| `pengiriman_create_shipment` (`destination`) | `POST <NICE_PROXY_URL>/pengiriman/shipments` | `pengiriman.shipments.create` |
 
 Every tool takes optional `organization_id` (`org_...`) and `project_id` (`prj_...`). Without them, the exchange asks only for `nice:aud:<service>`, and NICE uses the organization and project of the user's token. Another organization needs its project. The agent never picks a context the user did not name, and an ID not shaped like `org_...` or `prj_...` is refused before it becomes a scope.
 
-Sensitive operations have no tool on purpose: deleting an item (`DELETE /items/{id}`, sensitive in the `inventaris` catalog) and cancelling a shipment. Human approval of write operations is a policy of the agent application, outside this example.
+Sensitive operations have no tool on purpose: deleting an item (`DELETE /items/{id}`, sensitive in the `inventaris` catalog). Human approval of write operations is a policy of the agent application, outside this example.
+
+### Why only `nice_token` services
+
+An `api_key` service uses a key per Service Account and refuses user tokens (`403` `service_account_required`), so an agent that acts on behalf of the user offers tools for `nice_token` services only. The `api_key` example service in this repo, `pengiriman`, therefore has no tool here. Calling an `api_key` service through a Service Account that belongs to the agent would drop the identity of the user (the target service would no longer see the user as `created_by`) and is not the pattern of this example.
 
 ### How a call works
 
 `callAs` calls `niceclient.ExchangeClient.DoAs` with the user's token from the MCP request and the key `{Org, Project, Audience}`. `DoAs`:
 
 - keeps a token per `(user, organization, project, service)` until 60 seconds before it expires, and never uses a token that outlives the user's token;
-- runs one exchange per key for parallel calls, with no queue across keys, so `inventaris` and `pengiriman` are exchanged at the same time;
+- runs one exchange per key for parallel calls, with no queue across keys, so different contexts (organization or project) are exchanged at the same time;
 - exchanges again and resends the request once when the service answers `401` `token_stale` or `expired`.
 
 The MCP transport is *stateless* with JSON answers: every `POST /mcp` stands alone, so `curl` can call a tool in one request and parallel calls of one client do not wait for each other.
@@ -88,8 +89,7 @@ Failures come back as tool results marked as errors (`isError: true`) with the c
 | `invalid_grant` (`token_stale`, `subject_invalid`) | exchange | the user's access changed, the token is not a user token for `agen`, or the session ended: sign in again |
 | `invalid_client`, `unauthorized_client` | exchange | the agent's client is refused: check `NICE_CLIENT_ID` and `NICE_CLIENT_SECRET` |
 | `nice_unavailable` | exchange | NICE did not answer |
-| `insufficient_scope` (`permission_denied`), `permission_denied` | service or proxy | the user does not hold the permission for that operation in that project |
-| `service_account_required` | proxy | `pengiriman` uses mirrored keys (step 12 of its README), which accept only Service Accounts |
+| `insufficient_scope` (`permission_denied`), `permission_denied` | service | the user does not hold the permission for that operation in that project |
 | `invalid_argument` | agent | `organization_id` or `project_id` is malformed, or another organization comes without `project_id` |
 
 Example text of a tool result for an organization the user does not belong to:
@@ -103,7 +103,7 @@ access_denied (organization is not usable): NICE refused a token for inventaris 
 - Directory layout: `replace github.com/nice-platform/nice => ../../nice` in `go.mod` works only when the `nice` repository sits next to `example/`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
-- `inventaris` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md), and `pengiriman` through step 11 of [`../shared-service-apikey/README.en.md`](../shared-service-apikey/README.en.md), **without step 12** (mirrored keys refuse user tokens). The test user holds `inventaris.operator` and `pengiriman.admin` in the same project.
+- `inventaris` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md). The test user holds `inventaris.operator` in the same project.
 - For the other-organization test: the test user is also a member of a second organization, with a project that has `inventaris` active and an `inventaris.operator` binding there.
 
 ## Configuration
@@ -116,7 +116,6 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `NICE_CLIENT_ID` | required | `client_id` of the confidential client `agen-backend` (step 8) |
 | `NICE_CLIENT_SECRET` | required | the secret of that client. Sent to the NICE token endpoint only |
 | `INVENTARIS_URL` | required | address of `inventaris`, e.g. `http://127.0.0.1:8081` |
-| `NICE_PROXY_URL` | `NICE_ISSUER` | the NICE address whose `/pengiriman/...` is forwarded to `pengiriman` |
 | `LISTEN_ADDR` | `127.0.0.1:8083` | listen address |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients use; the metadata `resource` is `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
@@ -127,13 +126,13 @@ An empty required variable stops the start with a message that names it.
 
 ```bash
 make run          # go run ./cmd/agent-backend on 127.0.0.1:8083
-make test         # go test -race; needs no NICE (fake NICE, inventaris, and pengiriman proxy)
+make test         # go test -race; needs no NICE (fake NICE and inventaris)
 make smoke        # scripts/smoke.sh, needs a NICE set up with the checklist below
 ```
 
 When `go` on `PATH` does not match `GOROOT`, call `make GO=/path/to/go test`.
 
-The tests run the agent over in-process HTTP with the MCP client of the SDK, in front of a fake NICE that follows the token exchange rules. The tests that keep the pattern: the fake services fail when they ever receive a token with `aud=agen` (no passthrough), ten calls in one context give one exchange, and the exchanges for two services run at the same time.
+The tests run the agent over in-process HTTP with the MCP client of the SDK, in front of a fake NICE that follows the token exchange rules. The tests that keep the pattern: the fake services fail when they ever receive a token with `aud=agen` (no passthrough), ten calls in one context give one exchange, and the exchanges for two different contexts (organization or project) run at the same time.
 
 ## NICE setup checklist
 
@@ -148,7 +147,7 @@ read -rp 'Tenant organization owner email: ' OWNER_EMAIL; read -rsp 'Password: '
 OWNER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD"); unset OWNER_PASSWORD
 
 ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $OWNER_TOKEN" | jq -r .organization.id)
-PROJECT_ID=prj_...   # the tenant project where inventaris and pengiriman are active
+PROJECT_ID=prj_...   # the tenant project where inventaris is active
 USER_ID=usr_...      # the test user of the agent
 PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
 ```
@@ -183,7 +182,7 @@ curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports/$(jq -r .import_id <
 
 The preview shows one operation `mcp` (`agen.mcp.use`) and the roles `agen.admin` and `agen.user` (from `x-nice-roles`). There is no `agen.viewer`, because the document has no read operation.
 
-### 4. Dependencies of `agen` on `inventaris` and `pengiriman`
+### 4. Dependencies of `agen` on `inventaris`
 
 Needs `nice.platform.catalog.manage`. The permissions of exchanged tokens are cut down to this list, so the agent can never delete an item even when the user can. The list is replaced as a whole.
 
@@ -191,8 +190,7 @@ Needs `nice.platform.catalog.manage`. The permissions of exchanged tokens are cu
 curl -sS "$NICE/api/v1/shared-services/agen/dependencies" -X PUT \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"dependencies":[
-        {"service":"inventaris","permissions":["inventaris.items.read","inventaris.items.create"]},
-        {"service":"pengiriman","permissions":["pengiriman.shipments.read","pengiriman.shipments.create"]}]}'
+        {"service":"inventaris","permissions":["inventaris.items.read","inventaris.items.create"]}]}'
 ```
 
 ### 5. Activate the service
@@ -290,7 +288,7 @@ export AGENT_USER_TOKEN=$USER_TOKEN   # read by scripts/smoke.sh
 make smoke
 ```
 
-The script reads `.env` and `AGENT_USER_TOKEN` from the environment, never prints a token or the secret, and checks: NICE answers, `/healthz` answers, `/mcp` without a token answers `401` with `resource_metadata`, the metadata names `NICE_ISSUER`, then, with the user token, `tools/list` holds the four tools and `inventaris_list_items` succeeds. Failures map to steps:
+The script reads `.env` and `AGENT_USER_TOKEN` from the environment, never prints a token or the secret, and checks: NICE answers, `/healthz` answers, `/mcp` without a token answers `401` with `resource_metadata`, the metadata names `NICE_ISSUER`, then, with the user token, `tools/list` holds the two tools and `inventaris_list_items` succeeds. Failures map to steps:
 
 | Answer | Step likely missed |
 |---|---|
@@ -315,7 +313,7 @@ tool() {   # tool <name> [arguments JSON]
 }
 ```
 
-1. **Tool list.** Four tools, no delete or cancel:
+1. **Tool list.** Two `inventaris` tools, no delete operation:
 
    ```bash
    curl -sS http://127.0.0.1:8083/mcp -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
@@ -329,14 +327,7 @@ tool() {   # tool <name> [arguments JSON]
    tool inventaris_list_items
    ```
 
-3. **Shipments through the proxy.** `created_by` is the user; `pengiriman` does not see the actor:
-
-   ```bash
-   tool pengiriman_create_shipment '{"destination":"Gudang Timur, Surabaya"}'
-   tool pengiriman_list_shipments
-   ```
-
-4. **Another organization of the user.** With a second organization (`ORG_B_ID`, project `PROJECT_B_ID`) that meets the prerequisites and entitles `agen`:
+3. **Another organization of the user.** With a second organization (`ORG_B_ID`, project `PROJECT_B_ID`) that meets the prerequisites and entitles `agen`:
 
    ```bash
    tool inventaris_list_items "{\"organization_id\":\"$ORG_B_ID\",\"project_id\":\"$PROJECT_B_ID\"}"
@@ -344,27 +335,26 @@ tool() {   # tool <name> [arguments JSON]
 
    It succeeds, with the items of that organization.
 
-5. **An organization that is not the user's.** The result is an `access_denied` error, and `inventaris` is not called:
+4. **An organization that is not the user's.** The result is an `access_denied` error, and `inventaris` is not called:
 
    ```bash
    tool inventaris_list_items "{\"organization_id\":\"$OTHER_ORG_ID\",\"project_id\":\"$OTHER_PROJECT_ID\"}"
    ```
 
-6. **NICE audit.** Every exchange is recorded as `token.exchange` with the user as actor and `details` `client_id`, `service`, and `project_id`. A successful exchange is recorded in the target organization. A refusal is recorded in the organization of the user's token, with `details.reason` (e.g. `not_member`, `invalid_scope`) and `details.target_organization_id`:
+5. **NICE audit.** Every exchange is recorded as `token.exchange` with the user as actor and `details` `client_id`, `service`, and `project_id`. A successful exchange is recorded in the target organization. A refusal is recorded in the organization of the user's token, with `details.reason` (e.g. `not_member`, `invalid_scope`) and `details.target_organization_id`:
 
    ```bash
    curl -sS "$NICE/api/v1/audit/records?action=token.exchange&page_size=10" -H "Authorization: Bearer $OWNER_TOKEN" \
      | jq '.records[] | {actor_id, outcome, project_id, details}'
    ```
 
-   The agent keeps exchanged tokens, so many tool calls in one context give only one record per service.
+   The agent keeps exchanged tokens, so many tool calls in one context give only one record per context.
 
-7. **MCP Inspector (optional).** `npx @modelcontextprotocol/inspector`, Streamable HTTP transport to `http://127.0.0.1:8083/mcp`. NICE offers no Dynamic Client Registration, so enter the `client_id` of `agen-user` by hand and add `nice:prj:<project>` to the scope; the scopes of the metadata alone are not enough for a service client token. This step is not part of the integration run of this example.
+6. **MCP Inspector (optional).** `npx @modelcontextprotocol/inspector`, Streamable HTTP transport to `http://127.0.0.1:8083/mcp`. NICE offers no Dynamic Client Registration, so enter the `client_id` of `agen-user` by hand and add `nice:prj:<project>` to the scope; the scopes of the metadata alone are not enough for a service client token. This step is not part of the integration run of this example.
 
 ## Limits
 
 - **No DCR.** MCP clients are registered by hand (step 7).
-- **No actor in `pengiriman`.** The NICE proxy forwards only `X-Nice-Principal`. An actor header (`X-Nice-Actor`) could be a proposal for NICE.
-- **No mirrored keys in `pengiriman`.** After step 12 of the `pengiriman` README, the proxy refuses user tokens with `service_account_required`.
+- **No tools for `api_key` services.** Those services serve Service Accounts only (see "Why only `nice_token` services"), so this example does not show a call to an `api_key` service.
 - **No sensitive tools**, no chat UI or LLM, and no agent work while the user is away.
 - **No access change feed in the agent.** A stale user token is still refused at the exchange (`invalid_grant` `token_stale`), because NICE checks the feed itself.

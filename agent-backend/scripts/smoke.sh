@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test of the agen example against a NICE set up with the README checklist: the agent answers, /mcp without a
 # token points to the resource metadata, the metadata names NICE, and, with AGENT_USER_TOKEN in the environment
-# (checklist step 11), the four tools are listed and inventaris_list_items succeeds through a token exchange.
+# (checklist step 11), the two tools are listed and inventaris_list_items succeeds through a token exchange.
 # It reads .env and AGENT_USER_TOKEN only and never prints a token or the secret; neither reaches the argv of curl.
 set -euo pipefail
 
@@ -83,9 +83,9 @@ if [[ $status != 200 ]]; then
   esac
 fi
 tools=$(jq -r '[.result.tools[].name] | sort | join(",")' "$body")
-[[ $tools == inventaris_create_item,inventaris_list_items,pengiriman_create_shipment,pengiriman_list_shipments ]] ||
-  fail "tools/list memuat $tools, seharusnya empat tool contoh."
-ok "tools/list: empat tool"
+[[ $tools == inventaris_create_item,inventaris_list_items ]] ||
+  fail "tools/list memuat $tools, seharusnya dua tool contoh."
+ok "tools/list: dua tool"
 
 status=$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"inventaris_list_items","arguments":{}}}')
 [[ $status == 200 ]] || fail "tools/call dijawab HTTP $status."

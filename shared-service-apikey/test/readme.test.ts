@@ -29,10 +29,12 @@ describe.each(readmes)("$file", ({ file, config }) => {
     expect(names).toEqual(envExampleNames);
   });
 
-  it("gives NICE the key operation paths the code serves", () => {
-    const body = /-d '(\{\s*"key_operations"[\s\S]*?\n\})'/.exec(text)?.[1];
-    expect(body).toBeDefined();
-    expect(JSON.parse(body!).key_operations).toEqual(KEY_ROUTES);
+  it("registers the key operation paths the code serves", () => {
+    const start = text.indexOf("\n### 4. ");
+    const registration = text.slice(start, text.indexOf("\n### 5. ", start));
+    for (const [name, { method, path }] of Object.entries(KEY_ROUTES)) {
+      expect(registration).toContain(`${name}: {method: "${method}", path: "${path}"}`);
+    }
     for (const { method, path } of Object.values(KEY_ROUTES)) {
       expect(text).toContain(`| \`${method} ${path}`);
     }

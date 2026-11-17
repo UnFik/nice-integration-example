@@ -120,19 +120,6 @@ func TestCallExchangesTheUserTokenAndSendsOnlyTheExchangedOne(t *testing.T) {
 	}
 }
 
-func TestCallThroughTheProxyForPengiriman(t *testing.T) {
-	e := newCallEnv(t)
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Pengiriman, calldto.Where{}, http.MethodPost, "/shipments",
-		map[string]string{"destination": "Gudang Timur"})
-	got := wantOK(t, res, out)
-	if got["destination"] != "Gudang Timur" || got["created_by"] != testUser {
-		t.Fatalf("shipment = %v", got)
-	}
-	if ex := e.nice.Exchanges(); len(ex) != 1 || ex[0].Audience != "pengiriman" {
-		t.Fatalf("exchanges = %+v", ex)
-	}
-}
-
 func TestCallRefusedWithAccessDeniedCallsNoService(t *testing.T) {
 	e := newCallEnv(t)
 	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{Org: orgC, Project: prjQ},
@@ -185,14 +172,6 @@ func TestCallNamesPermissionDeniedOfTheService(t *testing.T) {
 	if !strings.Contains(text, "inventaris") {
 		t.Fatalf("text %q does not name the service", text)
 	}
-}
-
-func TestCallNamesPermissionDeniedOfTheProxy(t *testing.T) {
-	e := newCallEnv(t)
-	e.nice.perms["pengiriman"] = []string{"pengiriman.shipments.read"}
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Pengiriman, calldto.Where{}, http.MethodPost, "/shipments",
-		map[string]string{"destination": "Gudang"})
-	wantToolError(t, res, out, "permission_denied")
 }
 
 func TestCallRetriesOnceWhenTheServiceSaysTokenStale(t *testing.T) {

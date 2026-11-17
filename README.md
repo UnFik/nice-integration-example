@@ -9,7 +9,7 @@ Empat contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setia
 | [`sharedservice-oauth/`](sharedservice-oauth/README.md) | Service Anda bisa diubah untuk memverifikasi token NICE. Klien memanggilnya langsung, dan NICE tidak berada di jalur request (`auth_mode: nice_token`). UI-nya bicara ke backend service itu saja: backend login ke NICE sebagai service client confidential, memegang token, dan memindah organisasi serta project (backend-for-frontend). Data barang per organisasi dan project, PostgreSQL opsional. | `backend/`: Go + `nice/pkg/nicetoken` + `nice/pkg/niceclient`, port 8081; `web/`: Vite + React, port 5181 saat dev |
 | [`shared-service-apikey/`](shared-service-apikey/README.md) | Service lama yang hanya mengenal API key miliknya sendiri. Klien memanggilnya lewat proxy NICE `/<slug>/...` (`auth_mode: api_key`). | TypeScript + Hono, port 8082 |
 | [`public-client-pkce/`](public-client-pkce/README.md) | Aplikasi browser milik satu organisasi (client tenant) yang login dengan akun NICE lalu memanggil service `nice_token` atas nama user. | Vite + React + `oauth4webapi`, port 5180 |
-| [`agent-backend/`](agent-backend/README.md) | Backend agen AI (MCP server) yang menjalankan tool ke service lain atas nama user lewat token exchange, tanpa meneruskan token user. | Go + SDK MCP Go + `nice/pkg/niceclient`, port 8083 |
+| [`agent-backend/`](agent-backend/README.md) | Backend agen AI (MCP server) yang menjalankan tool ke service `nice_token` atas nama user lewat token exchange, tanpa meneruskan token user. Service `api_key` tidak dipanggil: ia memakai kunci per Service Account dan menolak token user. | Go + SDK MCP Go + `nice/pkg/niceclient`, port 8083 |
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
@@ -25,7 +25,6 @@ Empat contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setia
 ```text
  MCP client --Bearer JWT (aud=agen)--> agent-backend --token exchange--> NICE /oauth/token
  agent-backend --Bearer JWT hasil exchange (aud=inventaris, act)--> sharedservice-oauth/backend
- agent-backend --Bearer JWT hasil exchange (aud=pengiriman)--> NICE /pengiriman/... --> shared-service-apikey
 ```
 
 SPA tidak memanggil service `api_key` karena path proxy NICE `/<slug>/...` tidak dicakup CORS.
@@ -37,7 +36,7 @@ Kode protokol OAuth di browser (`oidc.ts`, token manager) hanya ada di `public-c
 | Contoh | Versi NICE |
 |---|---|
 | `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); jalur Bearer saja cukup `c7a5086` |
-| `shared-service-apikey` | `2638605` (mirrored key sampai ke upstream lewat proxy) |
+| `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy) |
 | `public-client-pkce` | `c7a5086`; tanpa `NICE_CORS_ALLOWED_ORIGINS` mulai `60939ed` (`add-delegated-nice-api`) |
 | `agent-backend` | `6cc9986` (ditambah `add-token-exchange`); `acted_by` di `sharedservice-oauth` juga butuh revisi ini |
 

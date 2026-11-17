@@ -23,16 +23,11 @@ type createItemInput struct {
 	ProjectID      string `json:"project_id,omitempty" jsonschema:"Optional. ID of the project (prj_...) to act in; default the project of the user's token."`
 }
 
-type createShipmentInput struct {
-	Destination    string `json:"destination" jsonschema:"Destination of the shipment, 1 to 200 characters"`
-	OrganizationID string `json:"organization_id,omitempty" jsonschema:"Optional. ID of the organization (org_...) to act in; default the organization of the user's token. Another organization needs project_id."`
-	ProjectID      string `json:"project_id,omitempty" jsonschema:"Optional. ID of the project (prj_...) to act in; default the project of the user's token."`
-}
-
 func ptr[T any](v T) *T { return &v }
 
-// newServer registers the tools. Deleting an item (sensitive in the inventaris catalog) and cancelling a shipment
-// have no tool on purpose: an agent that a prompt can steer should not hold them.
+// newServer registers the tools. Deleting an item (sensitive in the inventaris catalog) has no tool on purpose: an
+// agent that a prompt can steer should not hold it. Only nice_token services have tools: an api_key service accepts
+// Service Accounts only, so it cannot be called on behalf of a user.
 func newServer(h *Handlers) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "agen", Title: "Agen (NICE example)", Version: "1.0.0"}, nil)
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: ptr(false), OpenWorldHint: ptr(false)}
@@ -48,15 +43,5 @@ func newServer(h *Handlers) *mcp.Server {
 		Description: "Creates a stock item in inventaris on behalf of the user. The item records the user as creator and this agent as actor (acted_by).",
 		Annotations: creates,
 	}, h.CreateItem)
-	mcp.AddTool(s, &mcp.Tool{
-		Name: "pengiriman_list_shipments", Title: "List shipments",
-		Description: "Lists the shipments in pengiriman for the user, in the organization and project of the user's token or the ones named.",
-		Annotations: readOnly,
-	}, h.ListShipments)
-	mcp.AddTool(s, &mcp.Tool{
-		Name: "pengiriman_create_shipment", Title: "Create a shipment",
-		Description: "Creates a shipment in pengiriman on behalf of the user.",
-		Annotations: creates,
-	}, h.CreateShipment)
 	return s
 }

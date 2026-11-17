@@ -112,17 +112,16 @@ type testEnv struct {
 }
 
 // newTestEnv runs the agent with the production wiring of NewCallService and NewHandler, in front of a fake NICE (token
-// endpoint, JWKS, and the pengiriman proxy) and a fake inventaris.
+// endpoint and JWKS) and a fake inventaris.
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 	e := &testEnv{t: t}
 	e.nice = newFakeNICE(t)
 	e.issuer = e.nice.URL()
 	e.inv = newFakeService(t, e.issuer, "inventaris")
-	e.nice.pengiriman = newFakeService(t, e.issuer, "pengiriman")
 	e.cfg = config.Config{
 		Issuer: e.issuer, ClientID: testClientID, ClientSecret: testSecret,
-		InventarisURL: e.inv.srv.URL, ProxyURL: e.issuer, PublicURL: "http://agent.test",
+		InventarisURL: e.inv.srv.URL, PublicURL: "http://agent.test",
 	}
 	log := slog.New(slog.DiscardHandler)
 	vc := VerifierConfig(e.cfg, log)

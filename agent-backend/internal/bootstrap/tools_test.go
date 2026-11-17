@@ -16,7 +16,7 @@ import (
 // noPassthrough fails when a service ever received the user's own token (aud agen) instead of an exchanged one.
 func noPassthrough(t *testing.T, e *testEnv) {
 	t.Helper()
-	for _, s := range []*fakeService{e.inv, e.nice.pengiriman} {
+	for _, s := range []*fakeService{e.inv} {
 		for _, c := range s.Received() {
 			aud, _ := c["aud"].([]any)
 			if c["aud"] == domain.ServiceSlug || (len(aud) > 0 && aud[0] == domain.ServiceSlug) {
@@ -49,7 +49,7 @@ func callTool(t *testing.T, s *mcp.ClientSession, name string, args map[string]a
 	return res, out
 }
 
-func TestToolListHasTheFourToolsAndNothingSensitive(t *testing.T) {
+func TestToolListHasTheTwoInventarisToolsAndNothingSensitive(t *testing.T) {
 	e := newTestEnv(t)
 	res, err := e.connect(e.userToken(orgA, prjP)).ListTools(context.Background(), nil)
 	if err != nil {
@@ -77,9 +77,22 @@ func TestToolListHasTheFourToolsAndNothingSensitive(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := []string{"inventaris_create_item", "inventaris_list_items", "pengiriman_create_shipment", "pengiriman_list_shipments"}
+	want := []string{"inventaris_create_item", "inventaris_list_items"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
+	}
+}
+
+func TestToolListHasNoTargetThatIsNotInventaris(t *testing.T) {
+	e := newTestEnv(t)
+	res, err := e.connect(e.userToken(orgA, prjP)).ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range res.Tools {
+		if !strings.HasPrefix(tool.Name, string(domain.Inventaris)+"_") {
+			t.Errorf("tool %s targets something other than inventaris", tool.Name)
+		}
 	}
 }
 
@@ -95,21 +108,13 @@ func TestEveryToolInTheContextOfTheUserToken(t *testing.T) {
 	if list, _ := items["items"].([]any); len(list) != 1 || items["org"] != orgA || items["project"] != prjP {
 		t.Fatalf("items = %v", items)
 	}
-	_, shipment := callTool(t, s, "pengiriman_create_shipment", map[string]any{"destination": "Gudang Timur, Surabaya"})
-	if shipment == nil || shipment["destination"] != "Gudang Timur, Surabaya" {
-		t.Fatalf("shipment = %v", shipment)
-	}
-	_, shipments := callTool(t, s, "pengiriman_list_shipments", map[string]any{})
-	if list, _ := shipments["shipments"].([]any); len(list) != 1 {
-		t.Fatalf("shipments = %v", shipments)
-	}
 	for _, ex := range e.nice.Exchanges() {
 		if strings.Contains(ex.Scope, "nice:org") || strings.Contains(ex.Scope, "nice:prj") {
 			t.Fatalf("exchange %q names a context; without arguments the token's context is NICE's default", ex.Scope)
 		}
 	}
-	if n := len(e.nice.Exchanges()); n != 2 {
-		t.Fatalf("exchanges = %d, want 2 (one per service, then reused)", n)
+	if n := len(e.nice.Exchanges()); n != 1 {
+		t.Fatalf("exchanges = %d, want 1 (one for inventaris, then reused)", n)
 	}
 	noPassthrough(t, e)
 }
@@ -131,10 +136,10 @@ func TestToolInAnotherOrganizationOfTheUser(t *testing.T) {
 func TestToolInAnOrganizationThatIsNotTheUsers(t *testing.T) {
 	e := newTestEnv(t)
 	s := e.connect(e.userToken(orgA, prjP))
-	res, _ := callTool(t, s, "pengiriman_list_shipments", map[string]any{"organization_id": orgC, "project_id": prjQ})
+	res, _ := callTool(t, s, "inventaris_list_items", map[string]any{"organization_id": orgC, "project_id": prjQ})
 	wantToolError(t, res, nil, "access_denied")
-	if n := len(e.nice.pengiriman.Received()); n != 0 {
-		t.Fatalf("pengiriman was called %d times", n)
+	if n := len(e.inv.Received()); n != 0 {
+		t.Fatalf("inventaris was called %d times", n)
 	}
 }
 

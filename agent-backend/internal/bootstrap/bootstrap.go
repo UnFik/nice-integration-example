@@ -71,11 +71,8 @@ func NewCallService(cfg config.Config, hc *http.Client, log *slog.Logger) (*call
 		return nil, err
 	}
 	return &callusecase.Service{
-		Sender: sender,
-		Bases: map[domain.Target]string{
-			domain.Inventaris: cfg.InventarisURL,
-			domain.Pengiriman: cfg.ProxyURL + "/" + string(domain.Pengiriman),
-		},
+		Sender:     sender,
+		Bases:      map[domain.Target]string{domain.Inventaris: cfg.InventarisURL},
 		ClientVars: config.EnvClientID + " and " + config.EnvClientSecret,
 		Log:        log,
 	}, nil
