@@ -238,12 +238,12 @@ IAM mengetahui Service Account baru secara asinkron. Binding yang dibuat tepat s
 
 ### 11. API key Service Account
 
-Console: halaman Service Account tadi, buat API key dengan layanan yang diizinkan memuat `pengiriman`. Atau:
+Console: halaman Service Account tadi, buat API key untuk Service Account itu (hak ditentukan role-nya). Atau:
 
 ```bash
 curl -sS -X POST "$NICE/api/v1/projects/$PROJECT_ID/api-keys" -H "Authorization: Bearer $OWNER_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$SA_ID\",\"name\":\"pengiriman-smoke\",\"allowed_services\":[\"pengiriman\"]}" |
+  -d "{\"service_account_id\":\"$SA_ID\",\"name\":\"pengiriman-smoke\"}" |
   jq '{id: .api_key.id, key}'
 ```
 

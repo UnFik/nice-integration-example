@@ -2,20 +2,20 @@
 
 [Bahasa Indonesia](README.md)
 
-A React SPA that acts as a **tenant public OAuth client** of NICE. It signs in with authorization code + PKCE (`S256`), shows the user's identity, then calls one or more `nice_token` services (for example `inventaris` from `../shared-service-oauth`) with a **separate token per service**, obtained through the rotating refresh token.
+A React SPA that acts as a **tenant public OAuth client** of NICE. It signs in with authorization code + PKCE (`S256`), shows the user's identity, then calls one or more `nice_token` services (for example `inventaris` from `../sharedservice-oauth/backend`) with a **separate token per service**, obtained through the rotating refresh token.
 
 Tested against nice revision: `c7a5086` (2026-11-13)
 
 ### Tenant client or service client
 
-| | Tenant client (this example) | Service client ([`../service-client-ui`](../service-client-ui/README.en.md)) |
+| | Tenant client (this example) | Service client ([`../sharedservice-oauth`](../sharedservice-oauth/README.en.md), through its backend) |
 | --- | --- | --- |
 | Owner | a project of a tenant organization | a project of the platform organization, bound to one service |
 | Organization | the client's organization only | every organization of the user entitled to that service; switched by a `nice:org` refresh |
 | Project of a service token | the client's project; `nice:prj` may be empty | `nice:prj` required, any project of the token's organization |
 | Context discovery | none; services come from `VITE_SERVICES` | `GET /api/v1/me/contexts` with a delegated NICE API token |
 
-Use this example for an application owned by one organization. A first-party service UI that serves many organizations uses `service-client-ui`.
+Use this example for an application owned by one organization. A first-party service UI that serves many organizations uses the backend-for-frontend pattern of `sharedservice-oauth`.
 
 ## Contents
 
@@ -32,7 +32,7 @@ Use this example for an application owned by one organization. A first-party ser
 
 - Node 22.18+ and npm.
 - NICE dev running (`cd nice && make dev`, `http://localhost:8080` by default). For NICE at another address, use it in `NICE` below and in `VITE_NICE_ISSUER`.
-- The called service is registered, imported, enabled, entitled to the tenant organization, activated in the project, and the user who signs in has a role binding in that project. For `inventaris`, follow steps 1-8 of [`../shared-service-oauth/README.en.md`](../shared-service-oauth/README.en.md), then run the service (`make run`, port 8081).
+- The called service is registered, imported, enabled, entitled to the tenant organization, activated in the project, and the user who signs in has a role binding in that project. For `inventaris`, follow steps 1-8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md), then run the service (`make run`, port 8081).
 
 ## NICE setup checklist
 

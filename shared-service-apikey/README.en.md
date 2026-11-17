@@ -238,12 +238,12 @@ IAM learns about a new Service Account asynchronously. A binding made right afte
 
 ### 11. Service Account API key
 
-Console: the same Service Account page, create an API key whose allowed services include `pengiriman`. Or:
+Console: the same Service Account page, create an API key for that Service Account (its rights come from its role). Or:
 
 ```bash
 curl -sS -X POST "$NICE/api/v1/projects/$PROJECT_ID/api-keys" -H "Authorization: Bearer $OWNER_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$SA_ID\",\"name\":\"pengiriman-smoke\",\"allowed_services\":[\"pengiriman\"]}" |
+  -d "{\"service_account_id\":\"$SA_ID\",\"name\":\"pengiriman-smoke\"}" |
   jq '{id: .api_key.id, key}'
 ```
 

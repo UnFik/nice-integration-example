@@ -2,20 +2,20 @@
 
 [English](README.en.md)
 
-SPA React yang menjadi **OAuth client tenant bertipe public** di NICE. SPA masuk dengan authorization code + PKCE (`S256`), menampilkan identitas user, lalu memanggil satu atau lebih service `nice_token` (mis. `inventaris` dari `../shared-service-oauth`) dengan **token terpisah per service** yang diambil lewat refresh token yang berotasi.
+SPA React yang menjadi **OAuth client tenant bertipe public** di NICE. SPA masuk dengan authorization code + PKCE (`S256`), menampilkan identitas user, lalu memanggil satu atau lebih service `nice_token` (mis. `inventaris` dari `../sharedservice-oauth/backend`) dengan **token terpisah per service** yang diambil lewat refresh token yang berotasi.
 
 Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
 
 ### Client tenant atau service client
 
-| | Client tenant (contoh ini) | Service client ([`../service-client-ui`](../service-client-ui/README.md)) |
+| | Client tenant (contoh ini) | Service client ([`../sharedservice-oauth`](../sharedservice-oauth/README.md), lewat backend) |
 | --- | --- | --- |
 | Pemilik | project di organisasi tenant | project di organisasi platform, diikat ke satu service |
 | Organisasi | hanya organisasi client | setiap organisasi user yang meng-entitle service itu; pindah lewat refresh `nice:org` |
 | Project token service | project client; `nice:prj` boleh kosong | `nice:prj` wajib, project mana pun di organisasi token |
 | Discovery konteks | tidak ada; service dari `VITE_SERVICES` | `GET /api/v1/me/contexts` dengan token API NICE terdelegasi |
 
-Pakai contoh ini untuk aplikasi milik satu organisasi. UI service first-party yang melayani banyak organisasi memakai `service-client-ui`.
+Pakai contoh ini untuk aplikasi milik satu organisasi. UI service first-party yang melayani banyak organisasi memakai pola backend-for-frontend di `sharedservice-oauth`.
 
 ## Isi
 
@@ -32,7 +32,7 @@ Pakai contoh ini untuk aplikasi milik satu organisasi. UI service first-party ya
 
 - Node 22.18+ dan npm.
 - NICE dev berjalan (`cd nice && make dev`, bawaannya `http://localhost:8080`). Untuk NICE di alamat lain, pakai alamat itu di `NICE` di bawah dan di `VITE_NICE_ISSUER`.
-- Service yang dipanggil sudah terdaftar, diimpor, aktif, di-entitle ke organisasi tenant, aktif di project, dan user yang akan login punya binding role di project itu. Untuk `inventaris`, ikuti langkah 1-8 di [`../shared-service-oauth/README.md`](../shared-service-oauth/README.md), lalu jalankan servicenya (`make run`, port 8081).
+- Service yang dipanggil sudah terdaftar, diimpor, aktif, di-entitle ke organisasi tenant, aktif di project, dan user yang akan login punya binding role di project itu. Untuk `inventaris`, ikuti langkah 1-8 di [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md), lalu jalankan servicenya (`make run`, port 8081).
 
 ## Checklist setup NICE
 

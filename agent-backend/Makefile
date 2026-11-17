@@ -3,7 +3,7 @@ GO ?= go
 .PHONY: run test smoke
 
 run:
-	$(GO) run .
+	$(GO) run ./cmd/agent-backend
 
 test:
 	$(GO) test -race ./... -count=1
