@@ -11,6 +11,8 @@ NICE  --X-Api-Key + X-Nice-Organization/Project/Principal--> http://127.0.0.1:80
 
 Service ini tidak memverifikasi JWT dan tidak memeriksa izin. Keduanya tugas proxy. Service hanya memeriksa `X-Api-Key`.
 
+Tiga operasi key (`POST /keys`, `POST /keys/{key_id}/rotate`, `DELETE /keys/{key_id}`) wajib didaftarkan di NICE bersama service (langkah 4). Karena itu NICE membuat satu kunci per Service Account, dan **hanya Service Account yang bisa memanggil `pengiriman` lewat proxy**: user NICE dijawab 403 `service_account_required`.
+
 Kontrak NICE yang diikuti: `nice/docs/api.md` bagian "Service api_key dan proxy", "Kunci per Service Account (mirrored key)", dan "Service Account: `client_credentials`", serta `nice/docs/gateway-integration.md` bagian "Service lama yang tidak bisa diubah".
 
 Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
@@ -51,7 +53,7 @@ Dokumen `/openapi.json` (OpenAPI 3.0) dibuat oleh `@hono/zod-openapi` dari rute 
 
 ### Operasi key untuk mirrored key
 
-Ketiga operasi key dipanggil NICE setelah langkah 12 (opsional). NICE mengirim kredensial service di `X-Api-Key`, tanpa header `X-Nice-*`.
+Ketiga operasi key didaftarkan di langkah 4 dan dipanggil NICE untuk membuat, merotasi, dan mencabut kunci tiap Service Account (diperiksa di langkah 12). NICE mengirim kredensial service di `X-Api-Key`, tanpa header `X-Nice-*`.
 
 | Operasi | Jawaban |
 |---|---|
@@ -63,18 +65,15 @@ Key berbentuk `pgk_` + 32 byte acak base64url, dan id-nya `key_` + 24 karakter h
 
 Middleware `X-Api-Key` (`src/auth.ts`) menghitung SHA-256 nilai yang dikirim, lalu membandingkannya dengan `crypto.timingSafeEqual` terhadap hash kredensial service dan hash setiap mirrored key aktif. Jenis kredensial (`service` atau `mirrored`) dicatat di konteks request dan di log. Nilai kredensial dan key tidak pernah ditulis ke log.
 
-## Dipanggil oleh backend agen
+## Backend agen tidak memanggil service ini
 
-Backend agen [`../agent-backend`](../agent-backend/README.md) memanggil service ini atas nama user lewat proxy NICE, sama seperti klien lain. Ia menukar token user menjadi token `aud=pengiriman` lewat token exchange, lalu memanggil `<NICE>/pengiriman/shipments`. Proxy memeriksa izin dari `perms` token itu, yaitu izin user yang dipotong deklarasi dependensi `agen`.
-
-- **Tanpa aktor.** Proxy hanya meneruskan `X-Nice-Organization`, `X-Nice-Project`, dan `X-Nice-Principal`, tidak klaim `act`. `created_by` berisi user, dan service ini tidak tahu bahwa yang bertindak adalah agen. Service `nice_token` seperti `inventaris` bisa mencatat aktornya sebagai `acted_by`.
-- **Mirrored key menolak user.** Setelah langkah 12, proxy hanya menerima Service Account. Token hasil exchange berprincipal user, jadi dijawab 403 `service_account_required`, dan tool agen untuk `pengiriman` mengembalikan galat itu. Jalankan contoh agen terhadap `pengiriman` tanpa langkah 12.
+Backend agen [`../agent-backend`](../agent-backend/README.md) bertindak atas nama user lewat token exchange, sehingga token yang dibawanya berprincipal user. Service `api_key` dengan kunci per Service Account menolak token seperti itu dengan 403 `service_account_required`, jadi agen tidak memanggil `pengiriman`. Contoh agen hanya memakai `inventaris` (service `nice_token`, yang mendukung principal user dengan aktor `acted_by`).
 
 ## Prasyarat
 
 - Node.js 22.18 atau lebih baru (menjalankan `.ts` langsung lewat type stripping, tanpa build) dan npm.
 - `curl` dan `jq` untuk checklist dan skrip smoke.
-- NICE dev yang berjalan (`make dev` di `nice/`, bawaan `http://localhost:8080`), dengan repo `nice/` berada di sebelah `example/`. Untuk NICE di alamat lain, isi `NICE_URL` di `.env`; checklist dan uji smoke membacanya dari sana.
+- NICE dev yang berjalan (`make dev` di `nice/`, bawaan `http://localhost:8080`), revisi `40ddb20` atau sesudahnya (revisi pertama yang mewajibkan operasi key), dengan repo `nice/` berada di sebelah `example/`. Untuk NICE di alamat lain, isi `NICE_URL` di `.env`; checklist dan uji smoke membacanya dari sana.
 
 ## Konfigurasi
 
@@ -156,11 +155,15 @@ Token berlaku 30 menit. Bila `curl` berikutnya dijawab 401, ambil token lagi.
 
 ### 4. Daftarkan service `pengiriman`
 
-Console: **Platform Admin > Shared Service**, daftarkan service baru dengan mode `api_key`. Atau dengan `curl` (nilai kredensial diambil `jq` dari lingkungan, tidak muncul di argumen perintah):
+Console: **Platform Admin > Shared Service**, daftarkan service baru dengan mode `api_key`. Wizard memuat bagian **Operasi kunci upstream** di langkah Informasi, sudah terisi usulan bawaan yang sama dengan tabel Operasi di atas (`POST /keys`, `POST /keys/{key_id}/rotate`, `DELETE /keys/{key_id}`). Atau dengan `curl` (nilai kredensial diambil `jq` dari lingkungan, tidak muncul di argumen perintah):
 
 ```bash
 jq -n '{slug: "pengiriman", name: "Pengiriman", endpoint: "http://127.0.0.1:8082", health_path: "/healthz",
-        auth_mode: "api_key", upstream: {credential: {header: "X-Api-Key", value: env.SERVICE_CREDENTIAL}}}' |
+        auth_mode: "api_key",
+        upstream: {credential: {header: "X-Api-Key", value: env.SERVICE_CREDENTIAL},
+                   key_operations: {generate: {method: "POST", path: "/keys"},
+                                    rotate: {method: "POST", path: "/keys/{key_id}/rotate"},
+                                    revoke: {method: "DELETE", path: "/keys/{key_id}"}}}}' |
   curl -sS -X POST "$NICE/api/v1/shared-services" -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H 'Content-Type: application/json' -d @- | jq '.shared_service | {slug, auth_mode, status, credential}'
 ```
@@ -168,6 +171,7 @@ jq -n '{slug: "pengiriman", name: "Pengiriman", endpoint: "http://127.0.0.1:8082
 - `endpoint` ditulis `http://127.0.0.1:8082`, bukan `localhost`. `localhost` bisa teresolusi ke `::1`, yang tidak didengarkan service dan tidak termasuk `127.0.0.0/8`.
 - `base_path` dikosongkan, sehingga `<NICE>/pengiriman/shipments` diteruskan ke `http://127.0.0.1:8082/shipments`.
 - `upstream.credential`: `header` `X-Api-Key`, **tanpa** `scheme`, dan `value` sama persis dengan `SERVICE_CREDENTIAL`. Nilainya tulis-saja: respons hanya menampilkan `credential.header` dan `credential.configured`. Untuk menggantinya pakai `PUT /api/v1/shared-services/pengiriman/upstream/credential`.
+- `upstream.key_operations` wajib memuat ketiganya (`generate`, `rotate`, `revoke`, masing-masing `method` dan `path`); tanpa itu registrasi ditolak 400 `invalid_key_operations`, dan aktivasi (langkah 6) ditolak 400 `key_operations_required`. Path relatif terhadap `endpoint` + `base_path`, dan NICE mengganti `{key_id}` dengan id key. Untuk mengganti operasi sesudahnya pakai `PUT /api/v1/shared-services/pengiriman/upstream/key-operations` (butuh `nice.platform.catalog.manage`); operasi tidak bisa dikosongkan.
 - `health_path` `/healthz` terbuka tanpa kredensial, karena probe NICE tidak membawa kredensial.
 
 ### 5. Impor `/openapi.json`
@@ -249,42 +253,33 @@ curl -sS -X POST "$NICE/api/v1/projects/$PROJECT_ID/api-keys" -H "Authorization:
 
 `key` hanya ditampilkan sekali. Simpan ke `SMOKE_SA_API_KEY` di `.env`. Key ini ditukar menjadi token di `/oauth/token` dan tidak pernah dikirim ke service.
 
-### 12. Opsional: operasi key upstream (mirrored key)
+### 12. Periksa kunci Service Account
 
-Setelah langkah ini NICE berhenti memakai `SERVICE_CREDENTIAL` untuk lalu lintas klien. NICE membuat satu key per Service Account yang memegang izin `pengiriman` lewat `POST /keys`, menyimpannya terbungkus KEK, dan proxy mengirim key milik Service Account pemanggil di `X-Api-Key`. `SERVICE_CREDENTIAL` tetap dipakai, tetapi hanya oleh NICE untuk memanggil ketiga operasi key.
+Tidak ada yang dikonfigurasi di langkah ini: operasi key sudah didaftarkan di langkah 4. Karena itu NICE tidak memakai `SERVICE_CREDENTIAL` untuk lalu lintas klien. NICE membuat satu kunci per Service Account yang memegang izin `pengiriman` lewat `POST /keys`, menyimpannya terbungkus KEK, dan proxy mengirim kunci milik Service Account pemanggil di `X-Api-Key`. `SERVICE_CREDENTIAL` tetap dipakai, tetapi hanya oleh NICE untuk memanggil ketiga operasi key.
 
-**Akibatnya, hanya Service Account yang bisa memanggil `pengiriman` lewat proxy.** User NICE dijawab 403 `service_account_required`, dan Service Account yang key-nya belum aktif dijawab 503 `upstream_key_unavailable`.
+**Akibatnya, hanya Service Account yang bisa memanggil `pengiriman` lewat proxy.** User NICE dijawab 403 `service_account_required`, dan Service Account yang kuncinya belum aktif dijawab 503 `upstream_key_unavailable`.
 
-Console: halaman service `pengiriman`, butir **Operasi kunci upstream**, isi ketiga operasi seperti di bawah. Atau dengan `curl` (butuh `nice.platform.catalog.manage`):
+NICE membuat kunci secara asinkron: kunci dibuat saat Service Account pertama kali memperoleh izin `pengiriman` (langkah 10), lewat sapuan sekitar 30 detik. Karena itu 503 `upstream_key_unavailable` tepat setelah langkah 10 adalah keadaan sementara. Periksa hasilnya:
 
-```bash
-curl -sS -X PUT "$NICE/api/v1/shared-services/pengiriman/upstream/key-operations" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{
-  "key_operations": {
-    "generate": {"method": "POST", "path": "/keys"},
-    "rotate": {"method": "POST", "path": "/keys/{key_id}/rotate"},
-    "revoke": {"method": "DELETE", "path": "/keys/{key_id}"}
-  }
-}'
-```
+- Daftar kunci Service Account (butuh `nice.platform.upstreamkeys.manage`, hanya metadata tanpa nilai kunci). Console: **Platform Admin > Kunci Service Account**. Atau:
 
-Path relatif terhadap `endpoint` + `base_path`, dan NICE mengganti `{key_id}` dengan id key. Untuk memeriksa hasilnya:
+  ```bash
+  curl -sS "$NICE/api/v1/service-account-keys?service=pengiriman" -H "Authorization: Bearer $ADMIN_TOKEN" |
+    jq '.keys[] | {service_account_id, status, last_error}'
+  ```
 
-- NICE menyapu Service Account aktif saat start dan setiap ada perubahan role, katalog, atau entitlement (jarak minimal 30 detik), dan menyinkronkan satu Service Account saat binding-nya berubah. Menyimpan operasi key tidak memicu penyapuan: bila Service Account sudah punya binding (langkah 10), jalankan ulang NICE atau cabut lalu buat ulang binding-nya. Setelah itu log service memuat `key generated key_id=key_... label=<uuid>`. Label berisi id Service Account tanpa awalan `sa_`.
-- `jq . data/keys.json` menampilkan key dengan `label` sama dengan `SA_ID` tanpa `sa_` dan `status` `active`, tanpa nilai key.
-- Superadmin dapat melihat metadata key di `GET /api/v1/service-account-keys?service=pengiriman` (Console: **Platform Admin > Kunci Service Account**).
-- `scripts/smoke.sh` tetap lulus, dan log service kini mencatat `credential=mirrored` untuk request lewat proxy.
-
-Sampai nice revisi `c7a5086`, proxy tidak memakai mirrored key karena tabel rute proxy kehilangan tanda per akun, sehingga proxy tetap mengirim `SERVICE_CREDENTIAL` dan log mencatat `credential=service`. Bug ini diperbaiki di nice `2638605`: mirrored key kini benar-benar sampai ke upstream, smoke lulus dengan `credential=mirrored`, dan user NICE mendapat 403 `service_account_required`.
+  Kunci Service Account dari langkah 9 harus berstatus `active`. Status `pending` berarti NICE belum selesai membuatnya, dan `failed` berarti panggilan ke service gagal (lihat `last_error`); NICE mengulang dengan backoff sampai 10 menit.
+- Log service memuat `key generated key_id=key_... label=<uuid>`. Label berisi id Service Account tanpa awalan `sa_`.
+- `jq . data/keys.json` menampilkan kunci dengan `label` sama dengan `SA_ID` tanpa `sa_` dan `status` `active`, tanpa nilai kunci.
+- `scripts/smoke.sh` lulus, dan log service mencatat `credential=mirrored` untuk request lewat proxy.
 
 Catatan:
 
-- Jangan hapus `data/keys.json` setelah langkah ini. Key yang dipegang NICE tidak akan diterima lagi, dan proxy meneruskan 401 dari service.
-- Tidak ada API untuk menghapus operasi key saja. NICE baru melupakannya bila mode service diganti ke `nice_token` lewat `PUT /api/v1/shared-services/pengiriman` saat service nonaktif, dan itu ditolak 409 `keys_not_revoked` selama masih ada key yang belum dicabut. Jalankan langkah ini di NICE dev yang boleh di-reset.
+- Jangan hapus `data/keys.json`. Kunci yang dipegang NICE tidak akan diterima lagi, dan proxy meneruskan 401 dari service.
 
 ## Uji smoke
 
-Setelah langkah 1 sampai 11 dan service berjalan:
+Setelah langkah 1 sampai 11 dan service berjalan (langkah 12 diperiksa dengan smoke ini):
 
 ```bash
 scripts/smoke.sh
@@ -296,7 +291,7 @@ Skrip hanya membaca `.env`, tidak mencetak kredensial, API key, atau token, dan 
 2. NICE terjangkau di `NICE_URL`;
 3. `GET <NICE>/pengiriman/shipments` tanpa token dijawab 401 oleh proxy;
 4. token Service Account didapat lewat `client_credentials` dengan `scope=nice:aud:pengiriman`;
-5. `GET <NICE>/pengiriman/shipments` dengan token itu dijawab 200.
+5. `GET <NICE>/pengiriman/shipments` dengan token itu dijawab 200. NICE membuat kunci Service Account secara asinkron, jadi bila proxy menjawab 503 `upstream_key_unavailable`, skrip mengulang panggilan hingga 12 kali dengan jeda 5 detik (sekitar 60 detik) sebelum gagal.
 
 ```text
 ok    langsung ke service tanpa key: 401
@@ -317,8 +312,8 @@ Bila gagal, skrip keluar dengan kode bukan 0 dan menyebut langkah checklist yang
 | token `invalid_client` | 9, 11 |
 | token `invalid_scope` | 6, 7, 8, 11 |
 | proxy 403 `permission_denied` | 10, 11 |
-| proxy 401 `{"error":"unauthorized"}` dari service | 4 (kredensial berbeda), 12 |
-| proxy 503 `upstream_key_unavailable` | 12 |
+| proxy 401 `{"error":"unauthorized"}` dari service | 4 (kredensial berbeda), 12 (kunci tidak ada di `data/keys.json`) |
+| proxy 503 `upstream_key_unavailable` setelah semua percobaan | 12 |
 | proxy 502 atau 504 | 1, 2, 4 |
 
 Memanggil operasi lain lewat proxy dengan token Service Account:

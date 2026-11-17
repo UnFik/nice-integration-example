@@ -93,8 +93,18 @@ token=$(jq -r '.access_token // empty' "$body")
 [ -n "$token" ] || fail "jawaban token tidak memuat access_token"
 ok "token Service Account (scope nice:aud:pengiriman)"
 
-# 5. The call through the proxy.
-call "$nice/pengiriman/shipments" -H @- < <(printf 'Authorization: Bearer %s\n' "$token")
+# 5. The call through the proxy. NICE creates the Service Account key asynchronously (a sweep about every
+# 30 seconds), so 503 upstream_key_unavailable right after the setup is expected for a while; any other
+# answer is final.
+max_attempts=12
+retry_delay=5
+for attempt in $(seq 1 "$max_attempts"); do
+  call "$nice/pengiriman/shipments" -H @- < <(printf 'Authorization: Bearer %s\n' "$token")
+  [ "$status:$(field error_code)" = 503:upstream_key_unavailable ] || break
+  [ "$attempt" -lt "$max_attempts" ] || break
+  printf 'wait  kunci Service Account belum aktif, percobaan %s/%s; coba lagi dalam %s detik\n' "$attempt" "$max_attempts" "$retry_delay"
+  sleep "$retry_delay"
+done
 if [ "$status" = 200 ]; then
   jq -e '.shipments | type == "array"' "$body" >/dev/null || fail "jawaban 200 tanpa daftar shipments"
   ok "GET $nice/pengiriman/shipments lewat proxy: 200"
@@ -104,14 +114,14 @@ fi
 
 code=$(field error_code)
 case "$status:$code" in
-  401:) fail "service menolak kredensial dari NICE ($(describe)): nilai upstream.credential di NICE berbeda dengan SERVICE_CREDENTIAL, atau (setelah langkah 12) kunci Service Account tidak ada di ${KEYS_FILE:-data/keys.json}" "4, 12" ;;
+  401:) fail "service menolak kredensial dari NICE ($(describe)): nilai upstream.credential di NICE berbeda dengan SERVICE_CREDENTIAL, atau kunci Service Account yang dibuat NICE tidak ada di ${KEYS_FILE:-data/keys.json}" "4, 12" ;;
   401:*) fail "proxy menolak token ($(describe)); jalankan ulang skrip, token baru diambil setiap kali" ;;
   403:permission_denied) fail "Service Account tidak memegang pengiriman.shipments.read ($(describe)): binding belum dibuat, atau scopes API key memotongnya" "10, 11" ;;
   403:service_account_required) fail "proxy hanya menerima Service Account ($(describe))" 12 ;;
   403:*) fail "proxy menolak ($(describe))" "7-11" ;;
   404:*) fail "proxy tidak mengenal operasi ini ($(describe)): impor ulang /openapi.json" 5 ;;
   503:service_disabled) fail "service belum aktif ($(describe))" 6 ;;
-  503:upstream_key_unavailable) fail "kunci Service Account belum aktif ($(describe)): tunggu sapuan NICE (sekitar 30 detik) dan periksa log service" 12 ;;
+  503:upstream_key_unavailable) fail "kunci Service Account belum aktif setelah $max_attempts percobaan (sekitar $((max_attempts * retry_delay)) detik) ($(describe)): periksa statusnya di GET /api/v1/service-account-keys?service=pengiriman dan log service" 12 ;;
   503:*) fail "proxy tidak meneruskan ($(describe)): service dianggap tidak sehat atau penuh" "2, 4" ;;
   502:* | 504:*) fail "NICE tidak bisa menghubungi service ($(describe)): periksa NICE_OUTBOUND_ALLOW_HTTP/NICE_OUTBOUND_ALLOW_CIDRS, endpoint http://127.0.0.1:8082, dan service berjalan" "1, 2, 4" ;;
   000:*) fail "NICE tidak menjawab panggilan proxy" 1 ;;
