@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -21,6 +22,11 @@ type fakeNICE struct {
 	tokenErr     error
 	disconnected []string
 	disconnect   error
+	// tokens are handed out by ServiceToken in order until one is left, which
+	// is then handed out again; empty hands out "service-token".
+	tokens  []string
+	fetches int
+	dropped []string
 }
 
 func (f *fakeNICE) AuthorizeURL(_ context.Context, subject, session, _ string) (string, error) {
@@ -48,7 +54,24 @@ func (f *fakeNICE) HandleCallback(_ context.Context, session string, q url.Value
 func (f *fakeNICE) ServiceToken(context.Context, string, domain.Context) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return "service-token", f.tokenErr
+	f.fetches++
+	if f.tokenErr != nil {
+		return "", f.tokenErr
+	}
+	if len(f.tokens) == 0 {
+		return "service-token", nil
+	}
+	tok := f.tokens[0]
+	if len(f.tokens) > 1 {
+		f.tokens = f.tokens[1:]
+	}
+	return tok, nil
+}
+
+func (f *fakeNICE) DropServiceToken(_ context.Context, _ string, _ domain.Context, token string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.dropped = append(f.dropped, token)
 }
 
 func (f *fakeNICE) SignInToken(context.Context, string) (string, error) { return "sign-in", nil }
@@ -224,5 +247,67 @@ func TestSwitchContext(t *testing.T) {
 	n.tokenErr = sessionusecase.ErrSessionEnded
 	if _, err := s.ContextToken(ctx, next); !errors.Is(err, sessionusecase.ErrSessionEnded) || st.Len() != 0 {
 		t.Fatalf("session ended by NICE = %v, %d sessions; want it removed", err, st.Len())
+	}
+}
+
+// staleTokens treats the named tokens as refused by the access change feed.
+func staleTokens(names ...string) func(context.Context, string) bool {
+	return func(_ context.Context, tok string) bool {
+		return slices.Contains(names, tok)
+	}
+}
+
+func TestContextTokenRenewsAStaleTokenOnce(t *testing.T) {
+	cases := []struct {
+		name        string
+		tokens      []string
+		stale       []string
+		tokenErr    error
+		want        string
+		wantFetches int
+		wantDropped []string
+	}{
+		{name: "fresh", tokens: []string{"t1"}, want: "t1", wantFetches: 1},
+		{name: "stale then fresh", tokens: []string{"t1", "t2"}, stale: []string{"t1"}, want: "t2", wantFetches: 2,
+			wantDropped: []string{"t1"}},
+		{name: "stale twice", tokens: []string{"t1", "t2"}, stale: []string{"t1", "t2"}, want: "t2", wantFetches: 2,
+			wantDropped: []string{"t1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, n, _, _ := newService()
+			ctx := context.Background()
+			sess := signIn(t, s)
+			s.Stale = staleTokens(tc.stale...)
+			n.mu.Lock()
+			n.tokens, n.fetches = tc.tokens, 0
+			n.mu.Unlock()
+			got, err := s.ContextToken(ctx, sess)
+			if err != nil || got != tc.want {
+				t.Fatalf("token = %q, %v; want %q", got, err, tc.want)
+			}
+			if n.fetches != tc.wantFetches || !slices.Equal(n.dropped, tc.wantDropped) {
+				t.Fatalf("fetches = %d, dropped = %v; want %d, %v", n.fetches, n.dropped, tc.wantFetches, tc.wantDropped)
+			}
+		})
+	}
+}
+
+func TestContextTokenRenewalRefusedByNICE(t *testing.T) {
+	s, n, st, _ := newService()
+	ctx := context.Background()
+	sess := signIn(t, s)
+	s.Stale = func(context.Context, string) bool {
+		// NICE refuses the new token: the user may no longer use the context.
+		n.tokenErr = &sessionusecase.RefusedError{Code: "access_denied"}
+		return true
+	}
+	_, err := s.ContextToken(ctx, sess)
+	var refused *sessionusecase.RefusedError
+	if !errors.As(err, &refused) || refused.Code != "access_denied" {
+		t.Fatalf("err = %v, want access_denied", err)
+	}
+	if got, _ := s.Session(ctx, sess.ID); st.Len() != 1 || *got.Context != *sess.Context {
+		t.Fatalf("%d sessions, context %+v; want the session and its context kept", st.Len(), got.Context)
 	}
 }

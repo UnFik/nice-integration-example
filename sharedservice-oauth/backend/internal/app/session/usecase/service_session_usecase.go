@@ -20,6 +20,10 @@ type Service struct {
 	NICE  NICE
 	// Idle ends a session not used for this long.
 	Idle time.Duration
+	// Stale reports whether the access change feed refuses token. The token
+	// cache does not know the feed, so ContextToken asks NICE once for a token
+	// it would refuse. Nil treats no token as stale.
+	Stale func(ctx context.Context, token string) bool
 	// Now is for tests; default time.Now.
 	Now func() time.Time
 }
