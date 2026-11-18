@@ -60,6 +60,11 @@ type bffNICE struct {
 	revokeDown   bool
 	refreshes    []string // scope of every refresh
 	revoked      []string
+	// iatShift moves the issue time of the tokens it signs, to make a token
+	// older than a change of the access change feed.
+	iatShift time.Duration
+	// changes are what the access change feed replays at start.
+	changes []map[string]string
 }
 
 func newBFFNICE(t *testing.T) *bffNICE {
@@ -108,7 +113,7 @@ func (f *bffNICE) org(id string) (fakeOrg, bool) {
 }
 
 func (f *bffNICE) token(c map[string]any) string {
-	now := time.Now()
+	now := time.Now().Add(f.iatShift)
 	base := map[string]any{"iss": f.URL, "sub": bffUser, "iat": now.Unix(), "nbf": now.Unix(), "exp": now.Add(30 * time.Minute).Unix(),
 		"nice_principal_type": "user"}
 	for k, v := range c {
@@ -124,6 +129,11 @@ func oauthError(w http.ResponseWriter, status int, code, desc string) {
 }
 
 func (f *bffNICE) serve(w http.ResponseWriter, r *http.Request) {
+	if r.Method+" "+r.URL.Path == "GET /api/v1/access-changes" {
+		// Outside the lock: a long poll holds until the reader gives up.
+		f.serveFeed(w, r)
+		return
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch r.Method + " " + r.URL.Path {
@@ -213,6 +223,20 @@ func (f *bffNICE) serveToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// serveFeed replays the changes on a read since a time and then holds every
+// long poll, as NICE does when nothing changes.
+func (f *bffNICE) serveFeed(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("since") != "" {
+		f.mu.Lock()
+		changes := append([]map[string]string(nil), f.changes...)
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"changes": changes, "seq": strconv.Itoa(len(changes))})
+		return
+	}
+	<-r.Context().Done()
+}
+
 // issue answers a token in org: for aud and prj, or the sign-in token without aud.
 func (f *bffNICE) issue(w http.ResponseWriter, org, aud, prj string) {
 	f.seq++
@@ -263,6 +287,7 @@ type bffEnv struct {
 	*testEnv
 	nice *bffNICE
 	auth *Auth
+	v    *nicetoken.Verifier
 }
 
 func newBFFEnv(t *testing.T, checker nicetoken.AccessChecker) *bffEnv {
@@ -286,7 +311,7 @@ func newBFFEnv(t *testing.T, checker nicetoken.AccessChecker) *bffEnv {
 		t.Fatal(err)
 	}
 	h := rest.NewHandler(v, &itemusecase.Service{Repo: store}, rest.Options{Auth: a.Handler, CORSOrigins: cfg.CORSOrigins})
-	return &bffEnv{testEnv: &testEnv{t: t, store: store, handler: h}, nice: f, auth: a}
+	return &bffEnv{testEnv: &testEnv{t: t, store: store, handler: h}, nice: f, auth: a, v: v}
 }
 
 // browser keeps the session cookie the way a browser does and sends the CSRF

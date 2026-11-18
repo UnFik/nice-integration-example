@@ -68,6 +68,11 @@ func (g *Gateway) ServiceToken(ctx context.Context, subject string, c domain.Con
 	return tok.Access, nil
 }
 
+func (g *Gateway) DropServiceToken(_ context.Context, subject string, c domain.Context, token string) {
+	g.Client.Invalidate(niceclient.Key{Subject: subject, Org: c.Org, Audience: domain.ServiceSlug, Project: c.Project},
+		niceclient.Token{Access: token})
+}
+
 func (g *Gateway) SignInToken(ctx context.Context, subject string) (string, error) {
 	tok, err := g.Client.SignInToken(ctx, subject)
 	if err != nil {

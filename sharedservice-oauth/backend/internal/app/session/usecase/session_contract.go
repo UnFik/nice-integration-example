@@ -35,6 +35,9 @@ type NICE interface {
 	HandleCallback(ctx context.Context, session string, query url.Values) (string, error)
 	// ServiceToken is the inventaris token of subject in c.
 	ServiceToken(ctx context.Context, subject string, c domain.Context) (string, error)
+	// DropServiceToken forgets token if it is still the one kept for subject in
+	// c, so the next ServiceToken asks NICE for a new one.
+	DropServiceToken(ctx context.Context, subject string, c domain.Context, token string)
 	// SignInToken is the token of the sign-in itself, for userinfo and for the
 	// exchange that reads the contexts.
 	SignInToken(ctx context.Context, subject string) (string, error)

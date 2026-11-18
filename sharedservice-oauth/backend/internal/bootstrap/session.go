@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -47,6 +48,7 @@ func NewAuth(cfg config.Config, v *nicetoken.Verifier, log *slog.Logger) (*Auth,
 		Store: store,
 		NICE:  &nicegateway.Gateway{Client: c, Exchange: x, Issuer: cfg.Issuer, RedirectURI: cfg.RedirectURI, HTTP: hc},
 		Idle:  cfg.SessionIdle,
+		Stale: func(ctx context.Context, token string) bool { return stale(ctx, v, token) },
 	}
 	h := &auth.Handler{
 		Sessions:  sessions,
@@ -61,6 +63,15 @@ func NewAuth(cfg config.Config, v *nicetoken.Verifier, log *slog.Logger) (*Auth,
 		},
 	}
 	return &Auth{Client: c, Sessions: sessions, Store: store, Handler: h}, nil
+}
+
+// stale reports whether v refuses token only because the access change feed
+// marked its user, organization or project after it was issued. Other refusals
+// are not cured by a new token, so they are left to the verifier of the request.
+func stale(ctx context.Context, v *nicetoken.Verifier, token string) bool {
+	_, err := v.Verify(ctx, token)
+	var e *nicetoken.Error
+	return errors.As(err, &e) && e.Description == nicetoken.ReasonStale
 }
 
 // Start renews the tokens in use and signs out idle sessions until ctx ends.
