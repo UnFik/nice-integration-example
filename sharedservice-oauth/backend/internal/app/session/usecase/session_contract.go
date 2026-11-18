@@ -33,7 +33,7 @@ type NICE interface {
 	AuthorizeURL(ctx context.Context, subject, session, prompt string) (string, error)
 	// HandleCallback completes it and returns the NICE user (usr_...).
 	HandleCallback(ctx context.Context, session string, query url.Values) (string, error)
-	// ServiceToken is the inventaris token of subject in c.
+	// ServiceToken is the nadi token of subject in c.
 	ServiceToken(ctx context.Context, subject string, c domain.Context) (string, error)
 	// DropServiceToken forgets token if it is still the one kept for subject in
 	// c, so the next ServiceToken asks NICE for a new one.

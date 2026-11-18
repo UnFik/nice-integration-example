@@ -1,4 +1,4 @@
-// Package migrations embeds the SQL migrations of the item store, applied in
+// Package migrations embeds the SQL migrations of the device store, applied in
 // file name order when DATABASE_URL is set. Never edit a file that was
 // released: add a new pair instead.
 package migrations

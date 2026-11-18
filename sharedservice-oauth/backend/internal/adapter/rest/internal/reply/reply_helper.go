@@ -28,7 +28,7 @@ func ScopeOf(w http.ResponseWriter, r *http.Request) (domain.Scope, bool) {
 	org, ok := nicetoken.TenantFromContext(r.Context())
 	claims, hasClaims := nicetoken.FromContext(r.Context())
 	if !ok || org == "" || !hasClaims {
-		// Fail closed: without a tenant every organization would share one set of items.
+		// Fail closed: without a tenant every organization would share one set of devices.
 		Error(w, http.StatusServiceUnavailable, "temporarily_unavailable", "tenant_unavailable")
 		return domain.Scope{}, false
 	}

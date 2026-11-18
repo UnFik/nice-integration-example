@@ -15,14 +15,14 @@ import (
 	"testing"
 	"time"
 
-	itemmemory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/item"
+	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 	"github.com/nice-platform/nice/pkg/nicetoken"
 )
 
 func TestCheckerOnlyWithTheServiceKey(t *testing.T) {
-	store := itemmemory.NewRepository()
+	store := devicememory.NewRepository()
 	log := slog.New(slog.DiscardHandler)
 	if c := VerifierConfig(config.Config{Issuer: testIssuer}, store, log); c.Checker != nil {
 		t.Fatalf("checker without %s = %T, want nil", config.EnvServiceAPIKey, c.Checker)
@@ -40,7 +40,7 @@ func TestWithoutTheServiceKeyTheServiceWarnsAndStillServes(t *testing.T) {
 	var logs bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&logs, nil))
 	cfg := config.Config{Issuer: testIssuer, CORSOrigins: []string{testOrigin}}
-	store := itemmemory.NewRepository()
+	store := devicememory.NewRepository()
 	vc := VerifierConfig(cfg, store, log)
 	vc.StaticJWKS = testJWKS(t)
 	v, err := nicetoken.New(vc)
@@ -54,7 +54,7 @@ func TestWithoutTheServiceKeyTheServiceWarnsAndStillServes(t *testing.T) {
 		t.Fatalf("log = %q, want a warning naming %s", out, config.EnvServiceAPIKey)
 	}
 	e := &testEnv{t: t, store: store, handler: newHandler(v, store, cfg.CORSOrigins)}
-	if r := e.do(http.MethodGet, "/items", token(t, orgA, domain.PermRead), nil); r.Status != http.StatusOK {
+	if r := e.do(http.MethodGet, "/devices", token(t, orgA, domain.PermRead), nil); r.Status != http.StatusOK {
 		t.Fatalf("list without the feed = %d %s", r.Status, r.Body)
 	}
 }
@@ -70,7 +70,7 @@ func TestRestartWhileNICEIsDownUsesTheJWKSCopy(t *testing.T) {
 	cfg := config.Config{Issuer: nice.URL, JWKSFile: file}
 	log := slog.New(slog.DiscardHandler)
 
-	if _, err := nicetoken.New(VerifierConfig(cfg, itemmemory.NewRepository(), log)); err != nil {
+	if _, err := nicetoken.New(VerifierConfig(cfg, devicememory.NewRepository(), log)); err != nil {
 		t.Fatal(err)
 	}
 	if saved, err := os.ReadFile(file); err != nil || !bytes.Equal(saved, jwks) {
@@ -78,7 +78,7 @@ func TestRestartWhileNICEIsDownUsesTheJWKSCopy(t *testing.T) {
 	}
 
 	nice.Close()
-	store := itemmemory.NewRepository()
+	store := devicememory.NewRepository()
 	v, err := nicetoken.New(VerifierConfig(cfg, store, log))
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestRestartWhileNICEIsDownUsesTheJWKSCopy(t *testing.T) {
 	e := &testEnv{t: t, store: store, handler: newHandler(v, store, nil)}
 	cl := claims(orgA, domain.PermRead)
 	cl["iss"] = nice.URL
-	if r := e.do(http.MethodGet, "/items", sign(t, cl), nil); r.Status != http.StatusOK {
+	if r := e.do(http.MethodGet, "/devices", sign(t, cl), nil); r.Status != http.StatusOK {
 		t.Fatalf("after a restart with NICE down = %d %s, want 200", r.Status, r.Body)
 	}
 }
@@ -102,8 +102,8 @@ func TestFeedRefusesTokensIssuedBeforeARevocation(t *testing.T) {
 
 	before := nice.claims(orgA, domain.PermRead)
 	before["iat"] = revokedAt.Add(-5 * time.Second).Unix()
-	wantError(t, e.do(http.MethodGet, "/items", sign(t, before), nil), http.StatusUnauthorized, "invalid_token", "token_stale")
-	if r := e.do(http.MethodGet, "/items", sign(t, nice.claims(orgA, domain.PermRead)), nil); r.Status != http.StatusOK {
+	wantError(t, e.do(http.MethodGet, "/devices", sign(t, before), nil), http.StatusUnauthorized, "invalid_token", "token_stale")
+	if r := e.do(http.MethodGet, "/devices", sign(t, nice.claims(orgA, domain.PermRead)), nil); r.Status != http.StatusOK {
 		t.Fatalf("a token issued after the revocation = %d %s, want 200", r.Status, r.Body)
 	}
 	if got := nice.authorizations(); !slices.Contains(got, "GET /api/v1/access-changes ApiKey "+fakeServiceKey) {
@@ -116,15 +116,15 @@ func TestOnlineCheckAsksNICE(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	e := nice.serviceEnv(ctx, t)
-	it := e.create(orgA, "Kabel")
+	it := e.create(orgA, "Sensor")
 	tok := sign(t, nice.claims(orgA, allPerms...))
 
-	wantError(t, e.do(http.MethodDelete, "/items/"+it.ID, tok, nil), http.StatusForbidden, "insufficient_scope", "access_denied")
+	wantError(t, e.do(http.MethodDelete, "/devices/"+it.ID, tok, nil), http.StatusForbidden, "insufficient_scope", "access_denied")
 	if _, ok := e.get(orgA, it.ID); !ok {
-		t.Fatal("the item was deleted although NICE refused")
+		t.Fatal("the device was deleted although NICE refused")
 	}
 	nice.setAllowed(true)
-	if r := e.do(http.MethodDelete, "/items/"+it.ID, tok, nil); r.Status != http.StatusNoContent {
+	if r := e.do(http.MethodDelete, "/devices/"+it.ID, tok, nil); r.Status != http.StatusNoContent {
 		t.Fatalf("delete allowed by NICE = %d %s", r.Status, r.Body)
 	}
 	want := `{"principal_type":"PRINCIPAL_TYPE_USER","principal_id":"usr_test","organization_id":"` + orgA +
@@ -218,7 +218,7 @@ func (f *fakeNICE) serviceEnv(ctx context.Context, t *testing.T) *testEnv {
 	t.Helper()
 	cfg := config.Config{Issuer: f.URL, JWKSFile: filepath.Join(t.TempDir(), "jwks.json"), ServiceAPIKey: fakeServiceKey}
 	log := slog.New(slog.DiscardHandler)
-	store := itemmemory.NewRepository()
+	store := devicememory.NewRepository()
 	v, err := nicetoken.New(VerifierConfig(cfg, store, log))
 	if err != nil {
 		t.Fatal(err)

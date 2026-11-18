@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Smoke test of the inventaris example against a NICE set up with the README
-# checklist: 401 without a token, 200 on GET /items with a Service Account token
-# (client_credentials, scope nice:aud:inventaris), 401 on GET /auth/session
+# Smoke test of the nadi example against a NICE set up with the README
+# checklist: 401 without a token, 200 on GET /devices with a Service Account token
+# (client_credentials, scope nice:aud:nadi), 401 on GET /auth/session
 # without a cookie, and GET /auth/login redirecting to NICE. It reads only .env
 # and never prints a key or a token; secrets never reach the argv of curl or jq.
 set -euo pipefail
@@ -76,12 +76,12 @@ esac
   fail "GET /auth/login tidak membawa client_id dari NICE_CLIENT_ID (checklist langkah 2)."
 ok "GET /auth/login mengarahkan ke NICE"
 
-status=$(get "$service/items")
+status=$(get "$service/devices")
 [[ $status == 401 && $(field error_description) == missing_token ]] ||
-  fail "GET /items tanpa token dijawab HTTP $status $(field error_description), seharusnya 401 missing_token."
-ok "GET /items tanpa token: 401 missing_token"
+  fail "GET /devices tanpa token dijawab HTTP $status $(field error_description), seharusnya 401 missing_token."
+ok "GET /devices tanpa token: 401 missing_token"
 
-form=$(jq -rn '"grant_type=client_credentials&scope=" + ("nice:aud:inventaris" | @uri)
+form=$(jq -rn '"grant_type=client_credentials&scope=" + ("nice:aud:nadi" | @uri)
   + "&client_id=" + (env.SMOKE_SA_ID | @uri) + "&client_secret=" + (env.SMOKE_API_KEY | @uri)')
 status=$(printf '%s' "$form" | curl -s -o "$body" -w '%{http_code}' --max-time 15 \
   -H 'Content-Type: application/x-www-form-urlencoded' --data-binary @- "$nice/oauth/token" || true)
@@ -94,9 +94,9 @@ if [[ $status != 200 ]]; then
         "Periksa checklist langkah 10: SMOKE_SA_ID harus id Service Account (sa_...) pemilik SMOKE_API_KEY," \
         "key belum dicabut atau kedaluwarsa, dan Service Account tidak dinonaktifkan." ;;
     invalid_scope)
-      fail "NICE menolak scope nice:aud:inventaris: invalid_scope $(field error_description)." \
+      fail "NICE menolak scope nice:aud:nadi: invalid_scope $(field error_description)." \
         "Kemungkinan langkah yang terlewat: 3 (registrasi), 4 (impor), 5 (aktivasi service), 6 (entitlement organisasi)," \
-        "7 (aktivasi di project milik Service Account), atau 10 (project Service Account harus mengaktifkan inventaris)." ;;
+        "7 (aktivasi di project milik Service Account), atau 10 (project Service Account harus mengaktifkan nadi)." ;;
     "")
       fail "permintaan token ke $nice/oauth/token gagal (HTTP $status)." ;;
     *)
@@ -105,26 +105,26 @@ if [[ $status != 200 ]]; then
 fi
 access_token=$(field access_token)
 [[ -n $access_token ]] || fail "jawaban token dari NICE tidak memuat access_token."
-ok "token Service Account untuk nice:aud:inventaris diterbitkan"
+ok "token Service Account untuk nice:aud:nadi diterbitkan"
 
 status=$(printf 'header = "Authorization: Bearer %s"\n' "$access_token" |
-  curl -s -o "$body" -w '%{http_code}' --max-time 10 -K - "$service/items" || true)
+  curl -s -o "$body" -w '%{http_code}' --max-time 10 -K - "$service/devices" || true)
 unset access_token
 if [[ $status != 200 ]]; then
   reason=$(field error_description)
   case $reason in
     permission_denied)
-      fail "GET /items dijawab 403 permission_denied: token tidak memuat inventaris.items.read." \
-        "Periksa checklist langkah 10: binding Service Account ke role inventaris (mis. inventaris.viewer) di project-nya." ;;
+      fail "GET /devices dijawab 403 permission_denied: token tidak memuat nadi.devices.read." \
+        "Periksa checklist langkah 10: binding Service Account ke role nadi (mis. nadi.viewer) di project-nya." ;;
     wrong_issuer)
-      fail "GET /items dijawab 401 wrong_issuer: NICE_ISSUER di .env berbeda dengan iss token." \
+      fail "GET /devices dijawab 401 wrong_issuer: NICE_ISSUER di .env berbeda dengan iss token." \
         "Samakan dengan NICE_ISSUER di nice/.env lalu jalankan ulang service (checklist langkah 2)." ;;
     keys_unavailable)
-      fail "GET /items dijawab 503 keys_unavailable: service belum mendapat JWKS dari NICE." \
+      fail "GET /devices dijawab 503 keys_unavailable: service belum mendapat JWKS dari NICE." \
         "Pastikan service dapat menjangkau $nice/oauth/keys, lalu jalankan ulang service." ;;
     *)
-      fail "GET /items dengan token dijawab HTTP $status $(field error) $reason, seharusnya 200." ;;
+      fail "GET /devices dengan token dijawab HTTP $status $(field error) $reason, seharusnya 200." ;;
   esac
 fi
-ok "GET /items dengan token Service Account: 200 ($(jq '.items | length' "$body") barang)"
-printf 'smoke inventaris lulus\n'
+ok "GET /devices dengan token Service Account: 200 ($(jq '.devices | length' "$body") perangkat)"
+printf 'smoke nadi lulus\n'

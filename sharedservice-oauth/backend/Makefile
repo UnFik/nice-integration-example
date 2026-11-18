@@ -1,10 +1,10 @@
 GO ?= go
-SWAG_FLAGS = -g cmd/inventaris/main.go -d ./ --parseInternal --outputTypes json --quiet
+SWAG_FLAGS = -g cmd/nadi/main.go -d ./ --parseInternal --outputTypes json --quiet
 
 .PHONY: run test swag swag-check
 
 run:
-	$(GO) run ./cmd/inventaris
+	$(GO) run ./cmd/nadi
 
 test:
 	$(GO) test ./... -count=1

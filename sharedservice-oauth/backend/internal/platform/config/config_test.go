@@ -110,7 +110,7 @@ func TestLoadConfigRefusesAMalformedDotEnv(t *testing.T) {
 }
 
 func TestLoadConfigReadsTheDatabaseURL(t *testing.T) {
-	const db = "postgres://inventaris:s3cret@localhost:5432/inventaris?sslmode=disable"
+	const db = "postgres://nadi:s3cret@localhost:5432/nadi?sslmode=disable"
 	cfg, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvDatabaseURL: db})), filepath.Join(t.TempDir(), ".env"))
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +121,7 @@ func TestLoadConfigReadsTheDatabaseURL(t *testing.T) {
 }
 
 func TestLoadConfigRefusesADatabaseURLWithoutPrintingIt(t *testing.T) {
-	for _, db := range []string{"mysql://root:s3cret@localhost/inventaris", "host=localhost password=s3cret", "postgres://:s3cret@"} {
+	for _, db := range []string{"mysql://root:s3cret@localhost/nadi", "host=localhost password=s3cret", "postgres://:s3cret@"} {
 		_, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvDatabaseURL: db})), filepath.Join(t.TempDir(), ".env"))
 		if err == nil || !strings.Contains(err.Error(), EnvDatabaseURL) {
 			t.Errorf("%s: err = %v, want an error naming %s", db, err, EnvDatabaseURL)

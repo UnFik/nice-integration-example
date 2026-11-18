@@ -47,14 +47,14 @@ export function Problem(props: {
 
 export function SignIn(props: { signedOut?: boolean; onSignIn: () => void; onSelectAccount: () => void }) {
   return (
-    <ScreenCard icon="box" title="Inventaris">
+    <ScreenCard icon="box" title="NADI">
       {props.signedOut ? (
         <p role="status">
-          Anda sudah keluar dari inventaris. Sesi NICE di browser ini tetap ada, jadi Masuk bisa langsung kembali tanpa kata
+          Anda sudah keluar dari nadi. Sesi NICE di browser ini tetap ada, jadi Masuk bisa langsung kembali tanpa kata
           sandi.
         </p>
       ) : (
-        <p>Masuk lewat NICE untuk mengelola barang di organisasi dan project Anda.</p>
+        <p>Masuk lewat NICE untuk mengelola perangkat di organisasi dan project Anda.</p>
       )}
       <button type="button" className="primary block" onClick={props.onSignIn}>
         Masuk
@@ -65,7 +65,7 @@ export function SignIn(props: { signedOut?: boolean; onSignIn: () => void; onSel
       <details className="plain-details">
         <summary>Cara kerjanya</summary>
         <p className="muted">
-          Halaman ini tidak memegang token dan tidak memanggil NICE. Backend inventaris masuk ke NICE sebagai service client
+          Halaman ini tidak memegang token dan tidak memanggil NICE. Backend nadi masuk ke NICE sebagai service client
           confidential, menyimpan refresh token di sisi server, dan memberi browser cookie sesi. Pindah organisasi dan project
           dijalankan backend lewat refresh token tanpa login ulang.
         </p>

@@ -13,18 +13,18 @@ Empat contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setia
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
- SPA --Bearer JWT (aud=inventaris)--> sharedservice-oauth/backend      (langsung, verifikasi lokal)
+ SPA --Bearer JWT (aud=nadi)--> sharedservice-oauth/backend      (langsung, verifikasi lokal)
  Service Account --Bearer JWT (aud=pengiriman)--> NICE /pengiriman/... --X-Api-Key--> shared-service-apikey
 ```
 
 ```text
- UI --cookie sesi--> sharedservice-oauth/backend --PKCE + client_secret, refresh nice:org nice:aud:inventaris nice:prj--> NICE /oauth/token
+ UI --cookie sesi--> sharedservice-oauth/backend --PKCE + client_secret, refresh nice:org nice:aud:nadi nice:prj--> NICE /oauth/token
  sharedservice-oauth/backend --token login ditukar ke nice:aud:nice--> NICE /api/v1/me/contexts
 ```
 
 ```text
  MCP client --Bearer JWT (aud=agen)--> agent-backend --token exchange--> NICE /oauth/token
- agent-backend --Bearer JWT hasil exchange (aud=inventaris, act)--> sharedservice-oauth/backend
+ agent-backend --Bearer JWT hasil exchange (aud=nadi, act)--> sharedservice-oauth/backend
 ```
 
 SPA tidak memanggil service `api_key` karena path proxy NICE `/<slug>/...` tidak dicakup CORS.

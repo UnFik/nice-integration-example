@@ -17,7 +17,7 @@ export function App({ session }: { session: Session }) {
     case "unreachable":
       return (
         <Problem
-          title="Backend inventaris tidak terjangkau"
+          title="Backend nadi tidak terjangkau"
           message={state.message}
           icon="offline"
           tone="warning"

@@ -1,34 +1,34 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Example SharedService of NICE (auth mode nice_token): stock items per organization and project. Every item operation needs a NICE access token for the audience inventaris.",
-        "title": "Inventaris",
+        "description": "Example SharedService of NICE (auth mode nice_token): IoT devices per organization and project. Every device operation needs a NICE access token for the audience nadi.",
+        "title": "NADI",
         "contact": {},
         "version": "1.0"
     },
     "basePath": "/",
     "paths": {
-        "/items": {
+        "/devices": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Items of the organization and project of the token (nice_org_id and prj), oldest first. A token without prj is refused with 403 project_required.",
+                "description": "Devices of the organization and project of the token (nice_org_id and prj), oldest first. A token without prj is refused with 403 project_required.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "items"
+                    "devices"
                 ],
-                "summary": "List items",
-                "operationId": "listItems",
+                "summary": "List devices",
+                "operationId": "listDevices",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/ItemList"
+                            "$ref": "#/definitions/DeviceList"
                         }
                     },
                     "401": {
@@ -50,7 +50,7 @@
                         }
                     }
                 },
-                "x-nice-permission": "inventaris.items.read"
+                "x-nice-permission": "nadi.devices.read"
             },
             "post": {
                 "security": [
@@ -58,7 +58,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "The name is 1 to 120 characters after trimming; the quantity is an integer of at least 0. An invalid field is named in error_description. created_by is the user of the token; when a backend exchanged the user's token (the token carries act), acted_by is that backend's client.",
+                "description": "The name is 1 to 120 characters and the serial_number 1 to 64 characters after trimming; the status is active, inactive or maintenance; the location is optional, at most 120 characters. An invalid field is named in error_description. created_by is the user of the token; when a backend exchanged the user's token (the token carries act), acted_by is that backend's client.",
                 "consumes": [
                     "application/json"
                 ],
@@ -66,18 +66,18 @@
                     "application/json"
                 ],
                 "tags": [
-                    "items"
+                    "devices"
                 ],
-                "summary": "Create an item",
-                "operationId": "createItem",
+                "summary": "Create a device",
+                "operationId": "createDevice",
                 "parameters": [
                     {
-                        "description": "New item",
-                        "name": "item",
+                        "description": "New device",
+                        "name": "device",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ItemInput"
+                            "$ref": "#/definitions/DeviceInput"
                         }
                     }
                 ],
@@ -85,7 +85,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/Item"
+                            "$ref": "#/definitions/Device"
                         }
                     },
                     "400": {
@@ -113,10 +113,10 @@
                         }
                     }
                 },
-                "x-nice-permission": "inventaris.items.create"
+                "x-nice-permission": "nadi.devices.create"
             }
         },
-        "/items/{id}": {
+        "/devices/{id}": {
             "get": {
                 "security": [
                     {
@@ -127,14 +127,14 @@
                     "application/json"
                 ],
                 "tags": [
-                    "items"
+                    "devices"
                 ],
-                "summary": "Get an item",
-                "operationId": "getItem",
+                "summary": "Get a device",
+                "operationId": "getDevice",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Item ID",
+                        "description": "Device ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -144,7 +144,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/Item"
+                            "$ref": "#/definitions/Device"
                         }
                     },
                     "401": {
@@ -172,7 +172,7 @@
                         }
                     }
                 },
-                "x-nice-permission": "inventaris.items.read"
+                "x-nice-permission": "nadi.devices.read"
             },
             "put": {
                 "security": [
@@ -180,7 +180,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Same rules as creating an item.",
+                "description": "Same rules as creating a device.",
                 "consumes": [
                     "application/json"
                 ],
@@ -188,25 +188,25 @@
                     "application/json"
                 ],
                 "tags": [
-                    "items"
+                    "devices"
                 ],
-                "summary": "Replace an item",
-                "operationId": "updateItem",
+                "summary": "Replace a device",
+                "operationId": "updateDevice",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Item ID",
+                        "description": "Device ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "New name and quantity",
-                        "name": "item",
+                        "description": "New device fields",
+                        "name": "device",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ItemInput"
+                            "$ref": "#/definitions/DeviceInput"
                         }
                     }
                 ],
@@ -214,7 +214,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/Item"
+                            "$ref": "#/definitions/Device"
                         }
                     },
                     "400": {
@@ -248,7 +248,7 @@
                         }
                     }
                 },
-                "x-nice-permission": "inventaris.items.edit"
+                "x-nice-permission": "nadi.devices.edit"
             },
             "delete": {
                 "security": [
@@ -258,14 +258,14 @@
                 ],
                 "description": "Sensitive: besides the permission in the token, every call is checked online with NICE. A revoked access is refused with 403 access_denied, and 503 is answered when the check cannot be made.",
                 "tags": [
-                    "items"
+                    "devices"
                 ],
-                "summary": "Delete an item",
-                "operationId": "deleteItem",
+                "summary": "Delete a device",
+                "operationId": "deleteDevice",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Item ID",
+                        "description": "Device ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -300,30 +300,17 @@
                         }
                     }
                 },
-                "x-nice-permission": "inventaris.items.delete",
+                "x-nice-permission": "nadi.devices.delete",
                 "x-nice-sensitive": true
             }
         }
     },
     "definitions": {
-        "Error": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string",
-                    "example": "invalid_argument"
-                },
-                "error_description": {
-                    "type": "string",
-                    "example": "name"
-                }
-            }
-        },
-        "Item": {
+        "Device": {
             "type": "object",
             "properties": {
                 "acted_by": {
-                    "description": "ActedBy is act.sub of the token that created the item: the client of a backend acting for CreatedBy.",
+                    "description": "ActedBy is act.sub of the token that created the device: the client of a backend acting for CreatedBy.",
                     "type": "string",
                     "example": "cli_01a1..."
                 },
@@ -336,56 +323,98 @@
                 },
                 "id": {
                     "type": "string",
-                    "example": "itm_3f2a9c0d1e4b5a6f7081920a3b4c5d6e"
+                    "example": "dev_3f2a9c0d1e4b5a6f7081920a3b4c5d6e"
+                },
+                "location": {
+                    "type": "string",
+                    "example": "Gudang A, rak 3"
                 },
                 "name": {
                     "type": "string",
-                    "example": "Kabel UTP Cat6"
+                    "example": "Sensor Suhu Gudang"
                 },
-                "quantity": {
-                    "type": "integer",
-                    "example": 12
+                "serial_number": {
+                    "type": "string",
+                    "example": "SN-2026-0001"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "maintenance"
+                    ],
+                    "example": "active"
                 },
                 "update_time": {
                     "type": "string"
                 }
             }
         },
-        "ItemInput": {
+        "DeviceInput": {
             "type": "object",
             "required": [
                 "name",
-                "quantity"
+                "serial_number",
+                "status"
             ],
             "properties": {
+                "location": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "example": "Gudang A, rak 3"
+                },
                 "name": {
                     "type": "string",
                     "maxLength": 120,
                     "minLength": 1,
-                    "example": "Kabel UTP Cat6"
+                    "example": "Sensor Suhu Gudang"
                 },
-                "quantity": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "example": 12
+                "serial_number": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "example": "SN-2026-0001"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "maintenance"
+                    ],
+                    "example": "active"
                 }
             }
         },
-        "ItemList": {
+        "DeviceList": {
             "type": "object",
             "properties": {
-                "items": {
+                "devices": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/Item"
+                        "$ref": "#/definitions/Device"
                     }
+                }
+            }
+        },
+        "Error": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "invalid_argument"
+                },
+                "error_description": {
+                    "type": "string",
+                    "example": "name"
                 }
             }
         }
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "\"Bearer \u003cJWT\u003e\" from NICE, requested with the scope nice:aud:inventaris.",
+            "description": "\"Bearer \u003cJWT\u003e\" from NICE, requested with the scope nice:aud:nadi.",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
@@ -393,19 +422,19 @@
     },
     "tags": [
         {
-            "description": "Stock items of the organization and project of the token",
-            "name": "items"
+            "description": "IoT devices of the organization and project of the token",
+            "name": "devices"
         }
     ],
     "x-nice-roles": [
         {
-            "description": "Read, create and edit items",
-            "id": "operator",
-            "name": "Operator",
+            "description": "Read, create and edit devices",
+            "id": "editor",
+            "name": "Editor",
             "permissions": [
-                "inventaris.items.read",
-                "inventaris.items.create",
-                "inventaris.items.edit"
+                "nadi.devices.read",
+                "nadi.devices.create",
+                "nadi.devices.edit"
             ]
         }
     ]

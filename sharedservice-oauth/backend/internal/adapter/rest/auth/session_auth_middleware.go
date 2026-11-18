@@ -6,7 +6,7 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/internal/reply"
 )
 
-// WithSession puts the token of the active context on an item request that
+// WithSession puts the token of the active context on a device request that
 // comes with the session cookie and no Authorization, then hands it to next:
 // the nicetoken chain verifies it as any Bearer token, so permissions,
 // tenant, feed and sensitive checks hold for both paths. A request with

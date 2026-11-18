@@ -4,7 +4,7 @@ Repo ini berisi empat contoh integrasi dengan NICE yang **berdiri sendiri**. Con
 
 | Folder | Peran di NICE | Stack | Port |
 |---|---|---|---|
-| `sharedservice-oauth/` | SharedService `nice_token`, slug `inventaris`: `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice/pkg/nicetoken` + `nice/pkg/niceclient`; Vite + React 19 + TypeScript | 8081 (UI build juga di 8081); 5181 saat dev |
+| `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice/pkg/nicetoken` + `nice/pkg/niceclient`; Vite + React 19 + TypeScript | 8081 (UI build juga di 8081); 5181 saat dev |
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
 | `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service `nice_token` (`inventaris`) lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceclient` | 8083 |

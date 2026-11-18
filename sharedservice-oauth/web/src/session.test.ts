@@ -39,7 +39,7 @@ describe("sign in", () => {
     expect(navigations).toEqual(["/auth/login", "/auth/login?prompt=select_account"]);
   });
 
-  it("loads the session, the choices and the items of the active context", async () => {
+  it("loads the session, the choices and the devices of the active context", async () => {
     const state = (await started()).getState();
 
     expect(state).toMatchObject({
@@ -47,9 +47,9 @@ describe("sign in", () => {
       user: { id: "usr_1", name: "Siti Rahma", email: "siti@nusapala.id" },
       active: { org: ORG_A, project: PRJ_P },
     });
-    expect(state.perms).toContain("inventaris.items.delete");
+    expect(state.perms).toContain("nadi.devices.delete");
     expect(state.contexts?.organizations.map((org) => org.id)).toEqual([ORG_A, ORG_B, ORG_C]);
-    expect(state.items?.map((entry) => entry.name)).toEqual(["Kabel UTP Cat6"]);
+    expect(state.devices?.map((entry) => entry.name)).toEqual(["Sensor Suhu Gudang"]);
   });
 
   it("explains access_denied from the callback, clears it from the URL, and offers another account", async () => {
@@ -75,8 +75,8 @@ describe("sign in", () => {
 
     expect(state.phase).toBe("signed-in");
     expect(state.active).toBeUndefined();
-    expect(state.items).toBeUndefined();
-    expect(backend.calls("GET", "/items")).toEqual([]);
+    expect(state.devices).toBeUndefined();
+    expect(backend.calls("GET", "/devices")).toEqual([]);
     expect(state.contexts).toBeDefined();
   });
 
@@ -98,7 +98,7 @@ describe("only the backend", () => {
 
   it("calls relative URLs with same-origin credentials and the CSRF token on every write", async () => {
     const current = await started();
-    await current.saveItem({ name: "Obeng", quantity: 3 });
+    await current.saveDevice({ name: "Sensor Pintu", serialNumber: "SN-1", status: "active", location: "" });
     await current.choose(ORG_B, PRJ_R);
     await current.logout();
 
@@ -119,7 +119,7 @@ describe("only the backend", () => {
 
     const current = await started();
     await current.choose(ORG_B, PRJ_R);
-    await current.saveItem({ name: "Obeng", quantity: 3 });
+    await current.saveDevice({ name: "Sensor Pintu", serialNumber: "SN-1", status: "active", location: "" });
     await current.logout();
 
     expect(local.length).toBe(0);
@@ -129,14 +129,14 @@ describe("only the backend", () => {
 });
 
 describe("switching context", () => {
-  it("moves to another organization without leaving the page and lists its items", async () => {
+  it("moves to another organization without leaving the page and lists its devices", async () => {
     const current = await started();
 
     await expect(current.choose(ORG_B, PRJ_R)).resolves.toBe(true);
 
     expect(backend.calls("POST", "/auth/context")[0].body).toEqual({ org: ORG_B, project: PRJ_R });
     expect(current.getState()).toMatchObject({ active: { org: ORG_B, project: PRJ_R }, switching: undefined, switchError: undefined });
-    expect(current.getState().items?.map((entry) => entry.name)).toEqual(["Router"]);
+    expect(current.getState().devices?.map((entry) => entry.name)).toEqual(["Gateway LoRa"]);
     expect(navigations).toEqual([]);
   });
 
@@ -145,7 +145,7 @@ describe("switching context", () => {
 
     await current.choose(ORG_A, PRJ_Q);
 
-    expect(current.getState().perms).toEqual(["inventaris.items.read"]);
+    expect(current.getState().perms).toEqual(["nadi.devices.read"]);
   });
 
   it("keeps the context on 409, shows the reason and reloads the choices", async () => {
@@ -157,7 +157,7 @@ describe("switching context", () => {
 
     const state = current.getState();
     expect(state.active).toEqual({ org: ORG_A, project: PRJ_P });
-    expect(state.items?.map((entry) => entry.name)).toEqual(["Kabel UTP Cat6"]);
+    expect(state.devices?.map((entry) => entry.name)).toEqual(["Sensor Suhu Gudang"]);
     expect(state.switching).toBeUndefined();
     expect(state.switchError).toMatch(/tetap di konteks sebelumnya/);
     expect(state.switchError).toMatch(/invalid_scope/);
@@ -170,7 +170,7 @@ describe("switching context", () => {
 
     await current.choose(ORG_B, PRJ_R);
 
-    expect(current.getState().switchError).toMatch(/tidak boleh memakai inventaris di organisasi itu \(access_denied\)/);
+    expect(current.getState().switchError).toMatch(/tidak boleh memakai nadi di organisasi itu \(access_denied\)/);
   });
 
   it("renews the CSRF token once after 403 csrf and sends the write again", async () => {
@@ -190,31 +190,31 @@ describe("revoked access", () => {
     const state = (await started()).getState();
 
     expect(state).toMatchObject({ phase: "signed-in", contextError: "access_denied", perms: [] });
-    expect(backend.calls("GET", "/items")).toEqual([]);
+    expect(backend.calls("GET", "/devices")).toEqual([]);
     expect(state.contexts).toBeDefined();
   });
 
-  it("turns a 409 context_refused of the items into the reason", async () => {
+  it("turns a 409 context_refused of the devices into the reason", async () => {
     const current = await started();
     backend.contextError = "invalid_scope";
 
-    await current.loadItems();
+    await current.loadDevices();
 
-    expect(current.getState()).toMatchObject({ contextError: "invalid_scope", perms: [], items: undefined });
+    expect(current.getState()).toMatchObject({ contextError: "invalid_scope", perms: [], devices: undefined });
   });
 
   it("explains a delete refused because access was revoked at NICE", async () => {
     const current = await started();
-    backend.next["/items/itm_1"] = [json(403, { error: "access_denied" })];
+    backend.next["/devices/dev_1"] = [json(403, { error: "access_denied" })];
 
-    const result = await current.removeItem("itm_1");
+    const result = await current.removeDevice("dev_1");
 
     expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/dicabut/) });
   });
 });
 
 describe("discovery failure", () => {
-  it("shows the cause and keeps the active context and its items", async () => {
+  it("shows the cause and keeps the active context and its devices", async () => {
     backend.contextsFailure = json(502, { error: "contexts_unavailable", error_description: "invalid_grant" });
 
     const state = (await started()).getState();
@@ -222,7 +222,7 @@ describe("discovery failure", () => {
     expect(state.contextsError).toMatch(/NICE menolak penemuan konteks \(invalid_grant\)/);
     expect(state.contextsError).toMatch(/Konteks aktif tetap dipakai/);
     expect(state.active).toEqual({ org: ORG_A, project: PRJ_P });
-    expect(state.items).toHaveLength(1);
+    expect(state.devices).toHaveLength(1);
   });
 
   it("names a NICE that did not answer", async () => {
@@ -237,7 +237,7 @@ describe("session ended", () => {
     const current = await started();
     backend.ended = true;
 
-    const result = await current.saveItem({ name: "Obeng", quantity: 1 });
+    const result = await current.saveDevice({ name: "Sensor Pintu", serialNumber: "SN-1", status: "active", location: "" });
 
     expect(result.ok).toBe(false);
     expect(current.getState()).toEqual({ phase: "ended", perms: [] });
@@ -259,33 +259,33 @@ describe("session ended", () => {
   });
 });
 
-describe("items", () => {
+describe("devices", () => {
   it("adds, edits and deletes, then reloads the list", async () => {
     const current = await started();
 
-    expect(await current.saveItem({ name: "Obeng", quantity: 3 })).toEqual({ ok: true });
-    expect(await current.saveItem({ name: "Kabel", quantity: 13 }, "itm_1")).toEqual({ ok: true });
-    expect(await current.removeItem("itm_1")).toEqual({ ok: true });
+    expect(await current.saveDevice({ name: "Sensor Pintu", serialNumber: "SN-1", status: "active", location: "" })).toEqual({ ok: true });
+    expect(await current.saveDevice({ name: "Sensor", serialNumber: "SN-2", status: "maintenance", location: "" }, "dev_1")).toEqual({ ok: true });
+    expect(await current.removeDevice("dev_1")).toEqual({ ok: true });
 
-    expect(current.getState().items?.map((entry) => [entry.name, entry.quantity])).toEqual([["Obeng", 3]]);
+    expect(current.getState().devices?.map((entry) => [entry.name, entry.serialNumber])).toEqual([["Sensor Pintu", "SN-1"]]);
   });
 
-  it("does not list items without the read permission", async () => {
-    backend.perms[`${ORG_A}/${PRJ_P}`] = ["inventaris.items.create"];
+  it("does not list devices without the read permission", async () => {
+    backend.perms[`${ORG_A}/${PRJ_P}`] = ["nadi.devices.create"];
 
     const state = (await started()).getState();
 
-    expect(backend.calls("GET", "/items")).toEqual([]);
-    expect(state.itemsError).toMatch(/inventaris.items.read/);
+    expect(backend.calls("GET", "/devices")).toEqual([]);
+    expect(state.devicesError).toMatch(/nadi.devices.read/);
   });
 
   it("answers a refused write with one sentence and keeps the list", async () => {
     const current = await started();
     await current.choose(ORG_A, PRJ_Q);
 
-    const result = await current.saveItem({ name: "Obeng", quantity: 1 });
+    const result = await current.saveDevice({ name: "Sensor Pintu", serialNumber: "SN-1", status: "active", location: "" });
 
-    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/tidak punya izin untuk menambah barang/) });
+    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/tidak punya izin untuk menambah perangkat/) });
   });
 });
 
@@ -309,7 +309,7 @@ describe("sign out", () => {
     expect(state.phase).toBe("signed-in");
     expect(state.loggingOut).toBe(false);
     expect(state.logoutError).toMatch(/belum keluar/);
-    expect(state.items).toHaveLength(1);
+    expect(state.devices).toHaveLength(1);
 
     backend.logoutFailure = undefined;
     await current.logout();

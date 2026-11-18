@@ -17,9 +17,9 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 
-	itemmemory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/item"
+	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
-	itemusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/item/usecase"
+	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 	"github.com/nice-platform/nice/pkg/nicetoken"
@@ -30,7 +30,7 @@ const (
 	testKID    = "test-key"
 	testOrigin = "http://localhost:5180"
 	// testClientID and testClientSecret are the confidential client of the UI.
-	testClientID     = "cli_inventaris_web"
+	testClientID     = "cli_nadi_web"
 	testClientSecret = "s3cret-client"
 	orgA             = "org_aaaaaaaa"
 	orgB             = "org_bbbbbbbb"
@@ -112,9 +112,9 @@ func (f *fakeChecker) Calls() []string {
 	return append([]string(nil), f.calls...)
 }
 
-// testStore is what the tests read back from either item store.
+// testStore is what the tests read back from either device store.
 type testStore interface {
-	ItemStore
+	DeviceStore
 	HasTenant(ctx context.Context, org string) (bool, error)
 }
 
@@ -128,7 +128,7 @@ type testEnv struct {
 // with the test key set instead of NICE and checker as the online checker.
 func newTestEnv(t *testing.T, checker nicetoken.AccessChecker) *testEnv {
 	t.Helper()
-	return newTestEnvWith(t, checker, itemmemory.NewRepository())
+	return newTestEnvWith(t, checker, devicememory.NewRepository())
 }
 
 func newTestEnvWith(t *testing.T, checker nicetoken.AccessChecker, store testStore) *testEnv {
@@ -190,10 +190,10 @@ func (e *testEnv) do(method, path, token string, body any, headers ...string) re
 	return response{Status: rec.Code, Header: rec.Header(), Body: rec.Body.String()}
 }
 
-// create makes an item for org and testProject directly in the store, bypassing the API.
-func (e *testEnv) create(org, name string) domain.Item {
+// create makes a device for org and testProject directly in the store, bypassing the API.
+func (e *testEnv) create(org, name string) domain.Device {
 	e.t.Helper()
-	it, err := e.store.Create(context.Background(), scopeOf(org, testProject), domain.ItemFields{Name: name, Quantity: 1})
+	it, err := e.store.Create(context.Background(), scopeOf(org, testProject), domain.DeviceFields{Name: name, SerialNumber: "SN-1", Status: domain.StatusActive})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -205,16 +205,16 @@ func scopeOf(org, project string) domain.Scope {
 	return domain.Scope{OrgID: org, ProjectID: project, Subject: "usr_test"}
 }
 
-func (e *testEnv) list(org string) []domain.Item {
+func (e *testEnv) list(org string) []domain.Device {
 	e.t.Helper()
-	items, err := e.store.List(context.Background(), scopeOf(org, testProject))
+	devices, err := e.store.List(context.Background(), scopeOf(org, testProject))
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return items
+	return devices
 }
 
-func (e *testEnv) get(org, id string) (domain.Item, bool) {
+func (e *testEnv) get(org, id string) (domain.Device, bool) {
 	it, err := e.store.Get(context.Background(), scopeOf(org, testProject), id)
 	return it, err == nil
 }
@@ -242,6 +242,6 @@ func wantError(t *testing.T, r response, status int, code, description string) {
 	}
 }
 
-func newHandler(v *nicetoken.Verifier, repo itemusecase.Repo, origins []string) http.Handler {
-	return rest.NewHandler(v, &itemusecase.Service{Repo: repo}, rest.Options{CORSOrigins: origins})
+func newHandler(v *nicetoken.Verifier, repo deviceusecase.Repo, origins []string) http.Handler {
+	return rest.NewHandler(v, &deviceusecase.Service{Repo: repo}, rest.Options{CORSOrigins: origins})
 }

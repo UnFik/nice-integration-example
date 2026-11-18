@@ -26,7 +26,7 @@ export function ContextPicker(props: {
             </p>
             {org.projects.length === 0 ? (
               <p className="muted small" data-unavailable={org.id}>
-                Tidak tersedia: Anda tidak punya akses inventaris di project mana pun di organisasi ini.
+                Tidak tersedia: Anda tidak punya akses nadi di project mana pun di organisasi ini.
               </p>
             ) : (
               <ul className="choices">

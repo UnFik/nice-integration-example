@@ -47,11 +47,11 @@ type Config struct {
 	// ServiceAPIKey is the API key of a platform Service Account with the
 	// nice.service role. Empty disables the feed and the online check.
 	ServiceAPIKey string
-	// DatabaseURL is the PostgreSQL URL of the item store. Empty keeps the
-	// items in memory. It may hold a password, so it is never printed.
+	// DatabaseURL is the PostgreSQL URL of the device store. Empty keeps the
+	// devices in memory. It may hold a password, so it is never printed.
 	DatabaseURL string
 	// ClientID and ClientSecret are those of the confidential OAuth client bound
-	// to inventaris, used by the backend to sign users in. The secret is sent to
+	// to nadi, used by the backend to sign users in. The secret is sent to
 	// NICE only and never printed.
 	ClientID     string
 	ClientSecret string
@@ -116,11 +116,11 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 	if cfg.DatabaseURL != "" {
 		// The value is left out of the message: it may hold a password.
 		if u, err := url.Parse(cfg.DatabaseURL); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" {
-			return Config{}, fmt.Errorf("config: %s must be a postgres:// URL (e.g. postgres://user:password@localhost:5432/inventaris), or empty to keep items in memory", EnvDatabaseURL)
+			return Config{}, fmt.Errorf("config: %s must be a postgres:// URL (e.g. postgres://user:password@localhost:5432/nadi), or empty to keep devices in memory", EnvDatabaseURL)
 		}
 	}
 	if cfg.ClientID == "" {
-		return Config{}, fmt.Errorf("config: %s is required (the client_id of the confidential OAuth client bound to inventaris); set it in the environment or in %s", EnvClientID, dotenv)
+		return Config{}, fmt.Errorf("config: %s is required (the client_id of the confidential OAuth client bound to nadi); set it in the environment or in %s", EnvClientID, dotenv)
 	}
 	if cfg.ClientSecret == "" {
 		return Config{}, fmt.Errorf("config: %s is required (the secret of the OAuth client %s); set it in the environment or in %s", EnvClientSecret, EnvClientID, dotenv)

@@ -2,7 +2,7 @@ package domain
 
 import "errors"
 
-// Scope is the key every item operation runs under. It comes from the verified
+// Scope is the key every device operation runs under. It comes from the verified
 // token only: OrgID from nice_org_id, ProjectID from prj, Subject from sub and
 // Actor from act.sub. Nothing the client sends may change it.
 type Scope struct {
@@ -13,14 +13,14 @@ type Scope struct {
 }
 
 var (
-	// ErrProjectRequired refuses a token without prj: items belong to a project.
+	// ErrProjectRequired refuses a token without prj: devices belong to a project.
 	ErrProjectRequired = errors.New("token has no project")
-	// ErrOrgRequired refuses a scope without an organization, so items of
+	// ErrOrgRequired refuses a scope without an organization, so devices of
 	// different organizations can never share the empty tenant.
 	ErrOrgRequired = errors.New("token has no organization")
 )
 
-// Validate reports why s cannot hold items.
+// Validate reports why s cannot hold devices.
 func (s Scope) Validate() error {
 	switch {
 	case s.OrgID == "":

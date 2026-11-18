@@ -1,4 +1,4 @@
-import type { Item, ItemInput } from "./items";
+import { DEVICE_STATUSES, type Device, type DeviceInput } from "./devices";
 
 // Every call goes to the origin of the page: the backend holds the NICE
 // tokens and the session cookie stands for them, so the UI never sees a token.
@@ -84,7 +84,7 @@ export function createApi(fetcher: Fetch, csrfToken: () => string | undefined) {
     }
     return answer;
   };
-  const itemPath = (id: string) => `/items/${encodeURIComponent(id)}`;
+  const devicePath = (id: string) => `/devices/${encodeURIComponent(id)}`;
 
   return {
     async session(): Promise<SessionInfo> {
@@ -99,19 +99,19 @@ export function createApi(fetcher: Fetch, csrfToken: () => string | undefined) {
     async logout(): Promise<void> {
       await send("/auth/logout", "POST");
     },
-    async listItems(): Promise<Item[]> {
-      const answer = (await send("/items", "GET")) as { items?: unknown } | undefined;
-      if (!Array.isArray(answer?.items)) throw new ApiError(200, "invalid_body");
-      return answer.items.map(toItem);
+    async listDevices(): Promise<Device[]> {
+      const answer = (await send("/devices", "GET")) as { devices?: unknown } | undefined;
+      if (!Array.isArray(answer?.devices)) throw new ApiError(200, "invalid_body");
+      return answer.devices.map(toDevice);
     },
-    async createItem(input: ItemInput): Promise<Item> {
-      return toItem(await send("/items", "POST", input));
+    async createDevice(input: DeviceInput): Promise<Device> {
+      return toDevice(await send("/devices", "POST", toBody(input)));
     },
-    async updateItem(id: string, input: ItemInput): Promise<Item> {
-      return toItem(await send(itemPath(id), "PUT", input));
+    async updateDevice(id: string, input: DeviceInput): Promise<Device> {
+      return toDevice(await send(devicePath(id), "PUT", toBody(input)));
     },
-    async removeItem(id: string): Promise<void> {
-      await send(itemPath(id), "DELETE");
+    async removeDevice(id: string): Promise<void> {
+      await send(devicePath(id), "DELETE");
     },
   };
 }
@@ -122,12 +122,18 @@ export function loginUrl(options: { selectAccount?: boolean } = {}): string {
   return options.selectAccount ? "/auth/login?prompt=select_account" : "/auth/login";
 }
 
-export function toItem(raw: unknown): Item {
+function toBody(input: DeviceInput): Record<string, string> {
+  return { name: input.name, serial_number: input.serialNumber, status: input.status, location: input.location };
+}
+
+export function toDevice(raw: unknown): Device {
   const value = record(raw);
   return {
     id: text(value.id),
     name: text(value.name),
-    quantity: typeof value.quantity === "number" ? value.quantity : 0,
+    serialNumber: text(value.serial_number),
+    status: DEVICE_STATUSES.find((status) => status === value.status) ?? "inactive",
+    location: text(value.location),
     createdBy: text(value.created_by),
     actedBy: text(value.acted_by) || undefined,
     createTime: text(value.create_time) || undefined,
@@ -162,8 +168,8 @@ function toContexts(raw: unknown): Contexts {
         id: text(org.id),
         name: text(org.name),
         slug: text(org.slug),
-        projects: projects.map((item: unknown) => {
-          const project = record(item);
+        projects: projects.map((device: unknown) => {
+          const project = record(device);
           return { id: text(project.id), name: text(project.name), slug: text(project.slug) };
         }),
         projectsTruncated: org.projects_truncated === true,

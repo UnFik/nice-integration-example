@@ -14,7 +14,7 @@ import (
 
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/auth"
-	itemusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/item/usecase"
+	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 	"github.com/nice-platform/nice/pkg/nicetoken"
@@ -49,7 +49,7 @@ func TestLoginKeepsTheTokensOnTheServer(t *testing.T) {
 	if user["id"] != bffUser || user["name"] != "Budi" || user["email"] != "budi@example.com" || m["csrf_token"] == "" {
 		t.Fatalf("session = %v", m)
 	}
-	// The first project of the organization of the sign-in is chosen, so the items show at once.
+	// The first project of the organization of the sign-in is chosen, so the devices show at once.
 	if org, prj := contextOf(m); org != orgA || prj != projectP {
 		t.Fatalf("context = %s/%s, want %s/%s", org, prj, orgA, projectP)
 	}
@@ -57,7 +57,7 @@ func TestLoginKeepsTheTokensOnTheServer(t *testing.T) {
 		t.Fatalf("perms = %v, want %v", got, allPerms)
 	}
 	if got := e.nice.refreshScopes(); len(got) != 2 || got[0] != baseScopes ||
-		got[1] != baseScopes+" nice:org:"+orgA+" nice:aud:inventaris nice:prj:"+projectP {
+		got[1] != baseScopes+" nice:org:"+orgA+" nice:aud:nadi nice:prj:"+projectP {
 		t.Fatalf("refreshes = %q, want the sign-in token then the token of the first project", got)
 	}
 }
@@ -118,7 +118,7 @@ func TestSessionWithoutCookieIs401(t *testing.T) {
 		t.Fatal("an unknown session cookie was not cleared")
 	}
 	b.cookie = "made-up"
-	wantError(t, b.do(http.MethodGet, "/items", nil), http.StatusUnauthorized, "unauthenticated", "")
+	wantError(t, b.do(http.MethodGet, "/devices", nil), http.StatusUnauthorized, "unauthenticated", "")
 }
 
 func TestSessionEndedByNICE(t *testing.T) {
@@ -216,9 +216,9 @@ func TestContextsWhenNICERefuses(t *testing.T) {
 	b.login()
 	e.nice.set(func(f *bffNICE) { f.contextsDown = true })
 	wantError(t, b.do(http.MethodGet, "/auth/contexts", nil), http.StatusBadGateway, "contexts_unavailable", "permission_denied")
-	// The active context and the items still work.
-	if r := b.do(http.MethodGet, "/items", nil); r.Status != http.StatusOK {
-		t.Fatalf("items after a failed discovery = %d %s", r.Status, r.Body)
+	// The active context and the devices still work.
+	if r := b.do(http.MethodGet, "/devices", nil); r.Status != http.StatusOK {
+		t.Fatalf("devices after a failed discovery = %d %s", r.Status, r.Body)
 	}
 }
 
@@ -235,7 +235,7 @@ func TestSwitchOrganizationWithOneRefresh(t *testing.T) {
 		t.Fatalf("context after the switch = %s/%s", org, prj)
 	}
 	got := e.nice.refreshScopes()[before:]
-	if want := baseScopes + " nice:org:" + orgB + " nice:aud:inventaris nice:prj:" + projectR; len(got) != 1 || got[0] != want {
+	if want := baseScopes + " nice:org:" + orgB + " nice:aud:nadi nice:prj:" + projectR; len(got) != 1 || got[0] != want {
 		t.Fatalf("refreshes of the switch = %q, want one %q", got, want)
 	}
 	if org, prj := contextOf(b.session()); org != orgB || prj != projectR {
@@ -278,8 +278,8 @@ func TestTwoSwitchesAtOnceFromOneSession(t *testing.T) {
 		t.Fatalf("two switches at once = %v, want both 200 (the refresh token is used one at a time)", status)
 	}
 	b.session()
-	if r := b.do(http.MethodGet, "/items", nil); r.Status != http.StatusOK {
-		t.Fatalf("items after the switches = %d %s", r.Status, r.Body)
+	if r := b.do(http.MethodGet, "/devices", nil); r.Status != http.StatusOK {
+		t.Fatalf("devices after the switches = %d %s", r.Status, r.Body)
 	}
 }
 
@@ -287,7 +287,7 @@ func TestCookieRequestGetsTheTokenOfTheActiveContext(t *testing.T) {
 	e := newBFFEnv(t, &fakeChecker{allowed: true})
 	b := e.browser()
 	b.login()
-	r := b.do(http.MethodPost, "/items", map[string]any{"name": "Kabel A", "quantity": 1})
+	r := b.do(http.MethodPost, "/devices", map[string]any{"name": "Sensor A", "serial_number": "SN-1", "status": "active"})
 	if r.Status != http.StatusCreated || r.JSON(t)["created_by"] != bffUser {
 		t.Fatalf("create in A/P = %d %s", r.Status, r.Body)
 	}
@@ -295,25 +295,25 @@ func TestCookieRequestGetsTheTokenOfTheActiveContext(t *testing.T) {
 
 	// Q gives read only: the permission comes from the token of the context.
 	b.do(http.MethodPost, "/auth/context", map[string]string{"org": orgA, "project": projectQ})
-	wantError(t, b.do(http.MethodPost, "/items", map[string]any{"name": "x", "quantity": 1}), http.StatusForbidden, "insufficient_scope", "permission_denied")
+	wantError(t, b.do(http.MethodPost, "/devices", map[string]any{"name": "x", "serial_number": "SN-1", "status": "active"}), http.StatusForbidden, "insufficient_scope", "permission_denied")
 
 	// The tenant follows the context.
 	b.do(http.MethodPost, "/auth/context", map[string]string{"org": orgB, "project": projectR})
-	r = b.do(http.MethodGet, "/items", nil)
+	r = b.do(http.MethodGet, "/devices", nil)
 	if r.Status != http.StatusOK || strings.Contains(r.Body, idA) {
-		t.Fatalf("items of B/R = %d %s, must not hold the item of A", r.Status, r.Body)
+		t.Fatalf("devices of B/R = %d %s, must not hold the device of A", r.Status, r.Body)
 	}
-	if r = b.do(http.MethodPost, "/items", map[string]any{"name": "Kabel B", "quantity": 2}); r.Status != http.StatusCreated {
+	if r = b.do(http.MethodPost, "/devices", map[string]any{"name": "Sensor B", "serial_number": "SN-1", "status": "active"}); r.Status != http.StatusCreated {
 		t.Fatalf("create in B/R = %d %s", r.Status, r.Body)
 	}
 	for sc, want := range map[domain.Scope]int{
 		{OrgID: orgA, ProjectID: projectP}: 1, {OrgID: orgA, ProjectID: projectQ}: 0, {OrgID: orgB, ProjectID: projectR}: 1,
 	} {
-		if items, _ := e.store.List(context.Background(), sc); len(items) != want {
-			t.Errorf("items of %s/%s = %d, want %d", sc.OrgID, sc.ProjectID, len(items), want)
+		if devices, _ := e.store.List(context.Background(), sc); len(devices) != want {
+			t.Errorf("devices of %s/%s = %d, want %d", sc.OrgID, sc.ProjectID, len(devices), want)
 		}
 	}
-	if r = b.do(http.MethodDelete, "/items/"+r.JSON(t)["id"].(string), nil); r.Status != http.StatusNoContent {
+	if r = b.do(http.MethodDelete, "/devices/"+r.JSON(t)["id"].(string), nil); r.Status != http.StatusNoContent {
 		t.Fatalf("delete with the cookie = %d %s", r.Status, r.Body)
 	}
 }
@@ -322,21 +322,21 @@ func TestBearerCallerIsNotChangedByTheCookie(t *testing.T) {
 	e := newBFFEnv(t, nil)
 	b := e.browser()
 	b.login()
-	b.do(http.MethodPost, "/items", map[string]any{"name": "Kabel A", "quantity": 1})
+	b.do(http.MethodPost, "/devices", map[string]any{"name": "Sensor A", "serial_number": "SN-1", "status": "active"})
 
 	// agent-backend and Service Accounts send Authorization: the cookie is ignored, and so is the CSRF rule.
 	cl := claims(orgB, allPerms...)
 	cl["iss"], cl["prj"] = e.nice.URL, projectR
 	tok := sign(t, cl)
-	r := b.e.do(http.MethodPost, "/items", tok, map[string]any{"name": "Dari agen", "quantity": 1},
+	r := b.e.do(http.MethodPost, "/devices", tok, map[string]any{"name": "Dari agen", "serial_number": "SN-1", "status": "active"},
 		"Cookie", auth.CookieName+"="+b.cookie, "Origin", "http://evil.test")
 	if r.Status != http.StatusCreated {
 		t.Fatalf("Bearer with a cookie = %d %s", r.Status, r.Body)
 	}
-	if items, _ := e.store.List(context.Background(), domain.Scope{OrgID: orgB, ProjectID: projectR}); len(items) != 1 {
-		t.Fatalf("items of the Bearer token's scope = %v", items)
+	if devices, _ := e.store.List(context.Background(), domain.Scope{OrgID: orgB, ProjectID: projectR}); len(devices) != 1 {
+		t.Fatalf("devices of the Bearer token's scope = %v", devices)
 	}
-	if r = e.do(http.MethodPost, "/items", tok, map[string]any{"name": "Tanpa cookie", "quantity": 1}); r.Status != http.StatusCreated {
+	if r = e.do(http.MethodPost, "/devices", tok, map[string]any{"name": "Tanpa cookie", "serial_number": "SN-1", "status": "active"}); r.Status != http.StatusCreated {
 		t.Fatalf("Bearer without a cookie = %d %s", r.Status, r.Body)
 	}
 }
@@ -346,19 +346,19 @@ func TestCSRF(t *testing.T) {
 	b := e.browser()
 	b.login()
 	scope := domain.Scope{OrgID: orgA, ProjectID: projectP}
-	body := map[string]any{"name": "Kabel", "quantity": 1}
+	body := map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "active"}
 	csrf := b.csrf
 
 	b.csrf = ""
-	wantError(t, b.do(http.MethodPost, "/items", body), http.StatusForbidden, "csrf", "")
-	wantError(t, b.do(http.MethodPost, "/items", body, "X-CSRF-Token", "wrong"), http.StatusForbidden, "csrf", "")
+	wantError(t, b.do(http.MethodPost, "/devices", body), http.StatusForbidden, "csrf", "")
+	wantError(t, b.do(http.MethodPost, "/devices", body, "X-CSRF-Token", "wrong"), http.StatusForbidden, "csrf", "")
 	// A form posted from another site: the cookie goes along, the header and the Origin do not match.
-	wantError(t, b.do(http.MethodPost, "/items", body, "Origin", "http://evil.test", "X-CSRF-Token", csrf), http.StatusForbidden, "csrf", "")
+	wantError(t, b.do(http.MethodPost, "/devices", body, "Origin", "http://evil.test", "X-CSRF-Token", csrf), http.StatusForbidden, "csrf", "")
 	wantError(t, b.do(http.MethodPost, "/auth/context", map[string]string{"org": orgB, "project": projectR}, "Origin", "http://evil.test"),
 		http.StatusForbidden, "csrf", "")
 	wantError(t, b.do(http.MethodPost, "/auth/logout", nil, "X-CSRF-Token", "wrong"), http.StatusForbidden, "csrf", "")
-	if items, _ := e.store.List(context.Background(), scope); len(items) != 0 {
-		t.Fatalf("a refused write created %v", items)
+	if devices, _ := e.store.List(context.Background(), scope); len(devices) != 0 {
+		t.Fatalf("a refused write created %v", devices)
 	}
 	if org, _ := contextOf(b.session()); org != orgA {
 		t.Fatalf("a refused switch moved the session to %s", org)
@@ -373,12 +373,12 @@ func TestSessionWithoutAContext(t *testing.T) {
 	if m["context"] != nil || len(m["perms"].([]any)) != 0 {
 		t.Fatalf("session of an organization without projects = %v, want no context", m)
 	}
-	wantError(t, b.do(http.MethodGet, "/items", nil), http.StatusConflict, "context_required", "")
+	wantError(t, b.do(http.MethodGet, "/devices", nil), http.StatusConflict, "context_required", "")
 }
 
 func TestUIServedFromTheBuild(t *testing.T) {
 	dist := t.TempDir()
-	for name, content := range map[string]string{"index.html": "<!doctype html><title>Inventaris</title>", "assets/app.js": "console.log(1)"} {
+	for name, content := range map[string]string{"index.html": "<!doctype html><title>NADI</title>", "assets/app.js": "console.log(1)"} {
 		p := filepath.Join(dist, name)
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 			t.Fatal(err)
@@ -394,11 +394,11 @@ func TestUIServedFromTheBuild(t *testing.T) {
 	}
 	h := func(dir string) *testEnv {
 		env := *e
-		env.handler = rest.NewHandler(v, &itemusecase.Service{Repo: e.store}, rest.Options{WebDir: dir})
+		env.handler = rest.NewHandler(v, &deviceusecase.Service{Repo: e.store}, rest.Options{WebDir: dir})
 		return &env
 	}
 	withUI := h(dist)
-	for path, want := range map[string]string{"/": "<title>Inventaris</title>", "/barang/123": "<title>Inventaris</title>", "/assets/app.js": "console.log(1)"} {
+	for path, want := range map[string]string{"/": "<title>NADI</title>", "/perangkat/123": "<title>NADI</title>", "/assets/app.js": "console.log(1)"} {
 		if r := withUI.do(http.MethodGet, path, "", nil); r.Status != http.StatusOK || !strings.Contains(r.Body, want) {
 			t.Errorf("GET %s = %d %q", path, r.Status, r.Body)
 		}

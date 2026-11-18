@@ -2,7 +2,7 @@ import type { Session, SessionState } from "../session";
 import { ContextPanel } from "./ContextPanel";
 import { initials, shortId } from "./format";
 import { Icon } from "./icons";
-import { ItemsSection } from "./ItemsSection";
+import { DevicesSection } from "./DevicesSection";
 import { ToastRegion, useToasts } from "./Toasts";
 
 export function Home({ session, state }: { session: Session; state: SessionState }) {
@@ -24,7 +24,7 @@ export function Home({ session, state }: { session: Session; state: SessionState
           <div className="brand">
             <Icon name="box" />
             <div>
-              <strong>Inventaris</strong>
+              <strong>NADI</strong>
               <span className="muted small">Contoh SharedService NICE</span>
             </div>
           </div>
@@ -83,7 +83,7 @@ export function Home({ session, state }: { session: Session; state: SessionState
 
         <div className="layout">
           <div className="stack">
-            <ItemsSection session={session} state={state} notify={notify} />
+            <DevicesSection session={session} state={state} notify={notify} />
           </div>
           <aside className="stack side" aria-label="Konteks dan identitas">
             <ContextPanel session={session} state={state} />

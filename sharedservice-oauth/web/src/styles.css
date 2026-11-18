@@ -269,7 +269,8 @@ button.icon-button {
   font-size: 0.8125rem;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 40px;
   padding: 0 12px;
@@ -283,7 +284,8 @@ input::placeholder {
   opacity: 0.8;
 }
 
-input[aria-invalid="true"] {
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
   border-color: var(--err);
 }
 
@@ -655,7 +657,7 @@ button.choice.active {
   font-weight: 600;
 }
 
-/* Items */
+/* Devices */
 
 .empty {
   display: grid;
@@ -679,41 +681,43 @@ button.choice.active {
   max-width: 44ch;
 }
 
-.items {
+.devices {
   border: 1px solid var(--border);
   border-radius: var(--r-ctl);
   overflow: hidden;
 }
 
-.items-head,
-.item-row {
+.devices-head,
+.device-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) 56px 116px minmax(0, 1fr) 172px;
+  grid-template-columns:
+    minmax(0, 1.4fr) minmax(0, 1fr) 96px minmax(0, 1fr)
+    100px minmax(0, 0.8fr) 172px;
   align-items: center;
   gap: 8px 12px;
   padding: 8px 12px;
 }
 
-.items-head {
+.devices-head {
   background: var(--surface-2);
   color: var(--muted);
   font-size: 0.8125rem;
   font-weight: 600;
 }
 
-.item-row {
+.device-row {
   border-top: 1px solid var(--border);
 }
 
-.items-head + [role="rowgroup"] .item-row:first-child {
+.devices-head + [role="rowgroup"] .device-row:first-child {
   border-top: 0;
 }
 
-.item-name {
+.device-name {
   font-weight: 600;
 }
 
-.item-row code {
+.device-row code {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
@@ -740,42 +744,42 @@ button.choice.active {
 }
 
 @media (max-width: 639px) {
-  .items {
+  .devices {
     border: 0;
     display: grid;
     gap: 8px;
     overflow: visible;
   }
 
-  .items-head {
+  .devices-head {
     display: none;
   }
 
-  .item-row {
+  .device-row {
     grid-template-columns: 1fr 1fr;
     border: 1px solid var(--border);
     border-radius: var(--r-ctl);
     padding: 12px;
   }
 
-  .items-head + [role="rowgroup"] {
+  .devices-head + [role="rowgroup"] {
     display: grid;
     gap: 8px;
   }
 
-  .item-name {
+  .device-name {
     grid-column: 1 / -1;
     font-size: 1rem;
   }
 
-  .item-row [data-label]::before {
+  .device-row [data-label]::before {
     content: attr(data-label);
     display: block;
     color: var(--muted);
     font-size: 0.75rem;
   }
 
-  .item-row .num {
+  .device-row .num {
     text-align: left;
   }
 
@@ -802,6 +806,21 @@ button.choice.active {
   background: var(--accent-soft);
   color: var(--accent-ink);
   font-size: 0.75rem;
+}
+
+.chip.status-active {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.chip.status-maintenance {
+  background: var(--warn-soft);
+  color: var(--warn-ink);
+}
+
+.chip.status-inactive {
+  background: var(--surface-2);
+  color: var(--muted);
 }
 
 .chips {

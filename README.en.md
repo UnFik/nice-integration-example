@@ -13,18 +13,18 @@ Four runnable examples of the ways a system connects to NICE. Each example stand
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
- SPA --Bearer JWT (aud=inventaris)--> sharedservice-oauth/backend      (direct, local verification)
+ SPA --Bearer JWT (aud=nadi)--> sharedservice-oauth/backend      (direct, local verification)
  Service Account --Bearer JWT (aud=pengiriman)--> NICE /pengiriman/... --X-Api-Key--> shared-service-apikey
 ```
 
 ```text
- UI --session cookie--> sharedservice-oauth/backend --PKCE + client_secret, refresh nice:org nice:aud:inventaris nice:prj--> NICE /oauth/token
+ UI --session cookie--> sharedservice-oauth/backend --PKCE + client_secret, refresh nice:org nice:aud:nadi nice:prj--> NICE /oauth/token
  sharedservice-oauth/backend --sign-in token exchanged for nice:aud:nice--> NICE /api/v1/me/contexts
 ```
 
 ```text
  MCP client --Bearer JWT (aud=agen)--> agent-backend --token exchange--> NICE /oauth/token
- agent-backend --Bearer exchanged JWT (aud=inventaris, act)--> sharedservice-oauth/backend
+ agent-backend --Bearer exchanged JWT (aud=nadi, act)--> sharedservice-oauth/backend
 ```
 
 The SPA does not call the `api_key` service because CORS does not cover the NICE proxy path `/<slug>/...`.

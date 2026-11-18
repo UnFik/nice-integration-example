@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, createApi, loginUrl, toItem } from "./api";
+import { ApiError, createApi, loginUrl, toDevice } from "./api";
 import { json } from "./test/fake-backend";
 
 function client(answer: (url: string, init: RequestInit) => Response, csrf = "csrf-1") {
@@ -13,7 +13,7 @@ function client(answer: (url: string, init: RequestInit) => Response, csrf = "cs
 
 const header = (init: RequestInit, name: string) => new Headers(init.headers).get(name);
 
-const stored = { id: "itm_1", name: "Kabel", quantity: 3, created_by: "usr_1", acted_by: "agt_1", create_time: "2026-11-01T10:00:00Z", update_time: "2026-11-02T10:00:00Z" };
+const stored = { id: "dev_1", name: "Sensor", serial_number: "SN-1", status: "active", location: "Gudang A", created_by: "usr_1", acted_by: "agt_1", create_time: "2026-11-01T10:00:00Z", update_time: "2026-11-02T10:00:00Z" };
 
 describe("createApi", () => {
   it("reads the session with a relative URL and same-origin credentials, without the CSRF header", async () => {
@@ -38,19 +38,19 @@ describe("createApi", () => {
   it("sends the CSRF token and a JSON body on every write", async () => {
     const { api, calls } = client((url) => (url === "/auth/logout" ? new Response(null, { status: 204 }) : json(200, stored)));
 
-    await api.createItem({ name: "Kabel", quantity: 3 });
-    await api.updateItem("itm/1", { name: "Kabel", quantity: 4 });
-    await api.removeItem("itm_1");
+    await api.createDevice({ name: "Sensor", serialNumber: "SN-1", status: "active", location: "Gudang A" });
+    await api.updateDevice("dev/1", { name: "Sensor", serialNumber: "SN-1", status: "maintenance", location: "" });
+    await api.removeDevice("dev_1");
     await api.logout();
 
     expect(calls.map((call) => [call.init.method, call.url])).toEqual([
-      ["POST", "/items"],
-      ["PUT", "/items/itm%2F1"],
-      ["DELETE", "/items/itm_1"],
+      ["POST", "/devices"],
+      ["PUT", "/devices/dev%2F1"],
+      ["DELETE", "/devices/dev_1"],
       ["POST", "/auth/logout"],
     ]);
     for (const call of calls) expect(header(call.init, "X-CSRF-Token")).toBe("csrf-1");
-    expect(calls[0].init.body).toBe('{"name":"Kabel","quantity":3}');
+    expect(calls[0].init.body).toBe('{"name":"Sensor","serial_number":"SN-1","status":"active","location":"Gudang A"}');
     expect(header(calls[0].init, "Content-Type")).toBe("application/json");
     expect(header(calls[3].init, "Content-Type")).toBeNull();
   });
@@ -83,20 +83,20 @@ describe("createApi", () => {
   });
 
   it("rejects answers without the fields the UI needs", async () => {
-    await expect(client(() => json(200, {})).api.listItems()).rejects.toBeInstanceOf(ApiError);
+    await expect(client(() => json(200, {})).api.listDevices()).rejects.toBeInstanceOf(ApiError);
     await expect(client(() => json(200, { user: {} })).api.session()).rejects.toBeInstanceOf(ApiError);
     await expect(client(() => json(200, {})).api.contexts()).rejects.toBeInstanceOf(ApiError);
   });
 });
 
-describe("loginUrl and toItem", () => {
+describe("loginUrl and toDevice", () => {
   it("navigates to the backend login, with prompt=select_account for another account", () => {
     expect(loginUrl()).toBe("/auth/login");
     expect(loginUrl({ selectAccount: true })).toBe("/auth/login?prompt=select_account");
   });
 
-  it("maps an item and fills what an answer leaves out", () => {
-    expect(toItem(stored)).toEqual({ id: "itm_1", name: "Kabel", quantity: 3, createdBy: "usr_1", actedBy: "agt_1", createTime: "2026-11-01T10:00:00Z", updateTime: "2026-11-02T10:00:00Z" });
-    expect(toItem({ id: "itm_1" })).toEqual({ id: "itm_1", name: "", quantity: 0, createdBy: "", actedBy: undefined, createTime: undefined, updateTime: undefined });
+  it("maps a device and fills what an answer leaves out", () => {
+    expect(toDevice(stored)).toEqual({ id: "dev_1", name: "Sensor", serialNumber: "SN-1", status: "active", location: "Gudang A", createdBy: "usr_1", actedBy: "agt_1", createTime: "2026-11-01T10:00:00Z", updateTime: "2026-11-02T10:00:00Z" });
+    expect(toDevice({ id: "dev_1" })).toEqual({ id: "dev_1", name: "", serialNumber: "", status: "inactive", location: "", createdBy: "", actedBy: undefined, createTime: undefined, updateTime: undefined });
   });
 });

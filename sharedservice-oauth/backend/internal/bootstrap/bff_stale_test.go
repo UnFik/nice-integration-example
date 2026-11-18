@@ -36,8 +36,8 @@ func TestStaleContextTokenIsRenewedOnce(t *testing.T) {
 	e.nice.set(func(f *bffNICE) { f.iatShift = 0 })
 	before := len(e.nice.refreshScopes())
 
-	if r := b.do(http.MethodGet, "/items", nil); r.Status != http.StatusOK {
-		t.Fatalf("items with a stale cached token = %d %s, want 200 with a new token", r.Status, r.Body)
+	if r := b.do(http.MethodGet, "/devices", nil); r.Status != http.StatusOK {
+		t.Fatalf("devices with a stale cached token = %d %s, want 200 with a new token", r.Status, r.Body)
 	}
 	if n := len(e.nice.refreshScopes()) - before; n != 1 {
 		t.Fatalf("%d refreshes, want one for the stale token", n)
@@ -56,7 +56,7 @@ func TestStaleContextTokenTwiceIsNotRenewedAgain(t *testing.T) {
 	before := len(e.nice.refreshScopes())
 
 	// NICE keeps issuing tokens older than the change: one new token, then token_stale.
-	wantError(t, b.do(http.MethodGet, "/items", nil), http.StatusUnauthorized, "invalid_token", "token_stale")
+	wantError(t, b.do(http.MethodGet, "/devices", nil), http.StatusUnauthorized, "invalid_token", "token_stale")
 	if n := len(e.nice.refreshScopes()) - before; n != 1 {
 		t.Fatalf("%d refreshes, want exactly one", n)
 	}
@@ -69,7 +69,7 @@ func TestStaleBearerTokenIsNotRenewed(t *testing.T) {
 	cl["iss"], cl["prj"], cl["sub"] = e.nice.URL, projectP, bffUser
 	cl["iat"] = time.Now().Add(-10 * time.Second).Unix()
 
-	wantError(t, e.do(http.MethodGet, "/items", sign(t, cl), nil), http.StatusUnauthorized, "invalid_token", "token_stale")
+	wantError(t, e.do(http.MethodGet, "/devices", sign(t, cl), nil), http.StatusUnauthorized, "invalid_token", "token_stale")
 	if n := len(e.nice.refreshScopes()) - before; n != 0 {
 		t.Fatalf("%d refreshes for a Bearer caller, want none", n)
 	}

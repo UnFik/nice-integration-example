@@ -18,7 +18,7 @@ const module = "github.com/nice-platform/example/sharedservice-oauth/backend/int
 var forbidden = map[string][]string{
 	"domain/":         {module + "app", module + "adapter", module + "bootstrap", module + "platform", "net/http"},
 	"app/":            {module + "adapter", module + "bootstrap", "net/http"},
-	"app/item/dto":    {module + "app/item/usecase"},
+	"app/device/dto":  {module + "app/device/usecase"},
 	"app/session/dto": {module + "app/session/usecase"},
 	"adapter/":        {module + "bootstrap"},
 	"platform/":       {module + "app", module + "adapter", module + "domain", module + "bootstrap"},
@@ -30,8 +30,8 @@ var suffixes = []struct {
 	ends   []string
 }{
 	{"domain/", []string{"_domain.go"}},
-	{"app/item/usecase/", []string{"_usecase.go", "_contract.go"}},
-	{"app/item/dto/", []string{"_dto.go"}},
+	{"app/device/usecase/", []string{"_usecase.go", "_contract.go"}},
+	{"app/device/dto/", []string{"_dto.go"}},
 	{"app/session/usecase/", []string{"_usecase.go", "_contract.go"}},
 	{"app/session/dto/", []string{"_dto.go"}},
 	{"adapter/memory/session/", []string{"_repository.go"}},
@@ -39,13 +39,13 @@ var suffixes = []struct {
 	{"adapter/rest/auth/dto/", []string{"_dto.go"}},
 	{"adapter/rest/auth/", []string{"_handler.go", "_routes.go", "_middleware.go", "_helper.go"}},
 	{"adapter/rest/web/", []string{"_handler.go", "_routes.go"}},
-	{"adapter/memory/item/", []string{"_repository.go"}},
-	{"adapter/postgres/item/", []string{"_repository.go"}},
+	{"adapter/memory/device/", []string{"_repository.go"}},
+	{"adapter/postgres/device/", []string{"_repository.go"}},
 	{"adapter/rest/dto/", []string{"_dto.go"}},
-	{"adapter/rest/item/dto/", []string{"_dto.go"}},
-	{"adapter/rest/item/internal/", []string{"_helper.go", "_mapper.go"}},
+	{"adapter/rest/device/dto/", []string{"_dto.go"}},
+	{"adapter/rest/device/internal/", []string{"_helper.go", "_mapper.go"}},
 	{"adapter/rest/internal/", []string{"_helper.go", "_mapper.go"}},
-	{"adapter/rest/item/", []string{"_handler.go", "_routes.go"}},
+	{"adapter/rest/device/", []string{"_handler.go", "_routes.go"}},
 	{"adapter/rest/system/", []string{"_handler.go", "_routes.go"}},
 	{"adapter/rest/", []string{"routes.go"}},
 }

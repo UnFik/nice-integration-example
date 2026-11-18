@@ -1,4 +1,4 @@
-// Package system serves the public endpoints that are not item operations.
+// Package system serves the public endpoints that are not device operations.
 package system
 
 import "net/http"

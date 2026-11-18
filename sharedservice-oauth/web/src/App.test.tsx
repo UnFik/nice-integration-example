@@ -26,14 +26,14 @@ describe("App", () => {
     await session.start("http://localhost:5181/");
     await session.logout();
 
-    expect(renderToStaticMarkup(<App session={session} />)).toMatch(/Anda sudah keluar dari inventaris/);
+    expect(renderToStaticMarkup(<App session={session} />)).toMatch(/Anda sudah keluar dari nadi/);
   });
 
   it("explains access_denied and offers another account", async () => {
     const markup = await screen("http://localhost:5181/?login_error=access_denied");
 
     expect(markup).toMatch(/Service tidak tersedia/);
-    expect(markup).toMatch(/Tidak ada organisasi Anda yang memakai inventaris/);
+    expect(markup).toMatch(/Tidak ada organisasi Anda yang memakai nadi/);
     expect(markup).toMatch(/Masuk dengan akun lain/);
   });
 
@@ -51,10 +51,10 @@ describe("App", () => {
     expect(markup).toMatch(/>Masuk</);
   });
 
-  it("shows the home page with the items when signed in", async () => {
+  it("shows the home page with the devices when signed in", async () => {
     const markup = await screen("http://localhost:5181/");
 
-    expect(markup).toContain("Kabel UTP Cat6");
+    expect(markup).toContain("Sensor Suhu Gudang");
     expect(markup).toMatch(/Keluar/);
   });
 });

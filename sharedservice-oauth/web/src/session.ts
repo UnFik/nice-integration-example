@@ -1,9 +1,9 @@
 import { type ActiveContext, type Api, ApiError, type Contexts, createApi, type Fetch, loginUrl, type SessionInfo, type User } from "./api";
-import { describeItemsError, ITEM_PERMISSIONS, type Item, type ItemAction, type ItemInput } from "./items";
+import { describeDevicesError, DEVICE_PERMISSIONS, type Device, type DeviceAction, type DeviceInput } from "./devices";
 
 export type Phase = "starting" | "unreachable" | "signed-out" | "login-failed" | "ended" | "signed-in";
 
-export type { Item } from "./items";
+export type { Device } from "./devices";
 
 export interface SessionState {
   phase: Phase;
@@ -22,14 +22,14 @@ export interface SessionState {
   // switching is the context being asked from the backend; active changes only when it agrees.
   switching?: ActiveContext;
   switchError?: string;
-  items?: Item[];
-  itemsError?: string;
-  itemsLoading?: boolean;
+  devices?: Device[];
+  devicesError?: string;
+  devicesLoading?: boolean;
   loggingOut?: boolean;
   logoutError?: string;
 }
 
-export type ItemResult = { ok: true } | { ok: false; message: string };
+export type DeviceResult = { ok: true } | { ok: false; message: string };
 
 export interface SessionDeps {
   fetch: Fetch;
@@ -115,39 +115,39 @@ export class Session {
       return false;
     }
     if (epoch !== this.epoch) return false;
-    this.apply(info, { switching: undefined, items: undefined, itemsError: undefined });
-    await this.loadItems();
+    this.apply(info, { switching: undefined, devices: undefined, devicesError: undefined });
+    await this.loadDevices();
     return true;
   }
 
-  async loadItems(): Promise<void> {
+  async loadDevices(): Promise<void> {
     const { active, contextError, perms, phase } = this.state;
     if (phase !== "signed-in" || !active || contextError) return;
-    if (!perms.includes(ITEM_PERMISSIONS.read)) {
-      this.set({ items: undefined, itemsLoading: false, itemsError: `Token konteks ini tidak memuat ${ITEM_PERMISSIONS.read}, jadi daftar barang tidak dapat dibaca.` });
+    if (!perms.includes(DEVICE_PERMISSIONS.read)) {
+      this.set({ devices: undefined, devicesLoading: false, devicesError: `Token konteks ini tidak memuat ${DEVICE_PERMISSIONS.read}, jadi daftar perangkat tidak dapat dibaca.` });
       return;
     }
     const epoch = this.epoch;
-    this.set({ itemsLoading: true });
+    this.set({ devicesLoading: true });
     try {
-      const items = await this.api.listItems();
+      const devices = await this.api.listDevices();
       if (epoch !== this.epoch || this.state.active !== active) return;
-      this.set({ items, itemsError: undefined, itemsLoading: false });
+      this.set({ devices, devicesError: undefined, devicesLoading: false });
     } catch (error) {
       if (epoch !== this.epoch || this.dropped(error) || this.state.active !== active) return;
       this.contextAnswer(error);
-      this.set({ items: undefined, itemsError: describeItemsError(error, "read"), itemsLoading: false });
+      this.set({ devices: undefined, devicesError: describeDevicesError(error, "read"), devicesLoading: false });
     }
   }
 
-  // saveItem creates an item, or changes the one with id, then reloads the list.
+  // saveDevice creates a device, or changes the one with id, then reloads the list.
   // The answer is a sentence for the user; the list is only touched on success.
-  saveItem(input: ItemInput, id?: string): Promise<ItemResult> {
-    return this.mutate(id ? "edit" : "create", () => (id ? this.api.updateItem(id, input) : this.api.createItem(input)));
+  saveDevice(input: DeviceInput, id?: string): Promise<DeviceResult> {
+    return this.mutate(id ? "edit" : "create", () => (id ? this.api.updateDevice(id, input) : this.api.createDevice(input)));
   }
 
-  removeItem(id: string): Promise<ItemResult> {
-    return this.mutate("delete", () => this.api.removeItem(id));
+  removeDevice(id: string): Promise<DeviceResult> {
+    return this.mutate("delete", () => this.api.removeDevice(id));
   }
 
   // logout keeps the session when the backend could not revoke the refresh
@@ -196,10 +196,10 @@ export class Session {
     }
     if (epoch !== this.epoch) return;
     this.apply(info, { phase: "signed-in" });
-    await Promise.all([this.reloadContexts(), this.loadItems()]);
+    await Promise.all([this.reloadContexts(), this.loadDevices()]);
   }
 
-  private async mutate(action: ItemAction, run: () => Promise<unknown>): Promise<ItemResult> {
+  private async mutate(action: DeviceAction, run: () => Promise<unknown>): Promise<DeviceResult> {
     if (!this.state.active) return { ok: false, message: "Pilih project lebih dulu." };
     const epoch = this.epoch;
     try {
@@ -207,10 +207,10 @@ export class Session {
     } catch (error) {
       if (epoch !== this.epoch || this.dropped(error)) return { ok: false, message: "Sesi berakhir." };
       this.contextAnswer(error);
-      if (error instanceof ApiError && error.status === 404) await this.loadItems();
-      return { ok: false, message: describeItemsError(error, action) };
+      if (error instanceof ApiError && error.status === 404) await this.loadDevices();
+      return { ok: false, message: describeDevicesError(error, action) };
     }
-    await this.loadItems();
+    await this.loadDevices();
     return { ok: true };
   }
 
@@ -226,12 +226,12 @@ export class Session {
     }
   }
 
-  // contextAnswer follows a 409 of an item operation: the backend has no usable
+  // contextAnswer follows a 409 of a device operation: the backend has no usable
   // token for the active context, so the picker takes over.
   private contextAnswer(error: unknown): void {
     if (!(error instanceof ApiError && error.status === 409)) return;
-    if (error.code === "context_required") this.set({ active: undefined, perms: [], items: undefined });
-    if (error.code === "context_refused") this.set({ contextError: error.description || "access_denied", perms: [], items: undefined });
+    if (error.code === "context_required") this.set({ active: undefined, perms: [], devices: undefined });
+    if (error.code === "context_refused") this.set({ contextError: error.description || "access_denied", perms: [], devices: undefined });
   }
 
   // dropped ends the session on 401: session_ended means NICE ended it.
@@ -267,9 +267,9 @@ export class Session {
 export function refusalReason(code: string | undefined): string {
   switch (code) {
     case "access_denied":
-      return "NICE menolak: akun Anda tidak boleh memakai inventaris di organisasi itu (access_denied).";
+      return "NICE menolak: akun Anda tidak boleh memakai nadi di organisasi itu (access_denied).";
     case "invalid_scope":
-      return "NICE menolak: project itu tidak ada, tidak mengaktifkan inventaris, atau Anda tidak punya akses ke sana (invalid_scope).";
+      return "NICE menolak: project itu tidak ada, tidak mengaktifkan nadi, atau Anda tidak punya akses ke sana (invalid_scope).";
     case "temporarily_unavailable":
       return "NICE tidak menjawab. Coba lagi sebentar lagi (temporarily_unavailable).";
     default:
@@ -283,7 +283,7 @@ export function describeLoginError(code: string): { title: string; message: stri
       return {
         title: "Service tidak tersedia",
         message:
-          "Tidak ada organisasi Anda yang memakai inventaris, jadi NICE menolak login ke service ini. Minta admin organisasi mengaktifkan inventaris, atau masuk dengan akun lain.",
+          "Tidak ada organisasi Anda yang memakai nadi, jadi NICE menolak login ke service ini. Minta admin organisasi mengaktifkan nadi, atau masuk dengan akun lain.",
         selectAccount: true,
       };
     case "state_mismatch":

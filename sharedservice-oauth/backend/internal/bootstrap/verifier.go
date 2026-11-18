@@ -32,7 +32,7 @@ func VerifierConfig(cfg config.Config, tenants TenantCreator, log *slog.Logger) 
 // tokens issued before a revocation are refused with token_stale.
 func StartFeed(ctx context.Context, v *nicetoken.Verifier, cfg config.Config, log *slog.Logger) error {
 	if cfg.ServiceAPIKey == "" {
-		log.Warn(config.EnvServiceAPIKey + " is not set: the access change feed is off, so revoked access is refused only when the token expires (up to 30 minutes), and DELETE /items/{id} answers 503")
+		log.Warn(config.EnvServiceAPIKey + " is not set: the access change feed is off, so revoked access is refused only when the token expires (up to 30 minutes), and DELETE /devices/{id} answers 503")
 		return nil
 	}
 	return v.StartFeed(ctx, nicetoken.FeedConfig{APIKey: cfg.ServiceAPIKey})

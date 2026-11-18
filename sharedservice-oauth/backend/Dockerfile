@@ -18,14 +18,14 @@ COPY --from=nice pkg /src/nice/pkg
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/inventaris ./cmd/inventaris \
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/nadi ./cmd/nadi \
  && mkdir /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/inventaris /inventaris
+COPY --from=build /out/nadi /nadi
 COPY --from=build --chown=nonroot:nonroot /out/data /data
 COPY --from=ui /web/dist /web
 USER nonroot:nonroot
 ENV JWKS_FILE=/data/jwks.json WEB_DIR=/web
 EXPOSE 8081
-ENTRYPOINT ["/inventaris"]
+ENTRYPOINT ["/nadi"]

@@ -68,7 +68,7 @@ func (s *Service) FinishLogin(ctx context.Context, pendingID string, query url.V
 }
 
 // firstContext picks the first project of the organization the user signed in
-// to, so the items show at once; nil leaves the choice to the picker.
+// to, so the devices show at once; nil leaves the choice to the picker.
 func (s *Service) firstContext(ctx context.Context, subject, signIn string) *domain.Context {
 	cs, err := s.NICE.Contexts(ctx, signIn)
 	if err != nil {

@@ -1,16 +1,16 @@
-# Runs inventaris (sharedservice-oauth: backend and its UI on one origin) and its PostgreSQL next to a
+# Runs nadi (sharedservice-oauth: backend and its UI on one origin) and its PostgreSQL next to a
 # NICE stack that runs in Docker (`make up` in nice/).
 #
 #   docker compose up -d --build
 #
 # Open the UI at http://localhost:8081. The confidential client of the UI needs the redirect URI
 # http://localhost:8081/auth/callback, and NICE_CLIENT_ID and NICE_CLIENT_SECRET in
-# sharedservice-oauth/backend/.env. Register the service in NICE as http://inventaris:8081 (same network as
+# sharedservice-oauth/backend/.env. Register the service in NICE as http://nadi:8081 (same network as
 # NICE, resolved by name).
 name: example
 
 services:
-  # Owns the network of inventaris. The token issuer is http://localhost:8080 for NICE running on the
+  # Owns the network of nadi. The token issuer is http://localhost:8080 for NICE running on the
   # host, and the backend also uses it to fetch keys, to sign users in and to call NICE. Inside a
   # container localhost is the container itself, so this forwards localhost:8080 to NICE on nice-network.
   # The browser reaches NICE at the same http://localhost:8080. Dev only.
@@ -20,12 +20,12 @@ services:
     restart: unless-stopped
     networks:
       nice-network:
-        aliases: [inventaris]
-      inventaris:
+        aliases: [nadi]
+      nadi:
     ports:
       - "127.0.0.1:8081:8081"
 
-  inventaris:
+  nadi:
     build:
       context: ./sharedservice-oauth/backend
       additional_contexts:
@@ -38,40 +38,40 @@ services:
       PUBLIC_URL: http://localhost:8081
       WEB_DIR: /web
       # The password only guards a database on the private network below, never published.
-      DATABASE_URL: postgres://inventaris:${INVENTARIS_DB_PASSWORD:-inventaris-dev}@inventaris-db:5432/inventaris?sslmode=disable
+      DATABASE_URL: postgres://nadi:${NADI_DB_PASSWORD:-nadi-dev}@nadi-db:5432/nadi?sslmode=disable
     network_mode: service:nice-localhost
     depends_on:
       nice-localhost:
         condition: service_started
-      inventaris-db:
+      nadi-db:
         condition: service_healthy
     restart: unless-stopped
     volumes:
-      - inventaris-data:/data
+      - nadi-data:/data
 
   # Items per organization and project. On its own network, so its name never clashes with a database
   # of the NICE stack on nice-network.
-  inventaris-db:
+  nadi-db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: inventaris
-      POSTGRES_PASSWORD: ${INVENTARIS_DB_PASSWORD:-inventaris-dev}
-      POSTGRES_DB: inventaris
+      POSTGRES_USER: nadi
+      POSTGRES_PASSWORD: ${NADI_DB_PASSWORD:-nadi-dev}
+      POSTGRES_DB: nadi
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U inventaris -d inventaris"]
+      test: ["CMD-SHELL", "pg_isready -U nadi -d nadi"]
       interval: 2s
       timeout: 3s
       retries: 30
     restart: unless-stopped
-    networks: [inventaris]
+    networks: [nadi]
     volumes:
-      - inventaris-db:/var/lib/postgresql/data
+      - nadi-db:/var/lib/postgresql/data
 
 volumes:
-  inventaris-data:
-  inventaris-db:
+  nadi-data:
+  nadi-db:
 
 networks:
   nice-network:
     external: true
-  inventaris:
+  nadi:

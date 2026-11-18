@@ -46,7 +46,7 @@ export function ContextPanel({ session, state }: { session: Session; state: Sess
       {contexts ? (
         <>
           <p className="muted small">
-            {state.active ? "" : "Pilih project untuk melihat barangnya. "}
+            {state.active ? "" : "Pilih project untuk melihat perangkatnya. "}
             Pilihan berasal dari <code>GET /auth/contexts</code>, yang dibaca backend dari NICE. Memilih project meminta backend
             menjalankan satu refresh token, tanpa meninggalkan halaman ini.
           </p>

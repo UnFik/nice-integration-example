@@ -1,4 +1,4 @@
-// Package postgres opens the PostgreSQL pool of the item store and applies its migrations.
+// Package postgres opens the PostgreSQL pool of the device store and applies its migrations.
 package postgres
 
 import (

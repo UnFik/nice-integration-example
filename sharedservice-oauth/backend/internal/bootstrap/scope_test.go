@@ -28,7 +28,7 @@ func tokenIn(t *testing.T, org, project string, perms ...string) string {
 
 func TestProjectsOfAnOrganizationDoNotSeeEachOther(t *testing.T) {
 	e := newTestEnv(t, &fakeChecker{allowed: true})
-	r := e.do(http.MethodPost, "/items", tokenIn(t, orgA, projectP, allPerms...), map[string]any{"name": "Milik P", "quantity": 1})
+	r := e.do(http.MethodPost, "/devices", tokenIn(t, orgA, projectP, allPerms...), map[string]any{"name": "Milik P", "serial_number": "SN-1", "status": "active"})
 	if r.Status != http.StatusCreated {
 		t.Fatalf("create in P = %d %s", r.Status, r.Body)
 	}
@@ -36,8 +36,8 @@ func TestProjectsOfAnOrganizationDoNotSeeEachOther(t *testing.T) {
 
 	q := tokenIn(t, orgA, projectQ, allPerms...)
 	// The project comes from prj only, so a client that names P is still Q.
-	r = e.do(http.MethodGet, "/items?project_id="+projectP, q, nil, "X-Nice-Project", projectP)
-	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"items":[]}` {
+	r = e.do(http.MethodGet, "/devices?project_id="+projectP, q, nil, "X-Nice-Project", projectP)
+	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"devices":[]}` {
 		t.Fatalf("list of Q = %d %s, want an empty list", r.Status, r.Body)
 	}
 	for _, c := range []struct {
@@ -45,68 +45,68 @@ func TestProjectsOfAnOrganizationDoNotSeeEachOther(t *testing.T) {
 		body   any
 	}{
 		{http.MethodGet, nil},
-		{http.MethodPut, map[string]any{"name": "Diambil Q", "quantity": 1}},
+		{http.MethodPut, map[string]any{"name": "Diambil Q", "serial_number": "SN-1", "status": "active"}},
 		{http.MethodDelete, nil},
 	} {
-		if r = e.do(c.method, "/items/"+id, q, c.body); r.Status != http.StatusNotFound {
-			t.Errorf("%s of the item of P from Q = %d %s, want 404", c.method, r.Status, r.Body)
+		if r = e.do(c.method, "/devices/"+id, q, c.body); r.Status != http.StatusNotFound {
+			t.Errorf("%s of the device of P from Q = %d %s, want 404", c.method, r.Status, r.Body)
 		}
 	}
-	r = e.do(http.MethodGet, "/items/"+id, tokenIn(t, orgA, projectP, domain.PermRead), nil)
+	r = e.do(http.MethodGet, "/devices/"+id, tokenIn(t, orgA, projectP, domain.PermRead), nil)
 	if r.Status != http.StatusOK || r.JSON(t)["name"] != "Milik P" {
-		t.Fatalf("item of P after Q tried = %d %s", r.Status, r.Body)
+		t.Fatalf("device of P after Q tried = %d %s", r.Status, r.Body)
 	}
 }
 
 func TestProjectFromTheClientIsIgnored(t *testing.T) {
 	e := newTestEnv(t, nil)
 	p := tokenIn(t, orgA, projectP, allPerms...)
-	r := e.do(http.MethodPost, "/items?project_id="+projectQ, p, map[string]any{"name": "Kabel", "quantity": 1})
+	r := e.do(http.MethodPost, "/devices?project_id="+projectQ, p, map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "active"})
 	if r.Status != http.StatusCreated {
 		t.Fatalf("create = %d %s", r.Status, r.Body)
 	}
 	id := r.JSON(t)["id"].(string)
-	if r = e.do(http.MethodGet, "/items/"+id, p, nil); r.Status != http.StatusOK {
-		t.Fatalf("the item is not in the project of the token: %d %s", r.Status, r.Body)
+	if r = e.do(http.MethodGet, "/devices/"+id, p, nil); r.Status != http.StatusOK {
+		t.Fatalf("the device is not in the project of the token: %d %s", r.Status, r.Body)
 	}
-	if r = e.do(http.MethodGet, "/items", tokenIn(t, orgA, projectQ, domain.PermRead), nil); strings.Contains(r.Body, id) {
-		t.Fatalf("the query moved the item to %s: %s", projectQ, r.Body)
+	if r = e.do(http.MethodGet, "/devices", tokenIn(t, orgA, projectQ, domain.PermRead), nil); strings.Contains(r.Body, id) {
+		t.Fatalf("the query moved the device to %s: %s", projectQ, r.Body)
 	}
 
 	// A body never carries the scope: an unknown field is refused like any other.
-	r = e.do(http.MethodPost, "/items", p, map[string]any{"name": "Kabel", "quantity": 1, "project_id": projectQ})
+	r = e.do(http.MethodPost, "/devices", p, map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "active", "project_id": projectQ})
 	wantError(t, r, http.StatusBadRequest, "invalid_argument", "body")
-	if items, err := e.store.List(context.Background(), scopeOf(orgA, projectP)); err != nil || len(items) != 1 {
-		t.Fatalf("items of P = %+v, %v; want only the first", items, err)
+	if devices, err := e.store.List(context.Background(), scopeOf(orgA, projectP)); err != nil || len(devices) != 1 {
+		t.Fatalf("devices of P = %+v, %v; want only the first", devices, err)
 	}
 }
 
 func TestTokenWithoutProjectIsRefused(t *testing.T) {
 	e := newTestEnv(t, &fakeChecker{allowed: true})
-	it := e.create(orgA, "Kabel")
+	it := e.create(orgA, "Sensor")
 	noPrj := tokenIn(t, orgA, "", allPerms...)
 	for _, c := range []struct {
 		method, path string
 		body         any
 	}{
-		{http.MethodGet, "/items", nil},
-		{http.MethodPost, "/items", map[string]any{"name": "Baru", "quantity": 1}},
-		{http.MethodPost, "/items", `not JSON`},
-		{http.MethodGet, "/items/" + it.ID, nil},
-		{http.MethodPut, "/items/" + it.ID, map[string]any{"name": "Baru", "quantity": 1}},
-		{http.MethodDelete, "/items/" + it.ID, nil},
+		{http.MethodGet, "/devices", nil},
+		{http.MethodPost, "/devices", map[string]any{"name": "Baru", "serial_number": "SN-1", "status": "active"}},
+		{http.MethodPost, "/devices", `not JSON`},
+		{http.MethodGet, "/devices/" + it.ID, nil},
+		{http.MethodPut, "/devices/" + it.ID, map[string]any{"name": "Baru", "serial_number": "SN-1", "status": "active"}},
+		{http.MethodDelete, "/devices/" + it.ID, nil},
 	} {
 		t.Run(c.method+" "+c.path, func(t *testing.T) {
 			wantError(t, e.do(c.method, c.path, noPrj, c.body), http.StatusForbidden, "insufficient_scope", "project_required")
 		})
 	}
-	if items := e.list(orgA); len(items) != 1 || items[0].Name != "Kabel" {
-		t.Fatalf("items after the refusals = %+v", items)
+	if devices := e.list(orgA); len(devices) != 1 || devices[0].Name != "Sensor" {
+		t.Fatalf("devices after the refusals = %+v", devices)
 	}
 }
 
 func TestPermissionIsCheckedBeforeTheProject(t *testing.T) {
 	e := newTestEnv(t, nil)
-	wantError(t, e.do(http.MethodPost, "/items", tokenIn(t, orgA, "", domain.PermRead), map[string]any{"name": "x", "quantity": 1}),
+	wantError(t, e.do(http.MethodPost, "/devices", tokenIn(t, orgA, "", domain.PermRead), map[string]any{"name": "x", "serial_number": "SN-1", "status": "active"}),
 		http.StatusForbidden, "insufficient_scope", "permission_denied")
 }

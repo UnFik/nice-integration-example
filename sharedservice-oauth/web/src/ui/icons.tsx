@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 // Stroke icons on a 24px grid, drawn for this UI: each one names a thing on screen
-// (barang, organisasi, project, token), not a generic glyph.
+// (perangkat, organisasi, project, token), not a generic glyph.
 const paths = {
   box: <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9" />,
   org: <path d="M4 21V4h10v17M14 9h6v12M2 21h20M8 8h2M8 12h2M8 16h2" />,

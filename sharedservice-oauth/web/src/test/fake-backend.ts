@@ -1,4 +1,4 @@
-// FakeBackend answers /auth/* and /items* like the inventaris backend, so the
+// FakeBackend answers /auth/* and /devices* like the nadi backend, so the
 // UI is tested without a backend or NICE running.
 
 export const ORG_A = "org_00000000-0000-7000-8000-00000000000a";
@@ -8,7 +8,7 @@ export const PRJ_P = "prj_00000000-0000-7000-8000-000000000001";
 export const PRJ_Q = "prj_00000000-0000-7000-8000-000000000002";
 export const PRJ_R = "prj_00000000-0000-7000-8000-000000000003";
 
-export const FULL = ["inventaris.items.read", "inventaris.items.create", "inventaris.items.edit", "inventaris.items.delete"];
+export const FULL = ["nadi.devices.read", "nadi.devices.create", "nadi.devices.edit", "nadi.devices.delete"];
 
 export interface Recorded {
   method: string;
@@ -18,10 +18,12 @@ export interface Recorded {
   body?: unknown;
 }
 
-interface StoredItem {
+interface StoredDevice {
   id: string;
   name: string;
-  quantity: number;
+  serial_number: string;
+  status: string;
+  location: string;
   created_by: string;
   create_time: string;
   update_time: string;
@@ -38,14 +40,14 @@ export class FakeBackend {
   context: { org: string; project: string } | null = { org: ORG_A, project: PRJ_P };
   contextError = "";
   csrf = "csrf-1";
-  perms: Record<string, string[]> = { [`${ORG_A}/${PRJ_P}`]: FULL, [`${ORG_A}/${PRJ_Q}`]: ["inventaris.items.read"], [`${ORG_B}/${PRJ_R}`]: FULL };
+  perms: Record<string, string[]> = { [`${ORG_A}/${PRJ_P}`]: FULL, [`${ORG_A}/${PRJ_Q}`]: ["nadi.devices.read"], [`${ORG_B}/${PRJ_R}`]: FULL };
   // refused maps a context to the NICE code POST /auth/context answers with 409.
   refused: Record<string, string> = {};
   contextsFailure?: Response;
   logoutFailure?: Response;
-  items: Record<string, StoredItem[]> = {
-    [`${ORG_A}/${PRJ_P}`]: [item("itm_1", "Kabel UTP Cat6", 12)],
-    [`${ORG_B}/${PRJ_R}`]: [item("itm_9", "Router", 2)],
+  devices: Record<string, StoredDevice[]> = {
+    [`${ORG_A}/${PRJ_P}`]: [device("dev_1", "Sensor Suhu Gudang", "SN-2026-0001", "active", "Gudang A")],
+    [`${ORG_B}/${PRJ_R}`]: [device("dev_9", "Gateway LoRa", "SN-2026-0009", "maintenance", "Atap")],
   };
   // Answers queued for the next call to a path, ahead of the normal behavior.
   next: Record<string, Response[]> = {};
@@ -118,28 +120,34 @@ export class FakeBackend {
       this.signedIn = false;
       return new Response(null, { status: 204 });
     }
-    if (path === "/items" || path.startsWith("/items/")) return this.itemsRoute(method, path, body);
+    if (path === "/devices" || path.startsWith("/devices/")) return this.devicesRoute(method, path, body);
     return json(404, { error: "not_found" });
   }
 
-  private itemsRoute(method: string, path: string, body: Record<string, unknown> | undefined): Response {
+  private devicesRoute(method: string, path: string, body: Record<string, unknown> | undefined): Response {
     if (!this.context) return json(409, { error: "context_required" });
     if (this.contextError) return json(409, { error: "context_refused", error_description: this.contextError });
     const perms = this.perms[this.key] ?? [];
-    const list = (this.items[this.key] ??= []);
+    const list = (this.devices[this.key] ??= []);
     const need = { GET: "read", POST: "create", PUT: "edit", DELETE: "delete" }[method];
-    if (!perms.includes(`inventaris.items.${need}`)) return json(403, { error: "permission_denied" });
-    if (method === "GET" && path === "/items") return json(200, { items: list });
-    if (method === "POST" && path === "/items") {
-      const created = item(`itm_${this.nextId++}`, String(body?.name), Number(body?.quantity));
+    if (!perms.includes(`nadi.devices.${need}`)) return json(403, { error: "permission_denied" });
+    if (method === "GET" && path === "/devices") return json(200, { devices: list });
+    if (method === "POST" && path === "/devices") {
+      const created = device(`dev_${this.nextId++}`, String(body?.name), String(body?.serial_number), String(body?.status), String(body?.location ?? ""));
       list.push(created);
       return json(201, created);
     }
-    const id = decodeURIComponent(path.slice("/items/".length));
+    const id = decodeURIComponent(path.slice("/devices/".length));
     const index = list.findIndex((entry) => entry.id === id);
     if (index < 0) return json(404, { error: "not_found" });
     if (method === "PUT") {
-      list[index] = { ...list[index], name: String(body?.name), quantity: Number(body?.quantity) };
+      list[index] = {
+        ...list[index],
+        name: String(body?.name),
+        serial_number: String(body?.serial_number),
+        status: String(body?.status),
+        location: String(body?.location ?? ""),
+      };
       return json(200, list[index]);
     }
     if (method === "DELETE") {
@@ -150,6 +158,6 @@ export class FakeBackend {
   }
 }
 
-function item(id: string, name: string, quantity: number): StoredItem {
-  return { id, name, quantity, created_by: "usr_1", create_time: "2026-11-01T10:00:00Z", update_time: "2026-11-02T10:00:00Z" };
+function device(id: string, name: string, serial_number: string, status: string, location: string): StoredDevice {
+  return { id, name, serial_number, status, location, created_by: "usr_1", create_time: "2026-11-01T10:00:00Z", update_time: "2026-11-02T10:00:00Z" };
 }

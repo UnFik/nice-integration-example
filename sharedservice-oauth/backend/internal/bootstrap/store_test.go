@@ -12,21 +12,21 @@ import (
 	"sync"
 	"testing"
 
-	itemmemory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/item"
-	itempostgres "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/postgres/item"
+	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
+	devicepostgres "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/postgres/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 )
 
-const unreachableDB = "postgres://inventaris:s3cret@127.0.0.1:1/inventaris?connect_timeout=2"
+const unreachableDB = "postgres://nadi:s3cret@127.0.0.1:1/nadi?connect_timeout=2"
 
-func TestWithoutDatabaseURLTheItemsStayInMemory(t *testing.T) {
-	store, closeStore, err := OpenItemStore(context.Background(), config.Config{})
+func TestWithoutDatabaseURLTheDevicesStayInMemory(t *testing.T) {
+	store, closeStore, err := OpenDeviceStore(context.Background(), config.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeStore()
-	if _, ok := store.(*itemmemory.Repository); !ok {
+	if _, ok := store.(*devicememory.Repository); !ok {
 		t.Fatalf("store = %T, want the memory repository", store)
 	}
 	if StoreName(config.Config{}) != "memory" {
@@ -35,7 +35,7 @@ func TestWithoutDatabaseURLTheItemsStayInMemory(t *testing.T) {
 }
 
 func TestUnreachableDatabaseStopsTheServiceWithoutPrintingTheURL(t *testing.T) {
-	_, _, err := OpenItemStore(context.Background(), config.Config{DatabaseURL: unreachableDB})
+	_, _, err := OpenDeviceStore(context.Background(), config.Config{DatabaseURL: unreachableDB})
 	if err == nil || !strings.Contains(err.Error(), config.EnvDatabaseURL) {
 		t.Fatalf("err = %v, want an error naming %s", err, config.EnvDatabaseURL)
 	}
@@ -73,12 +73,12 @@ func randomOrg(t *testing.T) string {
 
 func TestDatabaseURLSelectsPostgres(t *testing.T) {
 	cfg := config.Config{DatabaseURL: testDatabase(t)}
-	store, closeStore, err := OpenItemStore(context.Background(), cfg)
+	store, closeStore, err := OpenDeviceStore(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeStore()
-	if _, ok := store.(*itempostgres.Repository); !ok {
+	if _, ok := store.(*devicepostgres.Repository); !ok {
 		t.Fatalf("store = %T, want the PostgreSQL repository", store)
 	}
 	if StoreName(cfg) != "postgres" {
@@ -88,21 +88,21 @@ func TestDatabaseURLSelectsPostgres(t *testing.T) {
 
 func postgresEnv(t *testing.T, checker *fakeChecker) *testEnv {
 	t.Helper()
-	store, closeStore, err := OpenItemStore(context.Background(), config.Config{DatabaseURL: testDatabase(t)})
+	store, closeStore, err := OpenDeviceStore(context.Background(), config.Config{DatabaseURL: testDatabase(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(closeStore)
-	return newTestEnvWith(t, checker, store.(*itempostgres.Repository))
+	return newTestEnvWith(t, checker, store.(*devicepostgres.Repository))
 }
 
-func TestItemsInPostgresThroughTheAPI(t *testing.T) {
+func TestDevicesInPostgresThroughTheAPI(t *testing.T) {
 	e := postgresEnv(t, &fakeChecker{allowed: true})
 	a, b := randomOrg(t), randomOrg(t)
 	if e.hasTenant(a) {
 		t.Fatal("tenant exists before any request")
 	}
-	if r := e.do(http.MethodGet, "/items", tokenIn(t, a, projectP, domain.PermRead), nil); r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"items":[]}` {
+	if r := e.do(http.MethodGet, "/devices", tokenIn(t, a, projectP, domain.PermRead), nil); r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"devices":[]}` {
 		t.Fatalf("first list = %d %s", r.Status, r.Body)
 	}
 	if !e.hasTenant(a) {
@@ -110,38 +110,38 @@ func TestItemsInPostgresThroughTheAPI(t *testing.T) {
 	}
 
 	ap := tokenIn(t, a, projectP, allPerms...)
-	r := e.do(http.MethodPost, "/items", ap, map[string]any{"name": "  Kabel  ", "quantity": 3})
+	r := e.do(http.MethodPost, "/devices", ap, map[string]any{"name": "  Sensor  ", "serial_number": "SN-1", "status": "active"})
 	if r.Status != http.StatusCreated {
 		t.Fatalf("create = %d %s", r.Status, r.Body)
 	}
 	created := r.JSON(t)
 	id := created["id"].(string)
-	if !strings.HasPrefix(id, "itm_") || created["name"] != "Kabel" || created["created_by"] != "usr_test" {
+	if !strings.HasPrefix(id, "dev_") || created["name"] != "Sensor" || created["created_by"] != "usr_test" {
 		t.Fatalf("created = %v", created)
 	}
-	if r = e.do(http.MethodPut, "/items/"+id, ap, map[string]any{"name": "Kabel Cat6", "quantity": 0}); r.Status != http.StatusOK || r.JSON(t)["quantity"] != float64(0) {
+	if r = e.do(http.MethodPut, "/devices/"+id, ap, map[string]any{"name": "Sensor Cat6", "serial_number": "SN-1", "status": "active"}); r.Status != http.StatusOK || r.JSON(t)["status"] != "active" {
 		t.Fatalf("update = %d %s", r.Status, r.Body)
 	}
 	for name, tok := range map[string]string{
 		"project Q of the same organization": tokenIn(t, a, projectQ, allPerms...),
 		"another organization":               tokenIn(t, b, projectP, allPerms...),
 	} {
-		if r = e.do(http.MethodGet, "/items", tok, nil); strings.Contains(r.Body, id) {
-			t.Errorf("%s lists the item: %s", name, r.Body)
+		if r = e.do(http.MethodGet, "/devices", tok, nil); strings.Contains(r.Body, id) {
+			t.Errorf("%s lists the device: %s", name, r.Body)
 		}
 		for _, m := range []string{http.MethodGet, http.MethodDelete} {
-			if r = e.do(m, "/items/"+id, tok, nil); r.Status != http.StatusNotFound {
+			if r = e.do(m, "/devices/"+id, tok, nil); r.Status != http.StatusNotFound {
 				t.Errorf("%s: %s = %d, want 404", name, m, r.Status)
 			}
 		}
 	}
-	if r = e.do(http.MethodGet, "/items/itm_not-hex", ap, nil); r.Status != http.StatusNotFound {
+	if r = e.do(http.MethodGet, "/devices/dev_not-hex", ap, nil); r.Status != http.StatusNotFound {
 		t.Fatalf("malformed id = %d, want 404", r.Status)
 	}
-	if r = e.do(http.MethodDelete, "/items/"+id, ap, nil); r.Status != http.StatusNoContent {
+	if r = e.do(http.MethodDelete, "/devices/"+id, ap, nil); r.Status != http.StatusNoContent {
 		t.Fatalf("delete = %d %s", r.Status, r.Body)
 	}
-	if r = e.do(http.MethodGet, "/items/"+id, ap, nil); r.Status != http.StatusNotFound {
+	if r = e.do(http.MethodGet, "/devices/"+id, ap, nil); r.Status != http.StatusNotFound {
 		t.Fatalf("get after delete = %d", r.Status)
 	}
 }
@@ -154,7 +154,7 @@ func TestFirstRequestsOfAnOrganizationAtOnceInPostgres(t *testing.T) {
 	status := make([]int, 8)
 	for i := range status {
 		wg.Go(func() {
-			status[i] = e.do(http.MethodPost, "/items", tok, map[string]any{"name": "Kabel", "quantity": 1}).Status
+			status[i] = e.do(http.MethodPost, "/devices", tok, map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "active"}).Status
 		})
 	}
 	wg.Wait()
@@ -163,7 +163,7 @@ func TestFirstRequestsOfAnOrganizationAtOnceInPostgres(t *testing.T) {
 			t.Errorf("request %d = %d, want 201", i, s)
 		}
 	}
-	if items := e.list(org); len(items) != len(status) {
-		t.Fatalf("items = %d, want %d", len(items), len(status))
+	if devices := e.list(org); len(devices) != len(status) {
+		t.Fatalf("devices = %d, want %d", len(devices), len(status))
 	}
 }

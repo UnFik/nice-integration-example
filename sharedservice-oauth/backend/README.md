@@ -1,8 +1,8 @@
-# sharedservice-oauth/backend (`inventaris`)
+# sharedservice-oauth/backend (`nadi`)
 
 [English](README.en.md)
 
-Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `inventaris`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/nicetoken`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice/pkg/niceclient`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
+Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/nicetoken`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice/pkg/niceclient`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
 
 Diuji terhadap nice revisi: belum diuji manual (lihat [`../README.md`](../README.md)); service Bearer terakhir diuji terhadap `c7a5086` (2026-11-13).
 
@@ -10,17 +10,17 @@ Diuji terhadap nice revisi: belum diuji manual (lihat [`../README.md`](../README
 
 | Berkas | Isi |
 |---|---|
-| `cmd/inventaris/main.go` | titik masuk tipis, anotasi swag tingkat dokumen termasuk `x-nice-roles` |
-| `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), pemilihan penyimpanan barang, `niceclient` dan sesi, use case, server |
-| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `item/` (tabel rute tunggal, handler, anotasi swag per operasi), `auth/` (`/auth/*` dan middleware sesi yang memasang token konteks aktif), `web/` (penyaji `web/dist`), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
-| `internal/app/item/` | use case barang dan kontrak `Repo` yang menerima kunci scope |
+| `cmd/nadi/main.go` | titik masuk tipis, anotasi swag tingkat dokumen termasuk `x-nice-roles` |
+| `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), pemilihan penyimpanan perangkat, `niceclient` dan sesi, use case, server |
+| `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `device/` (tabel rute tunggal, handler, anotasi swag per operasi), `auth/` (`/auth/*` dan middleware sesi yang memasang token konteks aktif), `web/` (penyaji `web/dist`), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
+| `internal/app/device/` | use case perangkat dan kontrak `Repo` yang menerima kunci scope |
 | `internal/app/session/` | use case sesi browser (login, konteks, pindah konteks, keluar) dan port `NICE` serta `Store` |
-| `internal/domain/` | `Item`, `Scope` (kunci org, project, user, aktor), `Session`, aturan validasi, nama izin |
-| `internal/adapter/memory/item/` | penyimpanan barang per organisasi dan project di memori |
-| `internal/adapter/postgres/item/` | penyimpanan yang sama di PostgreSQL, dipilih bila `DATABASE_URL` diisi |
+| `internal/domain/` | `Device`, `Scope` (kunci org, project, user, aktor), `Session`, aturan validasi, nama izin |
+| `internal/adapter/memory/device/` | penyimpanan perangkat per organisasi dan project di memori |
+| `internal/adapter/postgres/device/` | penyimpanan yang sama di PostgreSQL, dipilih bila `DATABASE_URL` diisi |
 | `internal/adapter/memory/session/` | sesi browser di memori |
 | `internal/adapter/nice/` | port `NICE` lewat `niceclient` (`Client` `KindBFF` dan `ExchangeClient`), `/oauth/userinfo`, dan `/api/v1/me/contexts` |
-| `migrations/` | migrasi SQL (`tenants`, `items`, beserta `down`), di-embed dan dijalankan saat start bila `DATABASE_URL` diisi |
+| `migrations/` | migrasi SQL (`tenants`, `devices`, beserta `down`), di-embed dan dijalankan saat start bila `DATABASE_URL` diisi |
 | `internal/platform/` | `config` (env dan `.env`), `httpx` (CORS untuk SPA lain yang terdaftar), dan `postgres` (pool dan runner migrasi) |
 | `Dockerfile` | image backend beserta hasil build UI (dipakai `compose.yml` di akar repo) |
 | `docs/swagger.json` | Swagger 2.0 hasil `make swag`, di-embed dan disajikan di `/openapi.json` |
@@ -29,64 +29,64 @@ Diuji terhadap nice revisi: belum diuji manual (lihat [`../README.md`](../README
 ## Struktur folder
 
 ```text
-cmd/inventaris/main.go             titik masuk: baca config, rakit, jalankan, shutdown
+cmd/nadi/main.go             titik masuk: baca config, rakit, jalankan, shutdown
 docs/                              swagger.json hasil make swag + embed.go (//go:embed)
 internal/
-  domain/                          *_domain.go          Item, Scope, Session, aturan validasi, izin
-  app/item/
-    usecase/                       *_usecase.go         satu aksi per berkas; item_contract.go = interface Repo
+  domain/                          *_domain.go          Device, Scope, Session, aturan validasi, izin
+  app/device/
+    usecase/                       *_usecase.go         satu aksi per berkas; device_contract.go = interface Repo
     dto/                           *_dto.go             data masukan use case
   app/session/
     usecase/                       *_usecase.go         login, sesi, konteks, keluar; session_contract.go = port NICE dan Store
     dto/                           *_dto.go             userinfo dan konteks dari NICE
   adapter/
-    memory/item/                   *_repository.go      implementasi Repo di memori
-    postgres/item/                 *_repository.go      implementasi Repo di PostgreSQL
+    memory/device/                   *_repository.go      implementasi Repo di memori
+    postgres/device/                 *_repository.go      implementasi Repo di PostgreSQL
     memory/session/                *_repository.go      sesi browser di memori
     nice/                          *_gateway.go         port NICE lewat niceclient
     rest/                          routes.go            perakit: verifikasi token, izin, sesi, CORS
-    rest/item/                     item_routes.go       tabel rute + <aksi>_item_handler.go
+    rest/device/                     device_routes.go       tabel rute + <aksi>_device_handler.go
     rest/auth/                     auth_routes.go       /auth/* + middleware sesi dan CSRF
     rest/web/                      web_routes.go        penyaji web/dist
     rest/system/                   /healthz, /openapi.json, dan /docs
   platform/{config,httpx,postgres}/ env, CORS, pool dan migrasi
-migrations/                        *.up.sql, *.down.sql  skema PostgreSQL barang
+migrations/                        *.up.sql, *.down.sql  skema PostgreSQL perangkat
   bootstrap/                       perakitan dan tes yang melintasi lapisan
   arch_test.go                     menegakkan aturan impor dan akhiran nama berkas
 ```
 
-Pola ini meniru modul di backend `nice` (`nice/AGENTS.md`, "Struktur satu modul"), diperkecil untuk satu service dengan satu resource (`item`). Satu aksi satu berkas supaya mudah dicari, paket `itemusecase` dan `itemdto` diimpor dengan alias eksplisit, dan ketergantungan hanya mengalir ke dalam: adapter memanggil use case, use case dan domain tidak mengimpor `net/http`. Tabel rute di `adapter/rest/item/item_routes.go` tetap satu-satunya sumber kebenaran yang dibandingkan dengan dokumen OpenAPI oleh tes.
+Pola ini meniru modul di backend `nice` (`nice/AGENTS.md`, "Struktur satu modul"), diperkecil untuk satu service dengan satu resource (`device`). Satu aksi satu berkas supaya mudah dicari, paket `deviceusecase` dan `devicedto` diimpor dengan alias eksplisit, dan ketergantungan hanya mengalir ke dalam: adapter memanggil use case, use case dan domain tidak mengimpor `net/http`. Tabel rute di `adapter/rest/device/device_routes.go` tetap satu-satunya sumber kebenaran yang dibandingkan dengan dokumen OpenAPI oleh tes.
 
 ## Operasi
 
 | Operasi | Izin | Sensitif |
 |---|---|---|
-| `GET /items` | `inventaris.items.read` | |
-| `GET /items/{id}` | `inventaris.items.read` | |
-| `POST /items` | `inventaris.items.create` | |
-| `PUT /items/{id}` | `inventaris.items.edit` | |
-| `DELETE /items/{id}` | `inventaris.items.delete` | ya, diperiksa online ke NICE |
+| `GET /devices` | `nadi.devices.read` | |
+| `GET /devices/{id}` | `nadi.devices.read` | |
+| `POST /devices` | `nadi.devices.create` | |
+| `PUT /devices/{id}` | `nadi.devices.edit` | |
+| `DELETE /devices/{id}` | `nadi.devices.delete` | ya, diperiksa online ke NICE |
 
-`GET /healthz`, `GET /openapi.json`, dan `GET /docs` (Swagger UI; asetnya dimuat dari CDN jsdelivr) terbuka tanpa token dan tidak ada di dokumen OpenAPI. Di `/docs`, tekan **Authorize** lalu isi `Bearer <JWT>` untuk mencoba operasi. Setelah impor, katalog NICE memuat role `inventaris.viewer` (baca), `inventaris.admin` (semua izin), dan `inventaris.operator` (baca, buat, ubah; dari `x-nice-roles`).
+`GET /healthz`, `GET /openapi.json`, dan `GET /docs` (Swagger UI; asetnya dimuat dari CDN jsdelivr) terbuka tanpa token dan tidak ada di dokumen OpenAPI. Di `/docs`, tekan **Authorize** lalu isi `Bearer <JWT>` untuk mencoba operasi. Setelah impor, katalog NICE memuat role `nadi.viewer` (baca), `nadi.admin` (semua izin), dan `nadi.editor` (baca, buat, ubah; dari `x-nice-roles`).
 
-Body barang: `{"name": "...", "quantity": 0}`. `name` 1 sampai 120 karakter setelah spasi di tepi dipangkas, `quantity` bilangan bulat paling kecil 0. Galat aplikasi memakai bentuk yang sama dengan `nicetoken`: `{"error": "...", "error_description": "..."}`, mis. `400 {"error":"invalid_argument","error_description":"name"}` dan `404 {"error":"not_found"}`.
+Body perangkat: `{"name": "...", "serial_number": "...", "status": "active", "location": "..."}`. `name` 1 sampai 120 dan `serial_number` 1 sampai 64 karakter setelah spasi di tepi dipangkas, `status` salah satu dari `active`, `inactive`, `maintenance`, dan `location` opsional (paling banyak 120 karakter, bawaan kosong). Galat aplikasi memakai bentuk yang sama dengan `nicetoken`: `{"error": "...", "error_description": "..."}`, mis. `400 {"error":"invalid_argument","error_description":"name"}` dan `404 {"error":"not_found"}`.
 
 Perilaku yang perlu diketahui:
 
 - Tenant adalah `nice_org_id` dan project adalah `prj` dari token terverifikasi, tidak pernah dari header, parameter, atau body. Organisasi yang memanggil pertama kali langsung dibuatkan tenant (`ProvisionOnFirstUse`). Token tanpa `prj` dijawab `403 {"error":"insufficient_scope","error_description":"project_required"}`. Tanpa `DATABASE_URL` data hanya di memori dan hilang saat service berhenti.
 - Salinan JWKS disimpan di `JWKS_FILE`, sehingga service yang restart ketika NICE mati tetap memverifikasi token yang masih berlaku.
-- Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit) dan `DELETE /items/{id}` dijawab `503`.
+- Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit) dan `DELETE /devices/{id}` dijawab `503`.
 
 ## Data per organisasi dan project
 
-Barang milik satu organisasi dan satu project. Handler membangun kunci scope `domain.Scope{OrgID, ProjectID, Subject, Actor}` dari klaim token terverifikasi (`nice_org_id`, `prj`, `sub`, `act.sub`), use case meneruskannya ke repository, dan repository tidak punya cara lain untuk menyebut organisasi atau project. Barang dari scope lain dijawab `404`. `project_id` di query diabaikan, dan field yang tidak dikenal di body, termasuk `project_id`, ditolak `400 invalid_argument` `body`.
+Perangkat milik satu organisasi dan satu project. Handler membangun kunci scope `domain.Scope{OrgID, ProjectID, Subject, Actor}` dari klaim token terverifikasi (`nice_org_id`, `prj`, `sub`, `act.sub`), use case meneruskannya ke repository, dan repository tidak punya cara lain untuk menyebut organisasi atau project. Perangkat dari scope lain dijawab `404`. `project_id` di query diabaikan, dan field yang tidak dikenal di body, termasuk `project_id`, ditolak `400 invalid_argument` `body`.
 
-Bila `DATABASE_URL` diisi, service menjalankan `migrations/` saat start (tabel `schema_migrations`, advisory lock supaya dua proses tidak menjalankannya bersamaan), lalu menyimpan barang di PostgreSQL:
+Bila `DATABASE_URL` diisi, service menjalankan `migrations/` saat start (tabel `schema_migrations`, advisory lock supaya dua proses tidak menjalankannya bersamaan), lalu menyimpan perangkat di PostgreSQL:
 
 | Tabel | Kolom |
 |---|---|
 | `tenants` | `org_id` (kunci, dari `nice_org_id`), `created_at` |
-| `items` | `id` (uuid, ditampilkan `itm_<32 hex>`), `org_id`, `project_id` (dari `prj`), `created_by` (dari `sub`), `acted_by` (dari `act`, `NULL` bila tidak ada), `name`, `quantity`, `create_time`, `update_time`; indeks `(org_id, project_id)` |
+| `devices` | `id` (uuid, ditampilkan `dev_<32 hex>`), `org_id`, `project_id` (dari `prj`), `created_by` (dari `sub`), `acted_by` (dari `act`, `NULL` bila tidak ada), `name`, `serial_number`, `status`, `location`, `create_time`, `update_time`; indeks `(org_id, project_id)` |
 
 Setiap query memakai `WHERE org_id = $1 AND project_id = $2`, termasuk baca, ubah, dan hapus per id. Tenant dibuat dengan `INSERT ... ON CONFLICT DO NOTHING`, jadi dua request pertama yang serentak menghasilkan satu baris. Tidak ada foreign key ke NICE: ID organisasi, project, dan user disimpan sebagai teks, dan nama organisasi atau project tidak disimpan. Jangan mengubah migrasi yang sudah dirilis; tambahkan pasangan berkas baru.
 
@@ -94,13 +94,13 @@ Setiap query memakai `WHERE org_id = $1 AND project_id = $2`, termasuk baca, uba
 
 Backend yang menukar token user lewat token exchange, misalnya [`../../agent-backend`](../../agent-backend/README.md), memanggil service ini dengan token yang `sub`-nya tetap user dan klaim `act.sub`-nya `client_id` service client backend itu. Service memverifikasi token itu dengan langkah yang sama. Aktor tidak mendapat hak tambahan: izinnya tetap `perms` di token, yaitu izin user yang dipotong deklarasi dependensi service backend.
 
-Barang yang dibuat dengan token seperti itu mencatat keduanya:
+Perangkat yang dibuat dengan token seperti itu mencatat keduanya:
 
 ```json
-{"id": "itm_...", "name": "Kabel UTP", "quantity": 3, "created_by": "usr_...", "acted_by": "<client_id agen-backend>"}
+{"id": "dev_...", "name": "Sensor Suhu", "serial_number": "SN-1", "status": "active", "location": "Gudang A", "created_by": "usr_...", "acted_by": "<client_id agen-backend>"}
 ```
 
-Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `nicetoken` (`internal/adapter/rest/item/create_item_handler.go`), dan tes `TestItemCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
+Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `nicetoken` (`internal/adapter/rest/device/create_device_handler.go`), dan tes `TestDeviceCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
 
 ## Prasyarat
 
@@ -130,7 +130,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `PUBLIC_URL` | `http://localhost:8081` | origin UI yang dilihat browser; redirect URI = `PUBLIC_URL/auth/callback`. Dev dengan Vite: `http://localhost:5181` |
 | `SESSION_IDLE_TIMEOUT` | `8h` | umur sesi browser tanpa pemakaian |
 | `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/` |
-| `DATABASE_URL` | kosong | URL `postgres://` untuk barang; kosong berarti memori. Nilainya tidak pernah dicetak |
+| `DATABASE_URL` | kosong | URL `postgres://` untuk perangkat; kosong berarti memori. Nilainya tidak pernah dicetak |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser lain yang boleh memanggil dengan Bearer, dipisah koma, untuk `public-client-pkce`. UI contoh ini tidak butuh CORS karena satu origin |
 | `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed dan pemeriksaan online |
 | `SMOKE_SA_ID`, `SMOKE_API_KEY` | kosong | hanya dibaca `scripts/smoke.sh`: Service Account tenant dan API key-nya (langkah 10) |
@@ -138,7 +138,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 ## Menjalankan dan tes
 
 ```bash
-make run          # go run ./cmd/inventaris di 127.0.0.1:8081
+make run          # go run ./cmd/nadi di 127.0.0.1:8081
 make test         # tes unit; tidak butuh NICE (token ditandatangani di tes, JWKS statis, NICE palsu httptest)
 make swag         # bangkitkan ulang docs/swagger.json dari anotasi
 make swag-check   # gagal bila docs/swagger.json tidak sama dengan hasil swag terbaru
@@ -150,12 +150,12 @@ Bila `go` di `PATH` tidak cocok dengan `GOROOT`, panggil `make GO=/path/ke/go te
 Tes repository PostgreSQL dilewati bila `TEST_DATABASE_URL` kosong. Untuk menjalankannya, pakai database kosong milik tes sendiri:
 
 ```bash
-docker run -d --name inventaris-test-pg -e POSTGRES_USER=inventaris -e POSTGRES_PASSWORD=inventaris -e POSTGRES_DB=inventaris -p 127.0.0.1:55460:5432 postgres:17-alpine
-TEST_DATABASE_URL='postgres://inventaris:inventaris@127.0.0.1:55460/inventaris?sslmode=disable' go test -race ./internal/... -count=1
-docker rm -f inventaris-test-pg
+docker run -d --name nadi-test-pg -e POSTGRES_USER=nadi -e POSTGRES_PASSWORD=nadi -e POSTGRES_DB=nadi -p 127.0.0.1:55460:5432 postgres:17-alpine
+TEST_DATABASE_URL='postgres://nadi:nadi@127.0.0.1:55460/nadi?sslmode=disable' go test -race ./internal/... -count=1
+docker rm -f nadi-test-pg
 ```
 
-Tes `TestOpenAPIMatchesTheRouteTable` membandingkan tabel rute di `internal/adapter/rest/item/item_routes.go` dengan `docs/swagger.json` yang di-embed: izin dan tanda sensitif harus sama, dan dokumen tidak boleh memuat operasi lain. Setelah mengubah anotasi, jalankan `make swag` lalu commit hasilnya.
+Tes `TestOpenAPIMatchesTheRouteTable` membandingkan tabel rute di `internal/adapter/rest/device/device_routes.go` dengan `docs/swagger.json` yang di-embed: izin dan tanda sensitif harus sama, dan dokumen tidak boleh memuat operasi lain. Setelah mengubah anotasi, jalankan `make swag` lalu commit hasilnya.
 
 ## Checklist setup NICE
 
@@ -176,7 +176,7 @@ OWNER_TOKEN=$(../../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD
 
 ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $OWNER_TOKEN" | jq -r .organization.id)
 curl -sS "$NICE/api/v1/organizations/$ORG_ID/projects" -H "Authorization: Bearer $OWNER_TOKEN" | jq '.projects[] | {id, name}'
-PROJECT_ID=prj_...   # project tenant yang akan memakai inventaris
+PROJECT_ID=prj_...   # project tenant yang akan memakai nadi
 USER_ID=$(curl -sS "$NICE/api/v1/me/profile" -H "Authorization: Bearer $OWNER_TOKEN" | jq -r .profile.user_id)
 ```
 
@@ -193,16 +193,16 @@ NICE_OUTBOUND_ALLOW_CIDRS=127.0.0.0/8
 
 ### 2. OAuth client UI dan jalankan service
 
-Service tidak mau start tanpa OAuth client UI, jadi client dibuat lebih dulu: client **confidential** di project organisasi platform (client di organisasi tenant tidak bisa diikat ke service). Ikatan ke `inventaris` menyusul setelah service terdaftar (langkah 2 di [`../README.md`](../README.md#checklist-setup-nice)). Console: Platform Admin, organisasi platform, **Project**, lalu halaman **OAuth client** project itu: tipe confidential, grant `authorization_code` dan `refresh_token`, dan dua redirect URI.
+Service tidak mau start tanpa OAuth client UI, jadi client dibuat lebih dulu: client **confidential** di project organisasi platform (client di organisasi tenant tidak bisa diikat ke service). Ikatan ke `nadi` menyusul setelah service terdaftar (langkah 2 di [`../README.md`](../README.md#checklist-setup-nice)). Console: Platform Admin, organisasi platform, **Project**, lalu halaman **OAuth client** project itu: tipe confidential, grant `authorization_code` dan `refresh_token`, dan dua redirect URI.
 
 ```bash
 PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
 UI_PROJECT_ID=$(curl -sS "$NICE/api/v1/organizations/$PLATFORM_ORG_ID/projects" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Inventaris UI","slug":"inventaris-ui"}' | jq -r .project.id)
+  -d '{"name":"NADI UI","slug":"nadi-ui"}' | jq -r .project.id)
 CLIENT=$(curl -sS "$NICE/api/v1/projects/$UI_PROJECT_ID/clients" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"inventaris","client_type":"CLIENT_TYPE_CONFIDENTIAL",
+  -d '{"name":"nadi","client_type":"CLIENT_TYPE_CONFIDENTIAL",
        "redirect_uris":["http://localhost:5181/auth/callback","http://localhost:8081/auth/callback"],
        "grant_types":["authorization_code","refresh_token"]}')
 OAUTH_CLIENT_ID=$(jq -r .oauth_client.id <<<"$CLIENT")
@@ -219,39 +219,39 @@ curl -sS http://127.0.0.1:8081/healthz
 
 Biarkan berjalan di terminal lain. Untuk dev dengan Vite, isi juga `PUBLIC_URL=http://localhost:5181`. Kunci lain di `.env` diisi pada langkah 9 dan 10.
 
-### 3. Daftarkan `inventaris`
+### 3. Daftarkan `nadi`
 
 Console: Platform Admin, **Shared Service**, **Daftarkan Shared Service**. Endpoint ditulis `http://127.0.0.1:8081`, bukan `localhost`, supaya NICE tidak pernah mencoba `::1`. `auth_mode` tidak perlu dikirim; bawaannya `nice_token`.
 
 ```bash
 curl -sS "$NICE/api/v1/shared-services" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"slug":"inventaris","name":"Inventaris","endpoint":"http://127.0.0.1:8081","health_path":"/healthz"}'
+  -d '{"slug":"nadi","name":"NADI","endpoint":"http://127.0.0.1:8081","health_path":"/healthz"}'
 ```
 
 ### 4. Impor `/openapi.json`
 
-Console: detail service `inventaris` di **Shared Service**, impor katalog (pratinjau lalu terapkan).
+Console: detail service `nadi` di **Shared Service**, impor katalog (pratinjau lalu terapkan).
 
 ```bash
 DOCUMENT=$(curl -sS http://127.0.0.1:8081/openapi.json | jq -Rs .)
-PREVIEW=$(curl -sS "$NICE/api/v1/shared-services/inventaris/catalog-imports" -X POST \
+PREVIEW=$(curl -sS "$NICE/api/v1/shared-services/nadi/catalog-imports" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"document\":$DOCUMENT}")
 printf '%s' "$PREVIEW" | jq '{added: [.diff.added[] | {key, permission, sensitive}], roles: [.diff.roles[] | .key]}'
 IMPORT_ID=$(printf '%s' "$PREVIEW" | jq -r .import_id)
 HASH=$(printf '%s' "$PREVIEW" | jq -r .hash)
-curl -sS "$NICE/api/v1/shared-services/inventaris/catalog-imports/$IMPORT_ID/apply" -X POST \
+curl -sS "$NICE/api/v1/shared-services/nadi/catalog-imports/$IMPORT_ID/apply" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"hash\":\"$HASH\"}"
 ```
 
-Pratinjau harus menunjukkan lima operasi, empat izin (`deleteItem` sensitif), serta role `inventaris.viewer`, `inventaris.admin`, dan `inventaris.operator`.
+Pratinjau harus menunjukkan lima operasi, empat izin (`deleteDevice` sensitif), serta role `nadi.viewer`, `nadi.admin`, dan `nadi.editor`.
 
 ### 5. Aktifkan service
 
 ```bash
-curl -sS "$NICE/api/v1/shared-services/inventaris/activate" -X POST -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -sS "$NICE/api/v1/shared-services/nadi/activate" -X POST -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 ### 6. Entitlement organisasi
@@ -260,7 +260,7 @@ Console: Platform Admin, **Organisasi**, detail organisasi tenant.
 
 ```bash
 curl -sS "$NICE/api/v1/organizations/$ORG_ID/entitlements" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{"service":"inventaris"}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{"service":"nadi"}'
 ```
 
 ### 7. Aktifkan di project
@@ -268,20 +268,20 @@ curl -sS "$NICE/api/v1/organizations/$ORG_ID/entitlements" -X POST \
 Console: project tenant, **Product & Activation**.
 
 ```bash
-curl -sS "$NICE/api/v1/projects/$PROJECT_ID/services/inventaris/activation" -X PUT -H "Authorization: Bearer $OWNER_TOKEN"
+curl -sS "$NICE/api/v1/projects/$PROJECT_ID/services/nadi/activation" -X PUT -H "Authorization: Bearer $OWNER_TOKEN"
 ```
 
-### 8. Binding user ke role inventaris
+### 8. Binding user ke role nadi
 
 Console: project tenant, **IAM**. IAM menyalin katalog dan aktivasi secara asinkron: bila dijawab `unknown_role` atau `service_not_active`, tunggu beberapa detik lalu ulangi. `echo "$BINDING_ID"` harus mencetak `rb_...`, bukan `null`.
 
 ```bash
 BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST \
   -H "Authorization: Bearer $OWNER_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"principal_type\":\"PRINCIPAL_TYPE_USER\",\"principal_id\":\"$USER_ID\",\"role\":\"inventaris.operator\"}" | jq -r .role_binding.id)
+  -d "{\"principal_type\":\"PRINCIPAL_TYPE_USER\",\"principal_id\":\"$USER_ID\",\"role\":\"nadi.editor\"}" | jq -r .role_binding.id)
 ```
 
-`inventaris.operator` tidak memuat `inventaris.items.delete`; pakai `inventaris.admin` untuk mencoba hapus barang.
+`nadi.editor` tidak memuat `nadi.devices.delete`; pakai `nadi.admin` untuk mencoba hapus perangkat.
 
 ### 9. Service Account platform `nice.service` (feed dan pemeriksaan online)
 
@@ -294,13 +294,13 @@ PLATFORM_PROJECT_ID=$(curl -sS "$NICE/api/v1/organizations/$PLATFORM_ORG_ID/proj
   -d '{"slug":"service-readers","name":"Service readers"}' | jq -r .project.id)
 FEED_SA_ID=$(curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/service-accounts" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"inventaris-feed","description":"Feed perubahan akses dan pemeriksaan online inventaris"}' | jq -r .service_account.id)
+  -d '{"name":"nadi-feed","description":"Feed perubahan akses dan pemeriksaan online nadi"}' | jq -r .service_account.id)
 curl -sS "$NICE/api/v1/admin/role-bindings" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$FEED_SA_ID\",\"role\":\"nice.service\"}"
 curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/api-keys" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$FEED_SA_ID\",\"name\":\"inventaris-feed\"}" | jq -r .key
+  -d "{\"service_account_id\":\"$FEED_SA_ID\",\"name\":\"nadi-feed\"}" | jq -r .key
 ```
 
 Key hanya tampil sekali. Isikan ke `NICE_SERVICE_API_KEY` di `.env`, lalu jalankan ulang `make run`; peringatan feed saat start hilang.
@@ -316,13 +316,13 @@ Console: project tenant, **Service Account** (buat akun dan API key) dan **IAM**
 ```bash
 SMOKE_SA_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/service-accounts" -X POST \
   -H "Authorization: Bearer $OWNER_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"inventaris-smoke"}' | jq -r .service_account.id)
+  -d '{"name":"nadi-smoke"}' | jq -r .service_account.id)
 curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST \
   -H "Authorization: Bearer $OWNER_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$SMOKE_SA_ID\",\"role\":\"inventaris.viewer\"}"
+  -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$SMOKE_SA_ID\",\"role\":\"nadi.viewer\"}"
 curl -sS "$NICE/api/v1/projects/$PROJECT_ID/api-keys" -X POST \
   -H "Authorization: Bearer $OWNER_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$SMOKE_SA_ID\",\"name\":\"inventaris-smoke\"}" | jq -r .key
+  -d "{\"service_account_id\":\"$SMOKE_SA_ID\",\"name\":\"nadi-smoke\"}" | jq -r .key
 echo "$SMOKE_SA_ID"
 ```
 
@@ -334,15 +334,15 @@ Isikan id Service Account ke `SMOKE_SA_ID` dan key ke `SMOKE_API_KEY` di `.env`.
 scripts/smoke.sh
 ```
 
-Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: NICE menjawab, `/healthz` menjawab, `GET /auth/session` tanpa cookie dijawab `401 unauthenticated`, `GET /auth/login` mengarahkan ke `$NICE/oauth/authorize` dengan `client_id` dari `NICE_CLIENT_ID`, `GET /items` tanpa token dijawab `401 missing_token`, token Service Account diterbitkan lewat `client_credentials` dengan scope `nice:aud:inventaris` (`client_id` id Service Account, `client_secret` API key), lalu `GET /items` dengan token itu dijawab `200`. Keluar dengan kode 0 bila semuanya lulus. Kegagalan dipetakan ke langkah checklist:
+Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: NICE menjawab, `/healthz` menjawab, `GET /auth/session` tanpa cookie dijawab `401 unauthenticated`, `GET /auth/login` mengarahkan ke `$NICE/oauth/authorize` dengan `client_id` dari `NICE_CLIENT_ID`, `GET /devices` tanpa token dijawab `401 missing_token`, token Service Account diterbitkan lewat `client_credentials` dengan scope `nice:aud:nadi` (`client_id` id Service Account, `client_secret` API key), lalu `GET /devices` dengan token itu dijawab `200`. Keluar dengan kode 0 bila semuanya lulus. Kegagalan dipetakan ke langkah checklist:
 
 | Jawaban | Langkah yang kemungkinan terlewat |
 |---|---|
 | `.env` tidak ada, NICE atau service tidak terjangkau | 2 (dan NICE harus berjalan) |
 | `NICE_CLIENT_ID` atau `NICE_CLIENT_SECRET` kosong, `/auth/login` tidak mengarah ke NICE | 2 |
 | `invalid_client` | 10: id Service Account bukan pemilik key, key dicabut atau kedaluwarsa, akun nonaktif |
-| `invalid_scope` | 3 sampai 7, atau 10 (project Service Account harus mengaktifkan `inventaris`) |
-| `403 permission_denied` dari service | 10: binding Service Account ke role inventaris |
+| `invalid_scope` | 3 sampai 7, atau 10 (project Service Account harus mengaktifkan `nadi`) |
+| `403 permission_denied` dari service | 10: binding Service Account ke role nadi |
 
 ## Uji pencabutan (opsional)
 
@@ -350,12 +350,12 @@ Butuh `NICE_SERVICE_API_KEY` terisi (langkah 9). Token user yang terbit sebelum 
 
 ```bash
 read -rsp 'Password owner: ' OWNER_PASSWORD; echo
-USER_TOKEN=$(../../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD" "" "openid nice:aud:inventaris nice:prj:$PROJECT_ID"); unset OWNER_PASSWORD
-curl -sS http://127.0.0.1:8081/items -H "Authorization: Bearer $USER_TOKEN"     # 200
+USER_TOKEN=$(../../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD" "" "openid nice:aud:nadi nice:prj:$PROJECT_ID"); unset OWNER_PASSWORD
+curl -sS http://127.0.0.1:8081/devices -H "Authorization: Bearer $USER_TOKEN"     # 200
 sleep 2
 curl -sS -X DELETE "$NICE/api/v1/projects/$PROJECT_ID/role-bindings/$BINDING_ID" -H "Authorization: Bearer $OWNER_TOKEN"
 sleep 2
-curl -sS http://127.0.0.1:8081/items -H "Authorization: Bearer $USER_TOKEN"     # 401 token_stale
+curl -sS http://127.0.0.1:8081/devices -H "Authorization: Bearer $USER_TOKEN"     # 401 token_stale
 ```
 
 Jeda sebelum pencabutan dibutuhkan karena feed bekerja dengan resolusi detik: token yang terbit pada detik yang sama dengan pencabutan tidak tertangkap.

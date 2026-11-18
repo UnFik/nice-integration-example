@@ -1,6 +1,6 @@
 // Package auth serves the browser session of the UI: sign-in through NICE,
 // the session, its contexts, switching context and signing out. It also puts
-// the token of the active context on the item requests that come with the
+// the token of the active context on the device requests that come with the
 // session cookie, so they pass the same nicetoken checks as a Bearer caller.
 package auth
 
@@ -15,7 +15,7 @@ import (
 
 // CookieName is the session cookie. Cookies of localhost are shared by every
 // port, so the name is specific to this example.
-const CookieName = "inventaris_session"
+const CookieName = "nadi_session"
 
 type Handler struct {
 	Sessions *sessionusecase.Service

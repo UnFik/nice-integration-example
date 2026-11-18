@@ -13,7 +13,7 @@ import (
 
 func TestMissingToken(t *testing.T) {
 	e := newTestEnv(t, nil)
-	r := e.do(http.MethodGet, "/items", "", nil)
+	r := e.do(http.MethodGet, "/devices", "", nil)
 	wantError(t, r, http.StatusUnauthorized, "invalid_token", "missing_token")
 	if got := r.Header.Get("WWW-Authenticate"); got != "Bearer" {
 		t.Fatalf("WWW-Authenticate = %q, want Bearer", got)
@@ -29,14 +29,14 @@ func TestTokenRefusals(t *testing.T) {
 		reason string
 	}{
 		{"token for another service", func(c map[string]any) { c["aud"] = "pengiriman" }, "wrong_audience"},
-		{"token for two services", func(c map[string]any) { c["aud"] = []string{"inventaris", "pengiriman"} }, "wrong_audience"},
+		{"token for two services", func(c map[string]any) { c["aud"] = []string{"nadi", "pengiriman"} }, "wrong_audience"},
 		{"expired beyond the skew", func(c map[string]any) { c["exp"] = now.Add(-61 * time.Second).Unix() }, "expired"},
 		{"another issuer", func(c map[string]any) { c["iss"] = "http://evil.test" }, "wrong_issuer"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			cl := claims(orgA, domain.PermRead)
 			c.edit(cl)
-			r := e.do(http.MethodGet, "/items", sign(t, cl), nil)
+			r := e.do(http.MethodGet, "/devices", sign(t, cl), nil)
 			wantError(t, r, http.StatusUnauthorized, "invalid_token", c.reason)
 			if got := r.Header.Get("WWW-Authenticate"); !strings.HasPrefix(got, "Bearer ") || !strings.Contains(got, c.reason) {
 				t.Fatalf("WWW-Authenticate = %q", got)
@@ -49,7 +49,7 @@ func TestExpiryAllowsTheClockSkew(t *testing.T) {
 	e := newTestEnv(t, nil)
 	cl := claims(orgA, domain.PermRead)
 	cl["exp"] = time.Now().Add(-30 * time.Second).Unix()
-	if r := e.do(http.MethodGet, "/items", sign(t, cl), nil); r.Status != http.StatusOK {
+	if r := e.do(http.MethodGet, "/devices", sign(t, cl), nil); r.Status != http.StatusOK {
 		t.Fatalf("a token expired 30 seconds ago = %d %s, want 200 (skew 60 seconds)", r.Status, r.Body)
 	}
 }
@@ -57,27 +57,27 @@ func TestExpiryAllowsTheClockSkew(t *testing.T) {
 func TestPermissionIsEnforcedPerOperation(t *testing.T) {
 	e := newTestEnv(t, nil)
 	reader := token(t, orgA, domain.PermRead)
-	if r := e.do(http.MethodGet, "/items", reader, nil); r.Status != http.StatusOK {
+	if r := e.do(http.MethodGet, "/devices", reader, nil); r.Status != http.StatusOK {
 		t.Fatalf("read with %s = %d %s", domain.PermRead, r.Status, r.Body)
 	}
-	r := e.do(http.MethodPost, "/items", reader, map[string]any{"name": "Kabel", "quantity": 1})
+	r := e.do(http.MethodPost, "/devices", reader, map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "active"})
 	wantError(t, r, http.StatusForbidden, "insufficient_scope", "permission_denied")
-	if items := e.list(orgA); len(items) != 0 {
-		t.Fatalf("a refused request created %v", items)
+	if devices := e.list(orgA); len(devices) != 0 {
+		t.Fatalf("a refused request created %v", devices)
 	}
-	it := e.create(orgA, "Kabel")
-	wantError(t, e.do(http.MethodPut, "/items/"+it.ID, reader, map[string]any{"name": "Baru", "quantity": 1}),
+	it := e.create(orgA, "Sensor")
+	wantError(t, e.do(http.MethodPut, "/devices/"+it.ID, reader, map[string]any{"name": "Baru", "serial_number": "SN-1", "status": "active"}),
 		http.StatusForbidden, "insufficient_scope", "permission_denied")
-	wantError(t, e.do(http.MethodGet, "/items", token(t, orgA, domain.PermCreate), nil),
+	wantError(t, e.do(http.MethodGet, "/devices", token(t, orgA, domain.PermCreate), nil),
 		http.StatusForbidden, "insufficient_scope", "permission_denied")
-	if got, _ := e.get(orgA, it.ID); got.Name != "Kabel" {
-		t.Fatalf("a refused request renamed the item to %q", got.Name)
+	if got, _ := e.get(orgA, it.ID); got.Name != "Sensor" {
+		t.Fatalf("a refused request renamed the device to %q", got.Name)
 	}
 }
 
 func TestOrganizationsDoNotSeeEachOther(t *testing.T) {
 	e := newTestEnv(t, nil)
-	r := e.do(http.MethodPost, "/items", token(t, orgA, allPerms...), map[string]any{"name": "Milik A", "quantity": 1})
+	r := e.do(http.MethodPost, "/devices", token(t, orgA, allPerms...), map[string]any{"name": "Milik A", "serial_number": "SN-1", "status": "active"})
 	if r.Status != http.StatusCreated {
 		t.Fatalf("create = %d %s", r.Status, r.Body)
 	}
@@ -85,18 +85,18 @@ func TestOrganizationsDoNotSeeEachOther(t *testing.T) {
 
 	b := token(t, orgB, allPerms...)
 	// The tenant comes from nice_org_id only, so a client that names org A is still org B.
-	r = e.do(http.MethodGet, "/items?organization_id="+orgA, b, nil, "X-Nice-Organization", orgA)
-	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"items":[]}` {
+	r = e.do(http.MethodGet, "/devices?organization_id="+orgA, b, nil, "X-Nice-Organization", orgA)
+	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"devices":[]}` {
 		t.Fatalf("list of org B = %d %s, want an empty list", r.Status, r.Body)
 	}
-	if r = e.do(http.MethodGet, "/items/"+id, b, nil); r.Status != http.StatusNotFound {
-		t.Fatalf("org B reading the item of org A = %d, want 404", r.Status)
+	if r = e.do(http.MethodGet, "/devices/"+id, b, nil); r.Status != http.StatusNotFound {
+		t.Fatalf("org B reading the device of org A = %d, want 404", r.Status)
 	}
-	if r = e.do(http.MethodPut, "/items/"+id, b, map[string]any{"name": "Diambil B", "quantity": 1}); r.Status != http.StatusNotFound {
-		t.Fatalf("org B editing the item of org A = %d, want 404", r.Status)
+	if r = e.do(http.MethodPut, "/devices/"+id, b, map[string]any{"name": "Diambil B", "serial_number": "SN-1", "status": "active"}); r.Status != http.StatusNotFound {
+		t.Fatalf("org B editing the device of org A = %d, want 404", r.Status)
 	}
 	if got, ok := e.get(orgA, id); !ok || got.Name != "Milik A" {
-		t.Fatalf("item of org A = %+v %v", got, ok)
+		t.Fatalf("device of org A = %+v %v", got, ok)
 	}
 }
 
@@ -105,8 +105,8 @@ func TestFirstRequestOfAnOrganizationCreatesItsTenant(t *testing.T) {
 	if e.hasTenant(orgB) {
 		t.Fatal("tenant exists before any request")
 	}
-	r := e.do(http.MethodGet, "/items", token(t, orgB, domain.PermRead), nil)
-	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"items":[]}` {
+	r := e.do(http.MethodGet, "/devices", token(t, orgB, domain.PermRead), nil)
+	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"devices":[]}` {
 		t.Fatalf("first list = %d %s, want 200 with an empty list", r.Status, r.Body)
 	}
 	if !e.hasTenant(orgB) {
@@ -116,7 +116,7 @@ func TestFirstRequestOfAnOrganizationCreatesItsTenant(t *testing.T) {
 
 func TestPreflightFromTheRegisteredOrigin(t *testing.T) {
 	e := newTestEnv(t, nil)
-	r := e.do(http.MethodOptions, "/items/itm_1", "", nil,
+	r := e.do(http.MethodOptions, "/devices/dev_1", "", nil,
 		"Origin", testOrigin, "Access-Control-Request-Method", "DELETE", "Access-Control-Request-Headers", "authorization")
 	if r.Status != http.StatusNoContent {
 		t.Fatalf("preflight = %d %s, want 204", r.Status, r.Body)
@@ -139,12 +139,12 @@ func TestPreflightFromTheRegisteredOrigin(t *testing.T) {
 
 func TestPreflightFromAnotherOrigin(t *testing.T) {
 	e := newTestEnv(t, nil)
-	r := e.do(http.MethodOptions, "/items", "", nil,
+	r := e.do(http.MethodOptions, "/devices", "", nil,
 		"Origin", "http://evil.test", "Access-Control-Request-Method", "GET", "Access-Control-Request-Headers", "authorization")
 	if v := r.Header.Get("Access-Control-Allow-Origin"); v != "" {
 		t.Fatalf("Access-Control-Allow-Origin = %q for an origin that is not registered", v)
 	}
-	r = e.do(http.MethodGet, "/items", token(t, orgA, domain.PermRead), nil, "Origin", "http://evil.test")
+	r = e.do(http.MethodGet, "/devices", token(t, orgA, domain.PermRead), nil, "Origin", "http://evil.test")
 	if v := r.Header.Get("Access-Control-Allow-Origin"); v != "" {
 		t.Fatalf("Access-Control-Allow-Origin = %q on a request from an origin that is not registered", v)
 	}
@@ -152,7 +152,7 @@ func TestPreflightFromAnotherOrigin(t *testing.T) {
 
 func TestCORSHeadersReachErrorsSoTheBrowserCanReadThem(t *testing.T) {
 	e := newTestEnv(t, nil)
-	r := e.do(http.MethodGet, "/items", "", nil, "Origin", testOrigin)
+	r := e.do(http.MethodGet, "/devices", "", nil, "Origin", testOrigin)
 	if r.Status != http.StatusUnauthorized || r.Header.Get("Access-Control-Allow-Origin") != testOrigin {
 		t.Fatalf("401 from the registered origin = %d, Access-Control-Allow-Origin %q", r.Status, r.Header.Get("Access-Control-Allow-Origin"))
 	}

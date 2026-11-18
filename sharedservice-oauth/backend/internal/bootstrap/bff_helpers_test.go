@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	itemmemory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/item"
+	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/auth"
-	itemusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/item/usecase"
+	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 	"github.com/nice-platform/nice/pkg/nicetoken"
@@ -271,13 +271,13 @@ func (f *bffNICE) serveContexts(w http.ResponseWriter, r *http.Request) {
 	o := f.orgs[i]
 	projects := []map[string]any{}
 	for _, p := range o.projects {
-		projects = append(projects, map[string]any{"id": p.id, "name": p.name, "slug": strings.ToLower(p.name), "services": []string{"inventaris"}})
+		projects = append(projects, map[string]any{"id": p.id, "name": p.name, "slug": strings.ToLower(p.name), "services": []string{"nadi"}})
 	}
 	page := map[string]any{}
 	if i+1 < len(f.orgs) {
 		page["next_page_token"] = strconv.Itoa(i + 1)
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"current_organization_id": f.firstOrg, "services": []string{"inventaris"},
+	_ = json.NewEncoder(w).Encode(map[string]any{"current_organization_id": f.firstOrg, "services": []string{"nadi"},
 		"organizations": []map[string]any{{"id": o.id, "name": o.name, "slug": strings.ToLower(o.name), "projects": projects, "projects_truncated": false}},
 		"page":          page})
 }
@@ -295,7 +295,7 @@ func newBFFEnv(t *testing.T, checker nicetoken.AccessChecker) *bffEnv {
 	f := newBFFNICE(t)
 	cfg := config.Config{Issuer: f.URL, ClientID: testClientID, ClientSecret: testClientSecret, PublicURL: bffPublicURL,
 		RedirectURI: bffPublicURL + config.CallbackPath, SessionIdle: 8 * time.Hour, CORSOrigins: []string{testOrigin}}
-	store := itemmemory.NewRepository()
+	store := devicememory.NewRepository()
 	log := slog.New(slog.DiscardHandler)
 	vc := VerifierConfig(cfg, store, log)
 	vc.StaticJWKS = testJWKS(t)
@@ -310,7 +310,7 @@ func newBFFEnv(t *testing.T, checker nicetoken.AccessChecker) *bffEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := rest.NewHandler(v, &itemusecase.Service{Repo: store}, rest.Options{Auth: a.Handler, CORSOrigins: cfg.CORSOrigins})
+	h := rest.NewHandler(v, &deviceusecase.Service{Repo: store}, rest.Options{Auth: a.Handler, CORSOrigins: cfg.CORSOrigins})
 	return &bffEnv{testEnv: &testEnv{t: t, store: store, handler: h}, nice: f, auth: a, v: v}
 }
 

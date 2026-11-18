@@ -35,7 +35,7 @@ func (s *Service) Session(ctx context.Context, id string) (domain.Session, error
 	return sess, nil
 }
 
-// ContextToken is the inventaris token of the active context of sess.
+// ContextToken is the nadi token of the active context of sess.
 func (s *Service) ContextToken(ctx context.Context, sess domain.Session) (string, error) {
 	if sess.Context == nil {
 		return "", ErrNoContext

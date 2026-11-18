@@ -10,7 +10,7 @@ export default defineConfig({
     // which must match its PUBLIC_URL for the CSRF check.
     proxy: {
       "/auth": { target: "http://127.0.0.1:8081", changeOrigin: false },
-      "/items": { target: "http://127.0.0.1:8081", changeOrigin: false },
+      "/devices": { target: "http://127.0.0.1:8081", changeOrigin: false },
     },
   },
   preview: { port: 5181, strictPort: true },

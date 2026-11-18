@@ -9,7 +9,7 @@ import (
 
 	"github.com/nice-platform/example/sharedservice-oauth/backend/docs"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
-	restitem "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/item"
+	restdevice "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 )
 
@@ -39,16 +39,16 @@ func readDoc(t *testing.T) swaggerDoc {
 // service enforces, and the document must declare nothing else.
 func TestOpenAPIMatchesTheRouteTable(t *testing.T) {
 	doc := readDoc(t)
-	routes := rest.ItemRoutes(nil)
+	routes := rest.DeviceRoutes(nil)
 	documented := 0
-	for path, item := range doc.Paths {
-		for method := range item {
+	for path, device := range doc.Paths {
+		for method := range device {
 			if method == "parameters" {
 				continue
 			}
 			documented++
 			key := strings.ToUpper(method) + " " + path
-			if !slices.ContainsFunc(routes, func(r restitem.Route) bool { return r.Method+" "+r.Pattern == key }) {
+			if !slices.ContainsFunc(routes, func(r restdevice.Route) bool { return r.Method+" "+r.Pattern == key }) {
 				t.Errorf("the document declares %s, which the route table does not serve", key)
 			}
 		}
@@ -85,13 +85,13 @@ func TestOpenAPIMatchesTheRouteTable(t *testing.T) {
 	}
 }
 
-func TestOpenAPIDeclaresTheOperatorRole(t *testing.T) {
+func TestOpenAPIDeclaresTheEditorRole(t *testing.T) {
 	doc := readDoc(t)
-	if len(doc.Roles) != 1 || doc.Roles[0].ID != "operator" || doc.Roles[0].Name == "" {
-		t.Fatalf("x-nice-roles = %+v, want one role operator", doc.Roles)
+	if len(doc.Roles) != 1 || doc.Roles[0].ID != "editor" || doc.Roles[0].Name == "" {
+		t.Fatalf("x-nice-roles = %+v, want one role editor", doc.Roles)
 	}
 	if got, want := doc.Roles[0].Permissions, []string{domain.PermRead, domain.PermCreate, domain.PermEdit}; !slices.Equal(got, want) {
-		t.Fatalf("operator permissions = %v, want %v", got, want)
+		t.Fatalf("editor permissions = %v, want %v", got, want)
 	}
 }
 
@@ -101,7 +101,7 @@ var pathParam = regexp.MustCompile(`^\{.*\}$`)
 // give the same names if x-nice-permission were removed.
 func TestPermissionNamesFollowTheCatalogRule(t *testing.T) {
 	action := map[string]string{"GET": "read", "POST": "create", "PUT": "edit", "PATCH": "edit", "DELETE": "delete"}
-	for _, rt := range rest.ItemRoutes(nil) {
+	for _, rt := range rest.DeviceRoutes(nil) {
 		var segs []string
 		for s := range strings.SplitSeq(strings.Trim(rt.Pattern, "/"), "/") {
 			if !pathParam.MatchString(s) {

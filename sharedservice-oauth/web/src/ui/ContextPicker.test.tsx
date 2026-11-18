@@ -46,7 +46,7 @@ describe("ContextPicker", () => {
     const section = markup.slice(markup.indexOf("Cakrawala"));
 
     expect(section).toContain('data-unavailable="org-c"');
-    expect(section).toMatch(/Tidak tersedia: Anda tidak punya akses inventaris di project mana pun/);
+    expect(section).toMatch(/Tidak tersedia: Anda tidak punya akses nadi di project mana pun/);
   });
 
   it("marks the organization of the login before a project is chosen", () => {
