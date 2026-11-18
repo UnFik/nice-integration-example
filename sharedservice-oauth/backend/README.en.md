@@ -307,6 +307,8 @@ The key is shown once. Put it in `NICE_SERVICE_API_KEY` in `.env`, then restart 
 
 IAM learns about a new Service Account asynchronously, so a binding made right after creating it can be answered 400 `principal_not_in_org`. Wait a few seconds and repeat the binding; the same holds for step 10.
 
+For a deployment with several replicas, note that each replica keeps its revocation marks in its own memory, so each replica opens its own long poll on the feed. NICE lets one Service Account hold only 4 long polls at once. If a fifth or later replica uses a key of the same Service Account, it keeps getting `429 too_many_waits`. That replica then goes degraded: the log shows "the access change feed is silent", and revocation takes effect only when the token expires. So create one `nice.service` Service Account for each group of at most 4 replicas.
+
 ### 10. Tenant Service Account for the smoke test
 
 Console: tenant project, **Service Account** (account and API key) and **IAM** (binding).

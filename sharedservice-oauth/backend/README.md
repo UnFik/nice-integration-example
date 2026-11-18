@@ -307,6 +307,8 @@ Key hanya tampil sekali. Isikan ke `NICE_SERVICE_API_KEY` di `.env`, lalu jalank
 
 IAM mengetahui Service Account baru secara asinkron, jadi binding yang dibuat tepat setelah akunnya dibuat bisa dijawab 400 `principal_not_in_org`. Tunggu beberapa detik lalu ulangi binding-nya; hal yang sama berlaku di langkah 10.
 
+Untuk deployment dengan beberapa replika, perlu diketahui bahwa setiap replika menyimpan tanda pencabutan di memorinya sendiri, jadi setiap replika membuka long-poll feed-nya sendiri. NICE hanya mengizinkan satu Service Account menahan 4 long-poll sekaligus. Bila replika kelima dan seterusnya memakai key dari Service Account yang sama, replika itu terus dijawab `429 too_many_waits`. Replika tersebut lalu masuk status degraded: log menampilkan "the access change feed is silent", dan pencabutan baru berlaku saat token kedaluwarsa. Karena itu, buat satu Service Account `nice.service` untuk setiap kelompok berisi paling banyak 4 replika.
+
 ### 10. Service Account tenant untuk smoke
 
 Console: project tenant, **Service Account** (buat akun dan API key) dan **IAM** (binding).
