@@ -2,7 +2,7 @@
 
 [Bahasa Indonesia](README.md)
 
-Four runnable examples of the ways a system connects to NICE. Each example stands alone with its own README, `.env.example`, tests, and NICE setup checklist.
+Five runnable examples of the ways a system connects to NICE. Each example stands alone with its own README, `.env.example`, tests, and NICE setup checklist.
 
 | Example | Use it when | Stack |
 |---|---|---|
@@ -10,6 +10,7 @@ Four runnable examples of the ways a system connects to NICE. Each example stand
 | [`shared-service-apikey/`](shared-service-apikey/README.en.md) | A legacy service that only knows its own API key. Clients call it through the NICE proxy `/<slug>/...` (`auth_mode: api_key`). | TypeScript + Hono, port 8082 |
 | [`public-client-pkce/`](public-client-pkce/README.en.md) | A browser app owned by one organization (tenant client) that signs in with a NICE account and calls `nice_token` services on the user's behalf. | Vite + React + `oauth4webapi`, port 5180 |
 | [`agent-backend/`](agent-backend/README.en.md) | An AI agent backend (MCP server) that runs tools against `nice_token` services on behalf of the user through token exchange, without passing the user's token on. It does not call `api_key` services: they use a key per Service Account and refuse user tokens. | Go + MCP Go SDK + `nice/pkg/niceclient`, port 8083 |
+| [`service-account-client/`](service-account-client/README.en.md) | An integration with no user (a job, a daemon, a partner service) that holds the API key of a Service Account, trades it at NICE for a token, and calls a `nice_token` service directly. The key goes to NICE only; the token is reused and renewed. | Go + `nice/pkg/niceclient` (`KindServiceAccount`), a command-line program with no port |
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
@@ -27,6 +28,11 @@ Four runnable examples of the ways a system connects to NICE. Each example stand
  agent-backend --Bearer exchanged JWT (aud=nadi, act)--> sharedservice-oauth/backend
 ```
 
+```text
+ service-account-client --client_credentials: Service Account id + API key, nice:aud:nadi--> NICE /oauth/token
+ service-account-client --Bearer JWT (aud=nadi)--> sharedservice-oauth/backend      (the key never reaches the service)
+```
+
 The SPA does not call the `api_key` service because CORS does not cover the NICE proxy path `/<slug>/...`.
 
 The OAuth protocol code in the browser (`oidc.ts`, the token manager) lives only in `public-client-pkce`. The `sharedservice-oauth` UI has no protocol code: it is all in the backend, through `nice/pkg/niceclient`.
@@ -39,10 +45,11 @@ The OAuth protocol code in the browser (`oidc.ts`, the token manager) lives only
 | `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy) |
 | `public-client-pkce` | `c7a5086`; without `NICE_CORS_ALLOWED_ORIGINS` from `60939ed` (`add-delegated-nice-api`) |
 | `agent-backend` | `6cc9986` (plus `add-token-exchange`); `acted_by` in `sharedservice-oauth` needs this revision too |
+| `service-account-client` | `c7a5086` (the same as the Bearer path of `sharedservice-oauth`) |
 
 ## Prerequisites
 
-- Directory layout: `nice/` must sit next to `example/`. The Go examples use `nice/pkg/nicetoken` and `nice/pkg/niceclient` through `replace ../../nice` (`agent-backend`) and `replace ../../../nice` (`sharedservice-oauth/backend`).
+- Directory layout: `nice/` must sit next to `example/`. The Go examples use `nice/pkg/nicetoken` and `nice/pkg/niceclient` through `replace ../../nice` (`agent-backend`, `service-account-client`) and `replace ../../../nice` (`sharedservice-oauth/backend`).
 - A dev NICE running on the host (`cd nice && make db && make migrate && make dev`, `http://localhost:8080`).
 - Settings in `nice/.env` (restart NICE after changing them):
 

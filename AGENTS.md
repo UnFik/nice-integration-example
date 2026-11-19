@@ -1,6 +1,6 @@
 # Contoh integrasi NICE: panduan untuk agen
 
-Repo ini berisi empat contoh integrasi dengan NICE yang **berdiri sendiri**. Contoh-contoh ini tidak berbagi kode. Duplikasi kecil di antaranya disengaja, supaya mitra bisa menyalin satu contoh tanpa membuka contoh lain.
+Repo ini berisi lima contoh integrasi dengan NICE yang **berdiri sendiri**. Contoh-contoh ini tidak berbagi kode. Duplikasi kecil di antaranya disengaja, supaya mitra bisa menyalin satu contoh tanpa membuka contoh lain.
 
 | Folder | Peran di NICE | Stack | Port |
 |---|---|---|---|
@@ -8,8 +8,9 @@ Repo ini berisi empat contoh integrasi dengan NICE yang **berdiri sendiri**. Con
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
 | `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service `nice_token` (`inventaris`) lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceclient` | 8083 |
+| `service-account-client/` | Pemanggil mesin: Service Account tenant yang menukar API key ke NICE (`client_credentials`) lalu memanggil service `nice_token` `nadi` | Go + `nice/pkg/niceclient` (`KindServiceAccount`) | tanpa port (program baris perintah) |
 
-`agent-backend` memakai `replace github.com/nice-platform/nice => ../../nice` dan `sharedservice-oauth/backend` memakai `=> ../../../nice`, jadi repo `nice` harus berada di sebelah `example/`. `compose.yml` di akar menjalankan `sharedservice-oauth` dan PostgreSQL-nya di samping stack NICE di Docker.
+`agent-backend` dan `service-account-client` memakai `replace github.com/nice-platform/nice => ../../nice` dan `sharedservice-oauth/backend` memakai `=> ../../../nice`, jadi repo `nice` harus berada di sebelah `example/`. `compose.yml` di akar menjalankan `sharedservice-oauth` dan PostgreSQL-nya di samping stack NICE di Docker.
 
 ## Perintah
 
@@ -35,9 +36,13 @@ npm test | npm run typecheck | npm run build
 cd agent-backend
 make run | make test               jalankan agen / tes unit dengan -race (tanpa NICE)
 make smoke                         uji terhadap NICE yang sudah diatur (baca .env dan AGENT_USER_TOKEN)
+
+cd service-account-client
+make run | make test               jalankan satu perintah (ARGS="list" | "create ..." | "watch") / tes unit dengan -race (tanpa NICE)
+make smoke                         uji terhadap NICE dan nadi yang sudah diatur (baca .env)
 ```
 
-Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` butuh `nice` `4282316` atau sesudahnya, `shared-service-apikey` butuh `40ddb20` atau sesudahnya, dan `agent-backend` butuh `6cc9986` atau sesudahnya.
+Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` butuh `nice` `4282316` atau sesudahnya, `shared-service-apikey` butuh `40ddb20` atau sesudahnya, `agent-backend` butuh `6cc9986` atau sesudahnya, dan `service-account-client` butuh `c7a5086` atau sesudahnya.
 
 ## Aturan
 
@@ -51,7 +56,7 @@ Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` but
   - Operasi key (`/keys*`), `/healthz`, `/openapi.json`, dan `/auth/*` (sesi UI `sharedservice-oauth`) tidak boleh masuk dokumen.
   - Setelah mengubah anotasi swag, jalankan `make swag`.
 - **Checklist dan smoke.** Nomor langkah checklist di README dirujuk oleh `scripts/smoke.sh`. Mengubah urutan checklist berarti memperbarui skripnya juga.
-- **Kontrak NICE.** Kontrak yang diikuti ada di `nice/docs/token-verification.md`, `nice/docs/api.md` ("Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil", "Token exchange: backend atas nama user"), dan `nice/docs/gateway-integration.md`. Bila kontrak berubah:
+- **Kontrak NICE.** Kontrak yang diikuti ada di `nice/docs/token-verification.md`, `nice/docs/api.md` ("Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service Account: `client_credentials`", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil", "Token exchange: backend atas nama user"), dan `nice/docs/gateway-integration.md`. Bila kontrak berubah:
   1. Perbarui contoh yang terdampak.
   2. Jalankan ulang smoke dan uji manual.
   3. Perbarui baris "Diuji terhadap nice revisi" di README contoh itu.

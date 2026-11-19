@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-Empat contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setiap contoh berdiri sendiri dan punya README, `.env.example`, tes, serta checklist setup NICE masing-masing.
+Lima contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setiap contoh berdiri sendiri dan punya README, `.env.example`, tes, serta checklist setup NICE masing-masing.
 
 | Contoh | Kapan dipakai | Stack |
 |---|---|---|
@@ -10,6 +10,7 @@ Empat contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setia
 | [`shared-service-apikey/`](shared-service-apikey/README.md) | Service lama yang hanya mengenal API key miliknya sendiri. Klien memanggilnya lewat proxy NICE `/<slug>/...` (`auth_mode: api_key`). | TypeScript + Hono, port 8082 |
 | [`public-client-pkce/`](public-client-pkce/README.md) | Aplikasi browser milik satu organisasi (client tenant) yang login dengan akun NICE lalu memanggil service `nice_token` atas nama user. | Vite + React + `oauth4webapi`, port 5180 |
 | [`agent-backend/`](agent-backend/README.md) | Backend agen AI (MCP server) yang menjalankan tool ke service `nice_token` atas nama user lewat token exchange, tanpa meneruskan token user. Service `api_key` tidak dipanggil: ia memakai kunci per Service Account dan menolak token user. | Go + SDK MCP Go + `nice/pkg/niceclient`, port 8083 |
+| [`service-account-client/`](service-account-client/README.md) | Integrasi tanpa user (job, daemon, service mitra) yang memegang API key Service Account, menukarnya ke NICE menjadi token, lalu memanggil service `nice_token` langsung. Key hanya dikirim ke NICE; token dipakai ulang dan diperbarui. | Go + `nice/pkg/niceclient` (`KindServiceAccount`), program baris perintah tanpa port |
 
 ```text
  SPA (public client) --PKCE--> NICE /oauth/*
@@ -27,6 +28,11 @@ Empat contoh yang bisa dijalankan untuk cara sistem terhubung dengan NICE. Setia
  agent-backend --Bearer JWT hasil exchange (aud=nadi, act)--> sharedservice-oauth/backend
 ```
 
+```text
+ service-account-client --client_credentials: id Service Account + API key, nice:aud:nadi--> NICE /oauth/token
+ service-account-client --Bearer JWT (aud=nadi)--> sharedservice-oauth/backend      (key tidak pernah sampai ke service)
+```
+
 SPA tidak memanggil service `api_key` karena path proxy NICE `/<slug>/...` tidak dicakup CORS.
 
 Kode protokol OAuth di browser (`oidc.ts`, token manager) hanya ada di `public-client-pkce`. UI `sharedservice-oauth` tidak memuat kode protokol: semuanya di backend lewat `nice/pkg/niceclient`.
@@ -39,10 +45,11 @@ Kode protokol OAuth di browser (`oidc.ts`, token manager) hanya ada di `public-c
 | `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy) |
 | `public-client-pkce` | `c7a5086`; tanpa `NICE_CORS_ALLOWED_ORIGINS` mulai `60939ed` (`add-delegated-nice-api`) |
 | `agent-backend` | `6cc9986` (ditambah `add-token-exchange`); `acted_by` di `sharedservice-oauth` juga butuh revisi ini |
+| `service-account-client` | `c7a5086` (sama dengan jalur Bearer `sharedservice-oauth`) |
 
 ## Prasyarat
 
-- Susunan direktori: `nice/` harus berada di sebelah `example/`. Contoh Go memakai `nice/pkg/nicetoken` dan `nice/pkg/niceclient` lewat `replace ../../nice` (`agent-backend`) dan `replace ../../../nice` (`sharedservice-oauth/backend`).
+- Susunan direktori: `nice/` harus berada di sebelah `example/`. Contoh Go memakai `nice/pkg/nicetoken` dan `nice/pkg/niceclient` lewat `replace ../../nice` (`agent-backend`, `service-account-client`) dan `replace ../../../nice` (`sharedservice-oauth/backend`).
 - NICE dev berjalan di host (`cd nice && make db && make migrate && make dev`, `http://localhost:8080`).
 - Pengaturan di `nice/.env` (setelah diubah, jalankan ulang NICE):
 
