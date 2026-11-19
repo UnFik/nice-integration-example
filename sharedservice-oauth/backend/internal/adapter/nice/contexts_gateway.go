@@ -10,7 +10,7 @@ import (
 
 	sessiondto "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/dto"
 	sessionusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/usecase"
-	"github.com/nice-platform/nice/pkg/niceclient"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 )
 
 // maxContextPages bounds the pages read, so a NICE that keeps answering a
@@ -50,7 +50,7 @@ func (g *Gateway) Contexts(ctx context.Context, signIn string) (sessiondto.Conte
 		if err != nil {
 			return sessiondto.Contexts{}, err
 		}
-		resp, err := g.Exchange.DoAs(ctx, signIn, niceclient.Key{Audience: "nice"}, req)
+		resp, err := g.Exchange.DoAs(ctx, signIn, credentials.Key{Audience: "nice"}, req)
 		if err != nil {
 			return sessiondto.Contexts{}, exchangeError(err)
 		}

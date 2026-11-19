@@ -26,7 +26,7 @@ type Store interface {
 }
 
 // NICE is what the session use cases need from NICE. subject is the
-// niceclient subject of a session, never its cookie value. The errors are
+// niceauth/credentials subject of a session, never its cookie value. The errors are
 // those below.
 type NICE interface {
 	// AuthorizeURL starts the sign-in of subject for the local session.

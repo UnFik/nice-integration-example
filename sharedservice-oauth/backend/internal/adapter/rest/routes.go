@@ -11,7 +11,7 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/web"
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/httpx"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // DeviceRoutes is the table of device operations the tests compare with the OpenAPI document.
@@ -33,13 +33,13 @@ type Options struct {
 // NewHandler assembles CORS -> mux. /healthz, /openapi.json and /docs are public;
 // every device route verifies the token and then its permission. With a session
 // cookie, Auth fills the token of the active context before that chain runs.
-func NewHandler(v *nicetoken.Verifier, devices *deviceusecase.Service, o Options) http.Handler {
+func NewHandler(v *verify.Verifier, devices *deviceusecase.Service, o Options) http.Handler {
 	mux := http.NewServeMux()
 	system.Register(mux, docs.OpenAPI)
 	for _, rt := range DeviceRoutes(devices) {
-		var opts []nicetoken.RequireOption
+		var opts []verify.RequireOption
 		if rt.Sensitive {
-			opts = append(opts, nicetoken.Sensitive())
+			opts = append(opts, verify.Sensitive())
 		}
 		h := v.Middleware(v.Require(rt.Permission, opts...)(rt.Handler))
 		if o.Auth != nil {

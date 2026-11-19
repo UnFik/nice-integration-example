@@ -12,32 +12,32 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/auth"
 	sessionusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/niceclient"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
-// Auth is the browser side of the service: niceclient for the confidential
+// Auth is the browser side of the service: niceauth/credentials for the confidential
 // client, the session use cases and the /auth handler.
 type Auth struct {
-	Client   *niceclient.Client
+	Client   *credentials.Client
 	Sessions *sessionusecase.Service
 	Store    *sessionmemory.Store
 	Handler  *auth.Handler
 }
 
 // NewAuth wires the sign-in of the UI. Refresh tokens are kept in a
-// niceclient.MemoryStore and sessions in memory, so a restart signs everybody
+// credentials.MemoryStore and sessions in memory, so a restart signs everybody
 // out; the README says what a production store needs.
-func NewAuth(cfg config.Config, v *nicetoken.Verifier, log *slog.Logger) (*Auth, error) {
+func NewAuth(cfg config.Config, v *verify.Verifier, log *slog.Logger) (*Auth, error) {
 	hc := &http.Client{Timeout: 15 * time.Second}
-	c, err := niceclient.New(niceclient.Config{
+	c, err := credentials.New(credentials.Config{
 		Issuer: cfg.Issuer, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret,
-		Kind: niceclient.KindBFF, BaseScopes: nicegateway.BaseScopes, HTTP: hc, Log: log,
+		Kind: credentials.KindBFF, BaseScopes: nicegateway.BaseScopes, HTTP: hc, Log: log,
 	})
 	if err != nil {
 		return nil, err
 	}
-	x, err := niceclient.NewExchange(niceclient.ExchangeConfig{
+	x, err := credentials.NewExchange(credentials.ExchangeConfig{
 		Issuer: cfg.Issuer, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, HTTP: hc, Log: log,
 	})
 	if err != nil {
@@ -68,10 +68,10 @@ func NewAuth(cfg config.Config, v *nicetoken.Verifier, log *slog.Logger) (*Auth,
 // stale reports whether v refuses token only because the access change feed
 // marked its user, organization or project after it was issued. Other refusals
 // are not cured by a new token, so they are left to the verifier of the request.
-func stale(ctx context.Context, v *nicetoken.Verifier, token string) bool {
+func stale(ctx context.Context, v *verify.Verifier, token string) bool {
 	_, err := v.Verify(ctx, token)
-	var e *nicetoken.Error
-	return errors.As(err, &e) && e.Description == nicetoken.ReasonStale
+	var e *verify.Error
+	return errors.As(err, &e) && e.Description == verify.ReasonStale
 }
 
 // Start renews the tokens in use and signs out idle sessions until ctx ends.

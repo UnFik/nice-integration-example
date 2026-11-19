@@ -18,7 +18,7 @@ import (
 	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 func TestCheckerOnlyWithTheServiceKey(t *testing.T) {
@@ -28,8 +28,8 @@ func TestCheckerOnlyWithTheServiceKey(t *testing.T) {
 		t.Fatalf("checker without %s = %T, want nil", config.EnvServiceAPIKey, c.Checker)
 	}
 	c := VerifierConfig(config.Config{Issuer: testIssuer, ServiceAPIKey: "nice_sk_test.secret"}, store, log)
-	if _, ok := c.Checker.(*nicetoken.HTTPChecker); !ok {
-		t.Fatalf("checker with %s = %T, want *nicetoken.HTTPChecker", config.EnvServiceAPIKey, c.Checker)
+	if _, ok := c.Checker.(*verify.HTTPChecker); !ok {
+		t.Fatalf("checker with %s = %T, want *verify.HTTPChecker", config.EnvServiceAPIKey, c.Checker)
 	}
 	if c.Service != domain.ServiceSlug || c.Tenants == nil {
 		t.Fatalf("verifier config = %+v", c)
@@ -43,7 +43,7 @@ func TestWithoutTheServiceKeyTheServiceWarnsAndStillServes(t *testing.T) {
 	store := devicememory.NewRepository()
 	vc := VerifierConfig(cfg, store, log)
 	vc.StaticJWKS = testJWKS(t)
-	v, err := nicetoken.New(vc)
+	v, err := verify.New(vc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestRestartWhileNICEIsDownUsesTheJWKSCopy(t *testing.T) {
 	cfg := config.Config{Issuer: nice.URL, JWKSFile: file}
 	log := slog.New(slog.DiscardHandler)
 
-	if _, err := nicetoken.New(VerifierConfig(cfg, devicememory.NewRepository(), log)); err != nil {
+	if _, err := verify.New(VerifierConfig(cfg, devicememory.NewRepository(), log)); err != nil {
 		t.Fatal(err)
 	}
 	if saved, err := os.ReadFile(file); err != nil || !bytes.Equal(saved, jwks) {
@@ -79,7 +79,7 @@ func TestRestartWhileNICEIsDownUsesTheJWKSCopy(t *testing.T) {
 
 	nice.Close()
 	store := devicememory.NewRepository()
-	v, err := nicetoken.New(VerifierConfig(cfg, store, log))
+	v, err := verify.New(VerifierConfig(cfg, store, log))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func (f *fakeNICE) serviceEnv(ctx context.Context, t *testing.T) *testEnv {
 	cfg := config.Config{Issuer: f.URL, JWKSFile: filepath.Join(t.TempDir(), "jwks.json"), ServiceAPIKey: fakeServiceKey}
 	log := slog.New(slog.DiscardHandler)
 	store := devicememory.NewRepository()
-	v, err := nicetoken.New(VerifierConfig(cfg, store, log))
+	v, err := verify.New(VerifierConfig(cfg, store, log))
 	if err != nil {
 		t.Fatal(err)
 	}

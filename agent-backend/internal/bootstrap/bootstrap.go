@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/nice-platform/nice/pkg/niceclient"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 
 	mcpadapter "github.com/nice-platform/example/agent-backend/internal/adapter/mcp"
 	"github.com/nice-platform/example/agent-backend/internal/adapter/niceexchange"
@@ -28,11 +28,11 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 	if err != nil {
 		return err
 	}
-	// nicetoken writes the JWKS copy through a temporary file in the same directory.
+	// niceauth/verify writes the JWKS copy through a temporary file in the same directory.
 	if err := os.MkdirAll(filepath.Dir(cfg.JWKSFile), 0o700); err != nil {
 		return fmt.Errorf("JWKS directory: %w", err)
 	}
-	v, err := nicetoken.New(VerifierConfig(cfg, log))
+	v, err := verify.New(VerifierConfig(cfg, log))
 	if err != nil {
 		return err
 	}
@@ -57,14 +57,14 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 	return nil
 }
 
-// VerifierConfig wires nicetoken for the agent. Tests reuse it and only swap the key source.
-func VerifierConfig(cfg config.Config, log *slog.Logger) nicetoken.Config {
-	return nicetoken.Config{Issuer: cfg.Issuer, Service: domain.ServiceSlug, JWKSFile: cfg.JWKSFile, Log: log}
+// VerifierConfig wires niceauth/verify for the agent. Tests reuse it and only swap the key source.
+func VerifierConfig(cfg config.Config, log *slog.Logger) verify.Config {
+	return verify.Config{Issuer: cfg.Issuer, Service: domain.ServiceSlug, JWKSFile: cfg.JWKSFile, Log: log}
 }
 
 // NewCallService wires the call use case to the exchange client of the agent's own service client.
 func NewCallService(cfg config.Config, hc *http.Client, log *slog.Logger) (*callusecase.Service, error) {
-	sender, err := niceexchange.New(niceclient.ExchangeConfig{
+	sender, err := niceexchange.New(credentials.ExchangeConfig{
 		Issuer: cfg.Issuer, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, HTTP: hc, Log: log,
 	})
 	if err != nil {
@@ -79,6 +79,6 @@ func NewCallService(cfg config.Config, hc *http.Client, log *slog.Logger) (*call
 }
 
 // NewHandler assembles the HTTP routes of the agent.
-func NewHandler(v *nicetoken.Verifier, calls *callusecase.Service, cfg config.Config) http.Handler {
+func NewHandler(v *verify.Verifier, calls *callusecase.Service, cfg config.Config) http.Handler {
 	return mcpadapter.NewHandler(mcpadapter.Deps{Verifier: v, Calls: calls, Issuer: cfg.Issuer, PublicURL: cfg.PublicURL})
 }

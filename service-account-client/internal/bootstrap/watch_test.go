@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Two steps of six minutes pass the time niceclient renews a token (10 minutes after it was issued) and stay before
+// Two steps of six minutes pass the time niceauth/credentials renews a token (10 minutes after it was issued) and stay before
 // its expiry (30). The reading between them matters: the SDK renews in the background only a token that was used
 // within the last renewal interval, as the token of a running watch always is.
 const step = 6 * time.Minute

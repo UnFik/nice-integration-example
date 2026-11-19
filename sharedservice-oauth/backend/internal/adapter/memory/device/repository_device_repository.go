@@ -30,7 +30,7 @@ func NewRepository() *Repository {
 	return &Repository{tenants: map[string]struct{}{}, devices: map[key]map[string]domain.Device{}, now: time.Now}
 }
 
-// CreateTenant is the provisioning hook of nicetoken.ProvisionOnFirstUse, so it
+// CreateTenant is the provisioning hook of verify.ProvisionOnFirstUse, so it
 // must be idempotent.
 func (r *Repository) CreateTenant(_ context.Context, org string) error {
 	r.mu.Lock()

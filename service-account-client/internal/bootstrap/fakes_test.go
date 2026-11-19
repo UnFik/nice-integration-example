@@ -28,7 +28,7 @@ const (
 	tokenMark = "access-token-do-not-leak"
 )
 
-// clock is the time niceclient sees; a test moves it past the renewal time of a token.
+// clock is the time niceauth/credentials sees; a test moves it past the renewal time of a token.
 type clock struct {
 	mu sync.Mutex
 	t  time.Time
@@ -127,7 +127,7 @@ type call struct {
 func (c call) Bearer() string { return strings.TrimPrefix(c.Header.Get("Authorization"), "Bearer ") }
 
 // fakeNadi plays the device API of sharedservice-oauth/backend: a Bearer token NICE issued, the same bodies, and the
-// refusals of nicetoken.
+// refusals of niceauth/verify.
 type fakeNadi struct {
 	srv  *httptest.Server
 	nice *fakeNICE

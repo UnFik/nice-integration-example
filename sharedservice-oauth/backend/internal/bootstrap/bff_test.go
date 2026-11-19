@@ -17,7 +17,7 @@ import (
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 const baseScopes = "openid profile email offline_access"
@@ -388,7 +388,7 @@ func TestUIServedFromTheBuild(t *testing.T) {
 		}
 	}
 	e := newTestEnv(t, nil)
-	v, err := nicetoken.New(VerifierConfig(config.Config{Issuer: testIssuer}, e.store, slog.New(slog.DiscardHandler)))
+	v, err := verify.New(VerifierConfig(config.Config{Issuer: testIssuer}, e.store, slog.New(slog.DiscardHandler)))
 	if err != nil {
 		t.Fatal(err)
 	}

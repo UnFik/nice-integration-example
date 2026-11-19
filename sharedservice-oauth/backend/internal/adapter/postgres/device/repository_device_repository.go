@@ -25,7 +25,7 @@ const devicePrefix = "dev_"
 // columns is the select list scanDevice reads.
 const columns = "id, org_id, project_id, name, serial_number, status, location, created_by, COALESCE(acted_by, ''), create_time, update_time"
 
-// CreateTenant is the provisioning hook of nicetoken.ProvisionOnFirstUse.
+// CreateTenant is the provisioning hook of verify.ProvisionOnFirstUse.
 // ON CONFLICT makes it idempotent and safe for two first requests at once.
 func (r *Repository) CreateTenant(ctx context.Context, org string) error {
 	_, err := r.pool.Exec(ctx, "INSERT INTO tenants (org_id) VALUES ($1) ON CONFLICT DO NOTHING", org)

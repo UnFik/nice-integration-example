@@ -22,7 +22,7 @@ import (
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 const (
@@ -99,7 +99,7 @@ type fakeChecker struct {
 	calls   []string
 }
 
-func (f *fakeChecker) Check(_ context.Context, c *nicetoken.Claims, permission string) (bool, error) {
+func (f *fakeChecker) Check(_ context.Context, c *verify.Claims, permission string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, c.Subject+" "+c.OrgID+" "+permission)
@@ -126,12 +126,12 @@ type testEnv struct {
 
 // newTestEnv builds the handler with the production wiring of verifierConfig,
 // with the test key set instead of NICE and checker as the online checker.
-func newTestEnv(t *testing.T, checker nicetoken.AccessChecker) *testEnv {
+func newTestEnv(t *testing.T, checker verify.AccessChecker) *testEnv {
 	t.Helper()
 	return newTestEnvWith(t, checker, devicememory.NewRepository())
 }
 
-func newTestEnvWith(t *testing.T, checker nicetoken.AccessChecker, store testStore) *testEnv {
+func newTestEnvWith(t *testing.T, checker verify.AccessChecker, store testStore) *testEnv {
 	t.Helper()
 	cfg := config.Config{Issuer: testIssuer, CORSOrigins: []string{testOrigin}}
 	vc := VerifierConfig(cfg, store, slog.New(slog.DiscardHandler))
@@ -139,7 +139,7 @@ func newTestEnvWith(t *testing.T, checker nicetoken.AccessChecker, store testSto
 	if checker != nil {
 		vc.Checker = checker
 	}
-	v, err := nicetoken.New(vc)
+	v, err := verify.New(vc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,6 +242,6 @@ func wantError(t *testing.T, r response, status int, code, description string) {
 	}
 }
 
-func newHandler(v *nicetoken.Verifier, repo deviceusecase.Repo, origins []string) http.Handler {
+func newHandler(v *verify.Verifier, repo deviceusecase.Repo, origins []string) http.Handler {
 	return rest.NewHandler(v, &deviceusecase.Service{Repo: repo}, rest.Options{CORSOrigins: origins})
 }

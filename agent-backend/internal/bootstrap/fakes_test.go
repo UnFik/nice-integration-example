@@ -13,7 +13,7 @@ import (
 
 	"github.com/nice-platform/example/agent-backend/internal/domain"
 
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // fakeNICE plays the part of NICE the agent talks to: the token endpoint (token exchange only). Its rules follow
@@ -22,7 +22,7 @@ import (
 type fakeNICE struct {
 	t       *testing.T
 	srv     *httptest.Server
-	subject *nicetoken.Verifier
+	subject *verify.Verifier
 
 	mu sync.Mutex
 	// projects are the organizations the user belongs to and their projects.
@@ -58,7 +58,7 @@ func newFakeNICE(t *testing.T) *fakeNICE {
 	mux.HandleFunc("POST /oauth/token", f.token)
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
-	v, err := nicetoken.New(nicetoken.Config{Issuer: f.srv.URL, Service: domain.ServiceSlug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
+	v, err := verify.New(verify.Config{Issuer: f.srv.URL, Service: domain.ServiceSlug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,13 +174,13 @@ func (f *fakeNICE) token(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// fakeService is a nice_token service with one collection, verified with nicetoken as inventaris does.
+// fakeService is a nice_token service with one collection, verified with niceauth/verify as inventaris does.
 type fakeService struct {
 	t          *testing.T
 	slug       string
 	collection string
 	srv        *httptest.Server
-	v          *nicetoken.Verifier
+	v          *verify.Verifier
 
 	mu        sync.Mutex
 	received  []map[string]any
@@ -192,7 +192,7 @@ type fakeService struct {
 
 func newFakeService(t *testing.T, issuer, slug string) *fakeService {
 	s := &fakeService{t: t, slug: slug, collection: "items"}
-	v, err := nicetoken.New(nicetoken.Config{Issuer: issuer, Service: slug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
+	v, err := verify.New(verify.Config{Issuer: issuer, Service: slug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func (s *fakeService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	claims, err := s.v.Verify(r.Context(), tok)
 	if err != nil {
-		s.fail(w, 401, "invalid_token", err.(*nicetoken.Error).Description)
+		s.fail(w, 401, "invalid_token", err.(*verify.Error).Description)
 		return
 	}
 	if r.URL.Path != "/"+s.collection {

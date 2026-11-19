@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-Contoh **pemanggil mesin**: integrasi tanpa user (job, daemon, service mitra) yang memegang API key sebuah Service Account, membuktikannya ke NICE, lalu memanggil service `nice_token` `nadi` ([`../sharedservice-oauth/backend`](../sharedservice-oauth/backend/README.md)) dengan token hasilnya. Ditulis dalam Go di atas `nice/pkg/niceclient` dengan `KindServiceAccount`. Empat hal yang diperlihatkan:
+Contoh **pemanggil mesin**: integrasi tanpa user (job, daemon, service mitra) yang memegang API key sebuah Service Account, membuktikannya ke NICE, lalu memanggil service `nice_token` `nadi` ([`../sharedservice-oauth/backend`](../sharedservice-oauth/backend/README.md)) dengan token hasilnya. Ditulis dalam Go di atas `nice/pkg/niceauth/credentials` dengan `KindServiceAccount`. Empat hal yang diperlihatkan:
 
 - API key **hanya dikirim ke endpoint token NICE**. `nadi` tidak pernah melihat key, hanya `Authorization: Bearer <token>`;
 - satu token dipakai ulang selama masih berlaku, dan diperbarui di latar sebelum kedaluwarsa;
@@ -14,9 +14,9 @@ klien --client_credentials: client_id=sa_..., client_secret=API key, scope=nice:
 klien --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Versi NICE minimum: `nice` `c7a5086` atau sesudahnya (sama dengan jalur Bearer `nadi`).
+Versi NICE minimum: `nice` `00256d3` atau sesudahnya (`rename-sdk-to-niceauth`: `nice/pkg/niceauth/credentials` dan `Client.HTTPClient`).
 
-Diuji terhadap nice revisi: `c7a3e33` (2026-11-19), NICE dan `nadi` di Docker: `scripts/smoke.sh`, `create` lalu `list` (`created_by` berisi id Service Account), `create` dengan role `nadi.viewer` (403 `permission_denied`), dan key dicabut saat `watch` berjalan (`watch` berhenti dengan `invalid_client` pada pembacaan berikutnya, feed aktif di `nadi`).
+Diuji terhadap nice revisi: `00256d3` (2026-11-19), NICE dan `nadi` di Docker, lewat `Client.HTTPClient`: `scripts/smoke.sh`, `create` lalu `list` (`created_by` berisi id Service Account), key salah (`invalid_client`), dan NICE tidak terjangkau (`nice_unavailable`). Terhadap `c7a3e33` (lewat `Client.Do`): `create` dengan role `nadi.viewer` (403 `permission_denied`), dan key dicabut saat `watch` berjalan (`watch` berhenti dengan `invalid_client` pada pembacaan berikutnya, feed aktif di `nadi`).
 
 ## Struktur folder
 
@@ -35,14 +35,14 @@ internal/
   adapter/
     cli/                             tabel perintah (routes.go) dan satu handler per perintah (*_handler.go);
                                      internal/mapper/ mencetak perangkat dan Failure (*_mapper.go)
-    nadi/                            port ke nadi lewat niceclient (*_gateway.go)
+    nadi/                            port ke nadi lewat *http.Client dari SDK (*_gateway.go)
   platform/config/                   env dan .env
   bootstrap/                         perakitan; tes lintas lapisan dengan NICE dan nadi palsu
   arch_test.go                       tes arsitektur: akhiran nama berkas, satu fungsi per use case, arah impor
 scripts/smoke.sh                     uji smoke terhadap NICE yang sudah diatur
 ```
 
-Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http` atau `niceclient` (hanya `adapter/nadi` yang mengenal SDK, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_gateway`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya.
+Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http` atau `niceauth/credentials` (hanya `adapter/nadi` yang mengenal SDK, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_gateway`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya.
 
 ## Perintah
 
@@ -58,7 +58,7 @@ Tidak ada perintah ubah dan hapus. `DELETE /devices/{id}` operasi sensitif yang 
 
 ### Cara kerja panggilan
 
-`bootstrap` membuat satu `niceclient.Client` (`Kind: KindServiceAccount`, `ClientID` = id Service Account, `ClientSecret` = API key) dan menjalankan `Run` di latar. Setiap panggilan lewat `client.Do(ctx, niceclient.Key{Audience: "nadi"}, req)`:
+`bootstrap` membuat satu `credentials.Client` (`Kind: KindServiceAccount`, `ClientID` = id Service Account, `ClientSecret` = API key), menjalankan `Run` di latar, dan memberi `adapter/nadi` sebuah `*http.Client` biasa dari `client.HTTPClient(credentials.Key{Audience: "nadi"})`. Gateway tidak memanggil SDK untuk mengirim request; ia hanya membaca galat SDK. Setiap request lewat client itu:
 
 1. Belum ada token: SDK mengirim `client_credentials` ke `/oauth/token` dan menyimpan tokennya di memori.
 2. Token masih berlaku: dipakai ulang, tanpa menghubungi NICE.
@@ -67,6 +67,41 @@ Tidak ada perintah ubah dan hapus. `DELETE /devices/{id}` operasi sensitif yang 
 5. NICE menjawab `invalid_client`: SDK berhenti meminta token untuk Service Account itu. Panggilan berikutnya langsung gagal tanpa menghubungi NICE, dan klien keluar.
 
 Project tidak disebut di scope: token Service Account selalu untuk project tempat akun itu dibuat. Tidak ada refresh token; "memperbarui" berarti membuktikan key lagi.
+
+Client itu mengirim token ke host mana pun yang dipanggil lewatnya, jadi hanya gateway `nadi` yang memakainya. Galat memperoleh token datang terbungkus `*url.Error` dari `http.Client`, sehingga gateway memeriksa `GrantError` dan `IsTemporary` lebih dulu, baru `*url.Error` sebagai `nadi` tidak terjangkau.
+
+### Bentuk tersingkat
+
+Contoh ini membaca `.env` dan menyuntikkan konfigurasi di tes, jadi `bootstrap` mengisi `credentials.Config` sendiri. Integrasi yang cukup membaca environment proses dapat memakai `NewFromEnv`: ia membaca `NICE_ISSUER`, `NICE_SA_ID`, dan `NICE_SA_API_KEY`, tidak membaca `.env`, dan galatnya menyebut nama variabel yang kosong tanpa nilainya.
+
+```go
+package main
+
+import (
+	"context"
+	"io"
+	"log"
+	"os"
+
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+)
+
+func main() {
+	ctx := context.Background()
+	c, err := credentials.NewFromEnv() // NICE_ISSUER, NICE_SA_ID, NICE_SA_API_KEY
+	if err != nil {
+		log.Fatal(err)
+	}
+	go c.Run(ctx)
+	hc := c.HTTPClient(credentials.Key{Audience: "nadi"})
+	resp, err := hc.Get("http://127.0.0.1:8081/devices")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(os.Stdout, resp.Body)
+}
+```
 
 Padanan `curl` satu panggilan `list`, untuk bahasa lain:
 
@@ -128,7 +163,7 @@ make smoke                     # scripts/smoke.sh, butuh NICE yang sudah diatur 
 
 Bila `go` di `PATH` tidak cocok dengan `GOROOT`, panggil `make GO=/path/ke/go test`.
 
-Tes di `internal/bootstrap` menjalankan perakitan asli dengan `niceclient.Client` asli di depan NICE palsu (endpoint token `client_credentials`) dan `nadi` palsu, jadi yang dibuktikan adalah perilaku di kabel: berapa kali `/oauth/token` dipanggil dan header apa yang sampai ke service. Jam SDK dipalsukan supaya pembaruan token tidak menunggu sepuluh menit. Setiap tes ditutup dengan pemeriksaan yang sama: key tidak pernah muncul di request ke `nadi`, dan key maupun token tidak pernah muncul di stdout atau stderr.
+Tes di `internal/bootstrap` menjalankan perakitan asli dengan `credentials.Client` asli di depan NICE palsu (endpoint token `client_credentials`) dan `nadi` palsu, jadi yang dibuktikan adalah perilaku di kabel: berapa kali `/oauth/token` dipanggil dan header apa yang sampai ke service. Jam SDK dipalsukan supaya pembaruan token tidak menunggu sepuluh menit. Setiap tes ditutup dengan pemeriksaan yang sama: key tidak pernah muncul di request ke `nadi`, dan key maupun token tidak pernah muncul di stdout atau stderr.
 
 ## Checklist setup NICE
 

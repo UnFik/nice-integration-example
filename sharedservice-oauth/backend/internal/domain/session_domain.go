@@ -17,7 +17,7 @@ type User struct {
 }
 
 // Session is a browser session of the UI. ID is the value of the cookie;
-// Subject is another random value under which niceclient keeps the refresh
+// Subject is another random value under which niceauth/credentials keeps the refresh
 // token, so the cookie never names the stored tokens.
 type Session struct {
 	ID      string

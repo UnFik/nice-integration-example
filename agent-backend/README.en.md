@@ -15,9 +15,9 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer exchanged token (aud=inventaris, act.sub=agen-backend)--> inventaris /items
 ```
 
-Minimum NICE version: a revision with `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, and `add-token-exchange` (`nice` `6cc9986` or later). The MCP SDK is pinned in `go.mod` at `v1.8.0`.
+Minimum NICE version: a revision with `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, `add-token-exchange`, and `rename-sdk-to-niceauth` (`nice` `00256d3` or later). The MCP SDK is pinned in `go.mod` at `v1.8.0`.
 
-Tested against nice revision: `6cc9986` (2026-11-13)
+Tested against nice revision: `6cc9986` (2026-11-13). Revision `00256d3` (`nice/pkg/niceauth`, 2026-11-19) was tested with the unit tests only, since `agen` and `inventaris` are not registered in the local stack; `make smoke` was not run again.
 
 ## Folder structure
 
@@ -33,16 +33,16 @@ internal/
     dto/                             Caller, Where, Key, Request, Response, Failure (*_dto.go)
     internal/{key,failure}/          ID checks and mapping of errors to Failure (*_helper.go)
   adapter/
-    mcp/                             HTTP routes and the nicetoken chain (routes.go), MCP server and tool schemas (tools_routes.go),
+    mcp/                             HTTP routes and the niceauth/verify chain (routes.go), MCP server and tool schemas (tools_routes.go),
                                      one handler per tool (*_handler.go); internal/ holds caller, challenge, mapper
-    niceexchange/                    wraps niceclient: token exchange and DoAs (sender_client.go)
+    niceexchange/                    wraps niceauth: token exchange and DoAs (sender_client.go)
   platform/config/                   env and .env
   bootstrap/                         assembly; integration tests with a fake NICE
   arch_test.go                       architecture test: file name endings and import direction
 scripts/smoke.sh                     smoke test against a NICE that is set up
 ```
 
-Why: `main.go` only assembles; the rules and the use case do not import `net/http`, the MCP SDK, `niceclient`, or `nicetoken` (the adapters do, enforced by `internal/arch_test.go`); every file carries its layer in the name ending (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named like its file. `openapi.json` stays hand-written and is embedded from `docs/`; `docs/openapi_test.go` keeps the permission in the document equal to the one the code enforces.
+Why: `main.go` only assembles; the rules and the use case do not import `net/http`, the MCP SDK, `niceauth/credentials`, or `niceauth/verify` (the adapters do, enforced by `internal/arch_test.go`); every file carries its layer in the name ending (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named like its file. `openapi.json` stays hand-written and is embedded from `docs/`; `docs/openapi_test.go` keeps the permission in the document equal to the one the code enforces.
 
 ## Endpoints and tools
 
@@ -69,7 +69,7 @@ An `api_key` service uses a key per Service Account and refuses user tokens (`40
 
 ### How a call works
 
-`callAs` calls `niceclient.ExchangeClient.DoAs` with the user's token from the MCP request and the key `{Org, Project, Audience}`. `DoAs`:
+`callAs` calls `credentials.ExchangeClient.DoAs` with the user's token from the MCP request and the key `{Org, Project, Audience}`. `DoAs`:
 
 - keeps a token per `(user, organization, project, service)` until 60 seconds before it expires, and never uses a token that outlives the user's token;
 - runs one exchange per key for parallel calls, with no queue across keys, so different contexts (organization or project) are exchanged at the same time;

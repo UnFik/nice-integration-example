@@ -20,7 +20,7 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 const (
@@ -126,7 +126,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	log := slog.New(slog.DiscardHandler)
 	vc := VerifierConfig(e.cfg, log)
 	vc.StaticJWKS = testJWKS(t)
-	v, err := nicetoken.New(vc)
+	v, err := verify.New(vc)
 	if err != nil {
 		t.Fatal(err)
 	}
