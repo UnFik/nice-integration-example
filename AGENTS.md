@@ -4,11 +4,11 @@ Repo ini berisi lima contoh integrasi dengan NICE yang **berdiri sendiri**. Cont
 
 | Folder | Peran di NICE | Stack | Port |
 |---|---|---|---|
-| `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice/pkg/nicetoken` + `nice/pkg/niceclient`; Vite + React 19 + TypeScript | 8081 (UI build juga di 8081); 5181 saat dev |
+| `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice/pkg/niceauth/verify` + `nice/pkg/niceauth/credentials`; Vite + React 19 + TypeScript | 8081 (UI build juga di 8081); 5181 saat dev |
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
-| `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service `nice_token` (`inventaris`) lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceclient` | 8083 |
-| `service-account-client/` | Pemanggil mesin: Service Account tenant yang menukar API key ke NICE (`client_credentials`) lalu memanggil service `nice_token` `nadi` | Go + `nice/pkg/niceclient` (`KindServiceAccount`) | tanpa port (program baris perintah) |
+| `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service `nice_token` (`inventaris`) lewat token exchange | Go + SDK MCP Go + `nice/pkg/niceauth/credentials` | 8083 |
+| `service-account-client/` | Pemanggil mesin: Service Account tenant yang menukar API key ke NICE (`client_credentials`) lalu memanggil service `nice_token` `nadi` | Go + `nice/pkg/niceauth/credentials` (`KindServiceAccount`) | tanpa port (program baris perintah) |
 
 `agent-backend` dan `service-account-client` memakai `replace github.com/nice-platform/nice => ../../nice` dan `sharedservice-oauth/backend` memakai `=> ../../../nice`, jadi repo `nice` harus berada di sebelah `example/`. `compose.yml` di akar menjalankan `sharedservice-oauth` dan PostgreSQL-nya di samping stack NICE di Docker.
 
@@ -42,12 +42,12 @@ make run | make test               jalankan satu perintah (ARGS="list" | "create
 make smoke                         uji terhadap NICE dan nadi yang sudah diatur (baca .env)
 ```
 
-Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` butuh `nice` `4282316` atau sesudahnya, `shared-service-apikey` butuh `40ddb20` atau sesudahnya, `agent-backend` butuh `6cc9986` atau sesudahnya, dan `service-account-client` butuh `c7a5086` atau sesudahnya.
+Versi NICE minimum per contoh ada di `README.md` akar. Ketiga contoh Go (`sharedservice-oauth`, `agent-backend`, `service-account-client`) butuh `nice` `00256d3` atau sesudahnya (`rename-sdk-to-niceauth`, SDK Go di `nice/pkg/niceauth`), dan `shared-service-apikey` butuh `40ddb20` atau sesudahnya.
 
 ## Aturan
 
 - **Dokumen.** Dokumen ditulis dalam bahasa Indonesia. Setiap `README.md` punya `README.en.md` dengan isi yang setara, dan mengubah salah satunya berarti mengubah keduanya.
-- **Kode protokol OAuth.** Di browser, `oidc.ts`, token manager, dan NICE palsu di `src/test/` hanya ada di `public-client-pkce`. `sharedservice-oauth/web` tidak boleh memuat kode protokol, token, atau pustaka OAuth: login, refresh, pindah konteks, dan keluar dikerjakan `sharedservice-oauth/backend` lewat `nice/pkg/niceclient`. Perbaikan protokol yang juga menyentuh SDK diterapkan lewat `niceclient` di repo `nice`.
+- **Kode protokol OAuth.** Di browser, `oidc.ts`, token manager, dan NICE palsu di `src/test/` hanya ada di `public-client-pkce`. `sharedservice-oauth/web` tidak boleh memuat kode protokol, token, atau pustaka OAuth: login, refresh, pindah konteks, dan keluar dikerjakan `sharedservice-oauth/backend` lewat `nice/pkg/niceauth/credentials`. Perbaikan protokol yang juga menyentuh SDK diterapkan lewat `niceauth/credentials` di repo `nice`.
 - **Komentar kode.** Komentar boleh di semua contoh: singkat, berbahasa Inggris, dan hanya untuk menjelaskan alasan. Jangan menulis komentar yang sekadar mengulang isi kode. Contoh ini bahan ajar, jadi aturannya berbeda dengan `nice-console` yang melarang komentar.
 - **Rahasia.** Jangan menulis rahasia ke berkas yang di-commit. `.env` dan `data/` di-ignore, dan `.env.example` hanya berisi placeholder. Nilai kredensial, API key, dan token tidak boleh muncul di log, respons galat, atau keluaran `smoke.sh`.
 - **Tes.** Tes unit tidak boleh butuh NICE yang berjalan. Hanya `scripts/smoke.sh` dan uji manual browser yang menyentuh NICE. Tes PostgreSQL `sharedservice-oauth/backend` dilewati tanpa `TEST_DATABASE_URL`; pakai database sementara milik tes sendiri, bukan database NICE.

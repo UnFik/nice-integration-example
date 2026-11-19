@@ -1,5 +1,5 @@
 // Package nicegateway implements the NICE port of the session use cases with
-// pkg/niceclient: a Client (KindBFF) that keeps the refresh token of every
+// pkg/niceauth/credentials: a Client (KindBFF) that keeps the refresh token of every
 // session, and an ExchangeClient of the same confidential client that trades
 // the sign-in token for a delegated token of the NICE API.
 package nicegateway
@@ -16,7 +16,7 @@ import (
 
 	sessionusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
-	"github.com/nice-platform/nice/pkg/niceclient"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 )
 
 // BaseScopes are sent with the sign-in and with every refresh, so userinfo
@@ -24,8 +24,8 @@ import (
 var BaseScopes = []string{"openid", "profile", "email", "offline_access"}
 
 type Gateway struct {
-	Client      *niceclient.Client
-	Exchange    *niceclient.ExchangeClient
+	Client      *credentials.Client
+	Exchange    *credentials.ExchangeClient
 	Issuer      string
 	RedirectURI string
 	HTTP        *http.Client
@@ -35,7 +35,7 @@ type Gateway struct {
 var prompts = map[string]bool{"login": true, "select_account": true}
 
 func (g *Gateway) AuthorizeURL(ctx context.Context, subject, session, prompt string) (string, error) {
-	u, err := g.Client.AuthorizeURL(ctx, niceclient.ConnectRequest{Subject: subject, Session: session, RedirectURI: g.RedirectURI})
+	u, err := g.Client.AuthorizeURL(ctx, credentials.ConnectRequest{Subject: subject, Session: session, RedirectURI: g.RedirectURI})
 	if err != nil {
 		return "", err
 	}
@@ -47,11 +47,11 @@ func (g *Gateway) AuthorizeURL(ctx context.Context, subject, session, prompt str
 
 func (g *Gateway) HandleCallback(ctx context.Context, session string, query url.Values) (string, error) {
 	conn, err := g.Client.HandleCallback(ctx, session, query)
-	var ge *niceclient.GrantError
+	var ge *credentials.GrantError
 	switch {
 	case err == nil:
 		return conn.NiceSubject, nil
-	case errors.Is(err, niceclient.ErrStateMismatch):
+	case errors.Is(err, credentials.ErrStateMismatch):
 		return "", sessionusecase.ErrStateMismatch
 	case errors.As(err, &ge):
 		// Every refusal at the callback (access_denied included) leaves no session to end.
@@ -61,7 +61,7 @@ func (g *Gateway) HandleCallback(ctx context.Context, session string, query url.
 }
 
 func (g *Gateway) ServiceToken(ctx context.Context, subject string, c domain.Context) (string, error) {
-	tok, err := g.Client.Token(ctx, niceclient.Key{Subject: subject, Org: c.Org, Audience: domain.ServiceSlug, Project: c.Project})
+	tok, err := g.Client.Token(ctx, credentials.Key{Subject: subject, Org: c.Org, Audience: domain.ServiceSlug, Project: c.Project})
 	if err != nil {
 		return "", mapError(err)
 	}
@@ -69,8 +69,8 @@ func (g *Gateway) ServiceToken(ctx context.Context, subject string, c domain.Con
 }
 
 func (g *Gateway) DropServiceToken(_ context.Context, subject string, c domain.Context, token string) {
-	g.Client.Invalidate(niceclient.Key{Subject: subject, Org: c.Org, Audience: domain.ServiceSlug, Project: c.Project},
-		niceclient.Token{Access: token})
+	g.Client.Invalidate(credentials.Key{Subject: subject, Org: c.Org, Audience: domain.ServiceSlug, Project: c.Project},
+		credentials.Token{Access: token})
 }
 
 func (g *Gateway) SignInToken(ctx context.Context, subject string) (string, error) {
@@ -85,17 +85,17 @@ func (g *Gateway) Disconnect(ctx context.Context, subject string) error {
 	return mapError(g.Client.Disconnect(ctx, subject))
 }
 
-// mapError turns the errors of niceclient into those of the use cases.
+// mapError turns the errors of niceauth/credentials into those of the use cases.
 func mapError(err error) error {
-	var ge *niceclient.GrantError
+	var ge *credentials.GrantError
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, niceclient.ErrSessionEnded), errors.Is(err, niceclient.ErrNotConnected):
+	case errors.Is(err, credentials.ErrSessionEnded), errors.Is(err, credentials.ErrNotConnected):
 		return sessionusecase.ErrSessionEnded
 	case errors.As(err, &ge):
 		return &sessionusecase.RefusedError{Code: ge.Code, Description: ge.Description}
-	case niceclient.IsTemporary(err):
+	case credentials.IsTemporary(err):
 		return &sessionusecase.UnavailableError{Err: err}
 	}
 	return err
@@ -104,11 +104,11 @@ func mapError(err error) error {
 // exchangeError maps a refusal of the exchange. It never ends the session:
 // invalid_grant there is about the subject token, not the refresh token.
 func exchangeError(err error) error {
-	var ge *niceclient.GrantError
+	var ge *credentials.GrantError
 	switch {
 	case errors.As(err, &ge):
 		return &sessionusecase.RefusedError{Code: ge.Code, Description: ge.Description}
-	case niceclient.IsTemporary(err):
+	case credentials.IsTemporary(err):
 		return &sessionusecase.UnavailableError{Err: err}
 	}
 	return &sessionusecase.UnavailableError{Err: err}

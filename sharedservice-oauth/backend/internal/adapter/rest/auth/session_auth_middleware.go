@@ -8,7 +8,7 @@ import (
 
 // WithSession puts the token of the active context on a device request that
 // comes with the session cookie and no Authorization, then hands it to next:
-// the nicetoken chain verifies it as any Bearer token, so permissions,
+// the niceauth/verify chain verifies it as any Bearer token, so permissions,
 // tenant, feed and sensitive checks hold for both paths. A request with
 // Authorization is a Bearer caller and the cookie is ignored.
 func (h *Handler) WithSession(next http.Handler) http.Handler {

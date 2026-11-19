@@ -15,9 +15,9 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer token hasil exchange (aud=inventaris, act.sub=agen-backend)--> inventaris /items
 ```
 
-Versi NICE minimum: revisi yang memuat `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, dan `add-token-exchange` (`nice` `6cc9986` atau sesudahnya). SDK MCP dipin di `go.mod` pada `v1.8.0`.
+Versi NICE minimum: revisi yang memuat `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, `add-token-exchange`, dan `rename-sdk-to-niceauth` (`nice` `00256d3` atau sesudahnya). SDK MCP dipin di `go.mod` pada `v1.8.0`.
 
-Diuji terhadap nice revisi: `6cc9986` (2026-11-13)
+Diuji terhadap nice revisi: `6cc9986` (2026-11-13). Revisi `00256d3` (`nice/pkg/niceauth`, 2026-11-19) hanya diuji dengan tes unit, karena `agen` dan `inventaris` tidak terdaftar di stack lokal; `make smoke` belum dijalankan ulang.
 
 ## Struktur folder
 
@@ -33,16 +33,16 @@ internal/
     dto/                             Caller, Where, Key, Request, Response, Failure (*_dto.go)
     internal/{key,failure}/          validasi ID dan pemetaan galat ke Failure (*_helper.go)
   adapter/
-    mcp/                             rute HTTP dan rantai nicetoken (routes.go), server MCP dan skema tool (tools_routes.go),
+    mcp/                             rute HTTP dan rantai niceauth/verify (routes.go), server MCP dan skema tool (tools_routes.go),
                                      satu handler per tool (*_handler.go); internal/ untuk caller, challenge, mapper
-    niceexchange/                    pembungkus niceclient: token exchange dan DoAs (sender_client.go)
+    niceexchange/                    pembungkus niceauth: token exchange dan DoAs (sender_client.go)
   platform/config/                   env dan .env
   bootstrap/                         perakitan; tes integrasi dengan NICE palsu
   arch_test.go                       tes arsitektur: akhiran nama berkas dan arah impor
 scripts/smoke.sh                     uji smoke terhadap NICE yang sudah diatur
 ```
 
-Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http`, SDK MCP, `niceclient`, atau `nicetoken` (adapter yang mengimpor, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya. `openapi.json` tetap ditulis tangan dan di-embed dari `docs/`; `docs/openapi_test.go` menjaga bahwa izin di dokumen sama dengan yang ditegakkan kode.
+Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http`, SDK MCP, `niceauth/credentials`, atau `niceauth/verify` (adapter yang mengimpor, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya. `openapi.json` tetap ditulis tangan dan di-embed dari `docs/`; `docs/openapi_test.go` menjaga bahwa izin di dokumen sama dengan yang ditegakkan kode.
 
 ## Endpoint dan tool
 
@@ -69,7 +69,7 @@ Service `api_key` memakai kunci per Service Account dan menolak token user (`403
 
 ### Cara kerja panggilan
 
-`callAs` memanggil `niceclient.ExchangeClient.DoAs` dengan token user dari request MCP dan kunci `{Org, Project, Audience}`. `DoAs`:
+`callAs` memanggil `credentials.ExchangeClient.DoAs` dengan token user dari request MCP dan kunci `{Org, Project, Audience}`. `DoAs`:
 
 - menyimpan token per `(user, organisasi, project, service)` sampai 60 detik sebelum kedaluwarsa, dan tidak pernah memakai token yang umurnya melebihi token user;
 - menjalankan satu exchange per kunci untuk panggilan paralel, tanpa antrean antar kunci, sehingga konteks (organisasi atau project) yang berbeda ditukar bersamaan;

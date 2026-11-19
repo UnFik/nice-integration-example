@@ -18,7 +18,7 @@ const (
 )
 
 // Service explains a refusal of a service. Only the code and description are read from the body, in the shape of
-// nicetoken ({error, error_description}).
+// niceauth/verify ({error, error_description}).
 func Service(t domain.Target, status int, raw []byte) *calldto.Failure {
 	var body struct {
 		Error       string `json:"error"`

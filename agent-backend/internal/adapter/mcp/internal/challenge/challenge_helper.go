@@ -1,9 +1,9 @@
-// Package challenge adds the resource metadata to the 401 and 403 challenges of nicetoken.
+// Package challenge adds the resource metadata to the 401 and 403 challenges of niceauth/verify.
 package challenge
 
 import "net/http"
 
-// With adds the resource metadata to the challenges of nicetoken, so an MCP client that gets 401 or 403
+// With adds the resource metadata to the challenges of niceauth/verify, so an MCP client that gets 401 or 403
 // finds the authorization server (RFC 9728, section 5.1).
 func With(metadataURL string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

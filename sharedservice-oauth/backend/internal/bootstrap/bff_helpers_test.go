@@ -19,7 +19,7 @@ import (
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 const (
@@ -287,10 +287,10 @@ type bffEnv struct {
 	*testEnv
 	nice *bffNICE
 	auth *Auth
-	v    *nicetoken.Verifier
+	v    *verify.Verifier
 }
 
-func newBFFEnv(t *testing.T, checker nicetoken.AccessChecker) *bffEnv {
+func newBFFEnv(t *testing.T, checker verify.AccessChecker) *bffEnv {
 	t.Helper()
 	f := newBFFNICE(t)
 	cfg := config.Config{Issuer: f.URL, ClientID: testClientID, ClientSecret: testClientSecret, PublicURL: bffPublicURL,
@@ -302,7 +302,7 @@ func newBFFEnv(t *testing.T, checker nicetoken.AccessChecker) *bffEnv {
 	if checker != nil {
 		vc.Checker = checker
 	}
-	v, err := nicetoken.New(vc)
+	v, err := verify.New(vc)
 	if err != nil {
 		t.Fatal(err)
 	}

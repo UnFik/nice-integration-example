@@ -10,7 +10,7 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 )
 
-// PendingTTL is how long a started sign-in may take; niceclient keeps the
+// PendingTTL is how long a started sign-in may take; niceauth/credentials keeps the
 // state as long.
 const PendingTTL = 10 * time.Minute
 

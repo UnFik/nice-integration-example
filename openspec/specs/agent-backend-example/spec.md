@@ -6,7 +6,7 @@ Contoh backend agen (MCP server untuk service `agen`) yang menjalankan tool ke s
 ## Requirements
 
 ### Requirement: MCP server dilindungi token NICE
-The agent SHALL serve MCP over Streamable HTTP at `/mcp` and SHALL accept only requests with a NICE access token whose `aud` is `agen` and whose `perms` hold `agen.mcp.use`, verified with `pkg/nicetoken`. It SHALL serve Protected Resource Metadata at `/.well-known/oauth-protected-resource` naming NICE as the authorization server and `nice:aud:agen` as the needed scope.
+The agent SHALL serve MCP over Streamable HTTP at `/mcp` and SHALL accept only requests with a NICE access token whose `aud` is `agen` and whose `perms` hold `agen.mcp.use`, verified with `pkg/niceauth/verify`. It SHALL serve Protected Resource Metadata at `/.well-known/oauth-protected-resource` naming NICE as the authorization server and `nice:aud:agen` as the needed scope.
 
 #### Scenario: Tanpa token
 - **WHEN** an MCP client calls `/mcp` without a token
@@ -49,7 +49,7 @@ The example SHALL carry `README.md` and `README.en.md` with the NICE version it 
 - **THEN** the created item in `inventaris` shows the agent's client as `acted_by`
 
 ### Requirement: Tool memanggil inventaris atas nama user
-Each tool SHALL obtain a token for `inventaris` with token exchange (`pkg/niceclient` exchange mode), using the user's token from the MCP request as subject token and the agent's confidential service client as actor, and SHALL call `inventaris` with that token only. The user's own token SHALL NOT be sent to any service other than NICE's token endpoint. The agent SHALL NOT expose tools for `api_key` services.
+Each tool SHALL obtain a token for `inventaris` with token exchange (`pkg/niceauth/credentials` exchange mode), using the user's token from the MCP request as subject token and the agent's confidential service client as actor, and SHALL call `inventaris` with that token only. The user's own token SHALL NOT be sent to any service other than NICE's token endpoint. The agent SHALL NOT expose tools for `api_key` services.
 
 #### Scenario: Daftar barang
 - **WHEN** the user calls `inventaris_list_items` without arguments

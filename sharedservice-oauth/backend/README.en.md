@@ -2,16 +2,16 @@
 
 [Bahasa Indonesia](README.md)
 
-The backend of the [`sharedservice-oauth`](../README.en.md) example: a NICE SharedService in `nice_token` mode with the slug `nadi`, written in Go (`net/http`) with the reference library `nice/pkg/nicetoken`. Clients call this service directly with a NICE access token; NICE is not on the request path. The service verifies the token itself according to the [token verification contract](../../../nice/docs/token-verification.md), keeps data apart per organization and project, and checks sensitive operations online with NICE. The same backend also serves the UI in [`../web`](../web/README.en.md) as its backend-for-frontend (`/auth/*`, through `nice/pkg/niceclient`); how it works, the UI checklist and the browser tests are in [`../README.en.md`](../README.en.md).
+The backend of the [`sharedservice-oauth`](../README.en.md) example: a NICE SharedService in `nice_token` mode with the slug `nadi`, written in Go (`net/http`) with the reference library `nice/pkg/niceauth/verify`. Clients call this service directly with a NICE access token; NICE is not on the request path. The service verifies the token itself according to the [token verification contract](../../../nice/docs/token-verification.md), keeps data apart per organization and project, and checks sensitive operations online with NICE. The same backend also serves the UI in [`../web`](../web/README.en.md) as its backend-for-frontend (`/auth/*`, through `nice/pkg/niceauth/credentials`); how it works, the UI checklist and the browser tests are in [`../README.en.md`](../README.en.md).
 
-Tested against nice revision: not tested by hand yet (see [`../README.en.md`](../README.en.md)); the Bearer service was last tested against `c7a5086` (2026-11-13).
+Tested against nice revision: `00256d3` (2026-11-19) for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md).
 
 ## Contents
 
 | File | Contents |
 |---|---|
 | `cmd/nadi/main.go` | thin entry point, document-level swag annotations including `x-nice-roles` |
-| `internal/bootstrap/` | assembly: configuration, `nicetoken` (`New`, `Run`, `StartFeed`), the choice of device store, `niceclient` and sessions, use cases, server |
+| `internal/bootstrap/` | assembly: configuration, `niceauth/verify` (`New`, `Run`, `StartFeed`), the choice of device store, `niceauth/credentials` and sessions, use cases, server |
 | `internal/adapter/rest/` | `routes.go` (the `CORS -> mux` chain), `device/` (the single route table, handlers, per-operation swag annotations), `auth/` (`/auth/*` and the session middleware that puts the token of the active context), `web/` (serves `web/dist`), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
 | `internal/app/device/` | device use cases and the `Repo` contract that takes the scope key |
 | `internal/app/session/` | use cases of the browser session (sign-in, contexts, switching context, sign-out) and the `NICE` and `Store` ports |
@@ -19,7 +19,7 @@ Tested against nice revision: not tested by hand yet (see [`../README.en.md`](..
 | `internal/adapter/memory/device/` | in-memory device storage per organization and project |
 | `internal/adapter/postgres/device/` | the same storage in PostgreSQL, chosen when `DATABASE_URL` is set |
 | `internal/adapter/memory/session/` | in-memory browser sessions |
-| `internal/adapter/nice/` | the `NICE` port through `niceclient` (a `KindBFF` `Client` and an `ExchangeClient`), `/oauth/userinfo`, and `/api/v1/me/contexts` |
+| `internal/adapter/nice/` | the `NICE` port through `niceauth/credentials` (a `KindBFF` `Client` and an `ExchangeClient`), `/oauth/userinfo`, and `/api/v1/me/contexts` |
 | `migrations/` | SQL migrations (`tenants`, `devices`, with `down`), embedded and run at start when `DATABASE_URL` is set |
 | `internal/platform/` | `config` (environment and `.env`), `httpx` (CORS for other registered SPAs), and `postgres` (pool and migration runner) |
 | `Dockerfile` | image of the backend with the built UI (used by `compose.yml` at the repository root) |
@@ -43,7 +43,7 @@ internal/
     memory/device/                   *_repository.go      in-memory Repo implementation
     postgres/device/                 *_repository.go      PostgreSQL Repo implementation
     memory/session/                *_repository.go      in-memory browser sessions
-    nice/                          *_gateway.go         the NICE port through niceclient
+    nice/                          *_gateway.go         the NICE port through niceauth/credentials
     rest/                          routes.go            assembler: token verification, permission, session, CORS
     rest/device/                     device_routes.go       route table + <action>_device_handler.go
     rest/auth/                     auth_routes.go       /auth/* + session and CSRF middleware
@@ -69,7 +69,7 @@ The layout follows a module of the `nice` backend (`nice/AGENTS.md`, "Struktur s
 
 `GET /healthz`, `GET /openapi.json`, and `GET /docs` (Swagger UI; its assets load from the jsdelivr CDN) are open without a token and are not in the OpenAPI document. On `/docs`, press **Authorize** and enter `Bearer <JWT>` to try an operation. After the import, the NICE catalog has the roles `nadi.viewer` (read), `nadi.admin` (every permission), and `nadi.editor` (read, create, edit; from `x-nice-roles`).
 
-Device body: `{"name": "...", "serial_number": "...", "status": "active", "location": "..."}`. `name` is 1 to 120 and `serial_number` 1 to 64 characters after trimming surrounding spaces, `status` is one of `active`, `inactive`, `maintenance`, and `location` is optional (at most 120 characters, empty by default). Application errors use the same shape as `nicetoken`: `{"error": "...", "error_description": "..."}`, e.g. `400 {"error":"invalid_argument","error_description":"name"}` and `404 {"error":"not_found"}`.
+Device body: `{"name": "...", "serial_number": "...", "status": "active", "location": "..."}`. `name` is 1 to 120 and `serial_number` 1 to 64 characters after trimming surrounding spaces, `status` is one of `active`, `inactive`, `maintenance`, and `location` is optional (at most 120 characters, empty by default). Application errors use the same shape as `niceauth/verify`: `{"error": "...", "error_description": "..."}`, e.g. `400 {"error":"invalid_argument","error_description":"name"}` and `404 {"error":"not_found"}`.
 
 Behavior worth knowing:
 
@@ -100,7 +100,7 @@ A device created with such a token records both:
 {"id": "dev_...", "name": "Sensor Suhu", "serial_number": "SN-1", "status": "active", "location": "Gudang A", "created_by": "usr_...", "acted_by": "<client_id of agen-backend>"}
 ```
 
-Without `act`, there is no `acted_by` field. The code reads it from `Claims.Actor` of `nicetoken` (`internal/adapter/rest/device/create_device_handler.go`), and the test `TestDeviceCreatedByAnAgentRecordsTheActor` uses a test token that carries `act`.
+Without `act`, there is no `acted_by` field. The code reads it from `Claims.Actor` of `niceauth/verify` (`internal/adapter/rest/device/create_device_handler.go`), and the test `TestDeviceCreatedByAnAgentRecordsTheActor` uses a test token that carries `act`.
 
 ## Prerequisites
 

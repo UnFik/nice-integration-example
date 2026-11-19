@@ -1,4 +1,4 @@
-// Package niceexchange wraps niceclient: the token exchange of RFC 8693 and the call to a service with the
+// Package niceexchange wraps niceauth/credentials: the token exchange of RFC 8693 and the call to a service with the
 // exchanged token.
 package niceexchange
 
@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/nice-platform/nice/pkg/niceclient"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 
 	calldto "github.com/nice-platform/example/agent-backend/internal/app/call/dto"
 	"github.com/nice-platform/example/agent-backend/internal/domain"
@@ -21,13 +21,13 @@ const maxBody = 1 << 20
 
 // Client sends requests with an exchanged token. It fills the Sender contract of the call use case.
 type Client struct {
-	x *niceclient.ExchangeClient
+	x *credentials.ExchangeClient
 }
 
 // New makes the client of the confidential service client bound to agen, the actor of every exchange. hc is shared
 // by the exchange and the calls, so they share its connection pool.
-func New(cfg niceclient.ExchangeConfig) (*Client, error) {
-	x, err := niceclient.NewExchange(cfg)
+func New(cfg credentials.ExchangeConfig) (*Client, error) {
+	x, err := credentials.NewExchange(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *Client) Send(ctx context.Context, token string, key calldto.Key, r call
 	if r.Body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := c.x.DoAs(ctx, token, niceclient.Key{Org: key.Org, Project: key.Project, Audience: key.Audience}, req)
+	resp, err := c.x.DoAs(ctx, token, credentials.Key{Org: key.Org, Project: key.Project, Audience: key.Audience}, req)
 	if err != nil {
 		return calldto.Response{}, domainError(err)
 	}
@@ -65,12 +65,12 @@ func (c *Client) Send(ctx context.Context, token string, key calldto.Key, r call
 
 // domainError names a failure of the exchange in the terms of the use case.
 func domainError(err error) error {
-	var grant *niceclient.GrantError
+	var grant *credentials.GrantError
 	var urlErr *url.Error
 	switch {
 	case errors.As(err, &grant):
 		return &domain.GrantError{Code: grant.Code, Description: grant.Description}
-	case niceclient.IsTemporary(err):
+	case credentials.IsTemporary(err):
 		return domain.ErrTemporary
 	case errors.As(err, &urlErr):
 		return domain.ErrUnreachable

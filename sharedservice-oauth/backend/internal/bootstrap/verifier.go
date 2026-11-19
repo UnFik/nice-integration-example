@@ -6,34 +6,34 @@ import (
 
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
-// VerifierConfig wires nicetoken for this service. Tests reuse it and only swap
+// VerifierConfig wires niceauth/verify for this service. Tests reuse it and only swap
 // the key source and the checker.
-func VerifierConfig(cfg config.Config, tenants TenantCreator, log *slog.Logger) nicetoken.Config {
-	c := nicetoken.Config{
+func VerifierConfig(cfg config.Config, tenants TenantCreator, log *slog.Logger) verify.Config {
+	c := verify.Config{
 		Issuer:   cfg.Issuer,
 		Service:  domain.ServiceSlug,
 		JWKSFile: cfg.JWKSFile,
 		// A valid token for this service already proves that NICE entitled the
 		// organization, so its first request is a safe moment to create the tenant.
-		Tenants: nicetoken.ProvisionOnFirstUse(tenants.CreateTenant),
+		Tenants: verify.ProvisionOnFirstUse(tenants.CreateTenant),
 		Log:     log,
 	}
 	if cfg.ServiceAPIKey != "" {
-		// Without a checker, nicetoken refuses sensitive operations with 503 (fail closed).
-		c.Checker = nicetoken.NewHTTPChecker(cfg.Issuer, cfg.ServiceAPIKey)
+		// Without a checker, niceauth/verify refuses sensitive operations with 503 (fail closed).
+		c.Checker = verify.NewHTTPChecker(cfg.Issuer, cfg.ServiceAPIKey)
 	}
 	return c
 }
 
 // StartFeed reads the access change feed when the nice.service key is set, so
 // tokens issued before a revocation are refused with token_stale.
-func StartFeed(ctx context.Context, v *nicetoken.Verifier, cfg config.Config, log *slog.Logger) error {
+func StartFeed(ctx context.Context, v *verify.Verifier, cfg config.Config, log *slog.Logger) error {
 	if cfg.ServiceAPIKey == "" {
 		log.Warn(config.EnvServiceAPIKey + " is not set: the access change feed is off, so revoked access is refused only when the token expires (up to 30 minutes), and DELETE /devices/{id} answers 503")
 		return nil
 	}
-	return v.StartFeed(ctx, nicetoken.FeedConfig{APIKey: cfg.ServiceAPIKey})
+	return v.StartFeed(ctx, verify.FeedConfig{APIKey: cfg.ServiceAPIKey})
 }

@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // staleEnv signs in with tokens issued ten seconds ago and then starts the
 // access change feed with a change of the user in organization A five seconds
-// ago, so the token of the active context A/P kept by niceclient is stale.
+// ago, so the token of the active context A/P kept by niceauth/credentials is stale.
 func staleEnv(t *testing.T) (*bffEnv, *browser) {
 	t.Helper()
 	e := newBFFEnv(t, nil)
@@ -25,7 +25,7 @@ func staleEnv(t *testing.T) (*bffEnv, *browser) {
 	b.login()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if err := e.v.StartFeed(ctx, nicetoken.FeedConfig{APIKey: "nice_sk_test.secret"}); err != nil {
+	if err := e.v.StartFeed(ctx, verify.FeedConfig{APIKey: "nice_sk_test.secret"}); err != nil {
 		t.Fatal(err)
 	}
 	return e, b

@@ -15,7 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // callEnv is the agent without the MCP layer, for the calls themselves.
@@ -48,7 +48,7 @@ func (e *callEnv) call(ctx context.Context, c calldto.Caller, t domain.Target, w
 
 func (e *callEnv) caller(org, prj string) calldto.Caller {
 	tok := e.userToken(org, prj)
-	v, err := nicetoken.New(nicetoken.Config{Issuer: e.issuer, Service: domain.ServiceSlug, StaticJWKS: testJWKS(e.t), Log: slog.New(slog.DiscardHandler)})
+	v, err := verify.New(verify.Config{Issuer: e.issuer, Service: domain.ServiceSlug, StaticJWKS: testJWKS(e.t), Log: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		e.t.Fatal(err)
 	}

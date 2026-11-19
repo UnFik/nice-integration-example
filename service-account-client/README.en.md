@@ -2,7 +2,7 @@
 
 [Bahasa Indonesia](README.md)
 
-An example **machine caller**: an integration with no user (a job, a daemon, a partner service) that holds the API key of a Service Account, proves it to NICE, and calls the `nice_token` service `nadi` ([`../sharedservice-oauth/backend`](../sharedservice-oauth/backend/README.en.md)) with the token it gets. Written in Go on `nice/pkg/niceclient` with `KindServiceAccount`. It shows four things:
+An example **machine caller**: an integration with no user (a job, a daemon, a partner service) that holds the API key of a Service Account, proves it to NICE, and calls the `nice_token` service `nadi` ([`../sharedservice-oauth/backend`](../sharedservice-oauth/backend/README.en.md)) with the token it gets. Written in Go on `nice/pkg/niceauth/credentials` with `KindServiceAccount`. It shows four things:
 
 - the API key is **sent to the NICE token endpoint only**. `nadi` never sees the key, only `Authorization: Bearer <token>`;
 - one token is reused while it is valid, and renewed in the background before it expires;
@@ -14,9 +14,9 @@ client --client_credentials: client_id=sa_..., client_secret=API key, scope=nice
 client --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Minimum NICE version: `nice` `c7a5086` or later (the same as the Bearer path of `nadi`).
+Minimum NICE version: `nice` `00256d3` or later (`rename-sdk-to-niceauth`: `nice/pkg/niceauth/credentials` and `Client.HTTPClient`).
 
-Tested against nice revision: `c7a3e33` (2026-11-19), NICE and `nadi` in Docker: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
+Tested against nice revision: `00256d3` (2026-11-19), NICE and `nadi` in Docker, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
 
 ## Folder structure
 
@@ -35,14 +35,14 @@ internal/
   adapter/
     cli/                             the command table (routes.go) and one handler per command (*_handler.go);
                                      internal/mapper/ prints devices and a Failure (*_mapper.go)
-    nadi/                            the port to nadi through niceclient (*_gateway.go)
+    nadi/                            the port to nadi through the *http.Client of the SDK (*_gateway.go)
   platform/config/                   env and .env
   bootstrap/                         assembly; cross-layer tests with a fake NICE and a fake nadi
   arch_test.go                       architecture test: file name suffixes, one function per use case, import direction
 scripts/smoke.sh                     smoke test against a NICE that is already set up
 ```
 
-Why: `main.go` only assembles; the rules and use cases import neither `net/http` nor `niceclient` (only `adapter/nadi` knows the SDK, enforced by `internal/arch_test.go`); every file carries its layer in its name suffix (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_gateway`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named after the file.
+Why: `main.go` only assembles; the rules and use cases import neither `net/http` nor `niceauth/credentials` (only `adapter/nadi` knows the SDK, enforced by `internal/arch_test.go`); every file carries its layer in its name suffix (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_gateway`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named after the file.
 
 ## Commands
 
@@ -58,7 +58,7 @@ There are no update and delete commands. `DELETE /devices/{id}` is a sensitive o
 
 ### How a call works
 
-`bootstrap` makes one `niceclient.Client` (`Kind: KindServiceAccount`, `ClientID` = the Service Account id, `ClientSecret` = the API key) and runs `Run` in the background. Every call goes through `client.Do(ctx, niceclient.Key{Audience: "nadi"}, req)`:
+`bootstrap` makes one `credentials.Client` (`Kind: KindServiceAccount`, `ClientID` = the Service Account id, `ClientSecret` = the API key), runs `Run` in the background, and gives `adapter/nadi` a plain `*http.Client` from `client.HTTPClient(credentials.Key{Audience: "nadi"})`. The gateway does not call the SDK to send a request; it only reads the errors of the SDK. Every request through that client goes like this:
 
 1. No token yet: the SDK sends `client_credentials` to `/oauth/token` and keeps the token in memory.
 2. The token is still valid: it is reused, without contacting NICE.
@@ -67,6 +67,41 @@ There are no update and delete commands. `DELETE /devices/{id}` is a sensitive o
 5. NICE answers `invalid_client`: the SDK stops asking for tokens for that Service Account. The next call fails at once without contacting NICE, and the client exits.
 
 The scope names no project: a Service Account token is always for the project the account was created in. There is no refresh token; "renewing" means proving the key again.
+
+That client sends the token to any host it calls, so only the `nadi` gateway uses it. A failure to get a token comes wrapped in a `*url.Error` from `http.Client`, so the gateway looks for `GrantError` and `IsTemporary` first, and only then for a `*url.Error` as `nadi` being unreachable.
+
+### Shortest form
+
+This example reads `.env` and injects its configuration in tests, so `bootstrap` fills `credentials.Config` itself. An integration that only needs the process environment can use `NewFromEnv`: it reads `NICE_ISSUER`, `NICE_SA_ID`, and `NICE_SA_API_KEY`, does not read `.env`, and its error names the empty variable without its value.
+
+```go
+package main
+
+import (
+	"context"
+	"io"
+	"log"
+	"os"
+
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+)
+
+func main() {
+	ctx := context.Background()
+	c, err := credentials.NewFromEnv() // NICE_ISSUER, NICE_SA_ID, NICE_SA_API_KEY
+	if err != nil {
+		log.Fatal(err)
+	}
+	go c.Run(ctx)
+	hc := c.HTTPClient(credentials.Key{Audience: "nadi"})
+	resp, err := hc.Get("http://127.0.0.1:8081/devices")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(os.Stdout, resp.Body)
+}
+```
 
 The `curl` equivalent of one `list` call, for other languages:
 
@@ -128,7 +163,7 @@ make smoke                     # scripts/smoke.sh, needs a NICE set up with the 
 
 When the `go` on `PATH` does not match `GOROOT`, call `make GO=/path/to/go test`.
 
-The tests in `internal/bootstrap` run the real assembly with the real `niceclient.Client` in front of a fake NICE (the `client_credentials` token endpoint) and a fake `nadi`, so what they prove is the behavior on the wire: how many times `/oauth/token` is called and which headers reach the service. The clock of the SDK is faked so that a token renewal does not wait ten minutes. Every test ends with the same check: the key never appears in a request to `nadi`, and neither the key nor a token ever appears in stdout or stderr.
+The tests in `internal/bootstrap` run the real assembly with the real `credentials.Client` in front of a fake NICE (the `client_credentials` token endpoint) and a fake `nadi`, so what they prove is the behavior on the wire: how many times `/oauth/token` is called and which headers reach the service. The clock of the SDK is faked so that a token renewal does not wait ten minutes. Every test ends with the same check: the key never appears in a request to `nadi`, and neither the key nor a token ever appears in stdout or stderr.
 
 ## NICE setup checklist
 

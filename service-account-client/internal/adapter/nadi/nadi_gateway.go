@@ -1,5 +1,6 @@
-// Package nadi calls the device API of nadi as the Service Account. It is the only package that knows niceclient:
-// the SDK proves the API key to NICE, keeps and renews the token, and adds it to every request.
+// Package nadi calls the device API of nadi as the Service Account. It sends through the *http.Client of the SDK
+// (credentials.Client.HTTPClient), which proves the API key to NICE, keeps and renews the token, and adds it to every
+// request; this package only reads the failures of the SDK, as the only one that knows niceauth/credentials.
 package nadi
 
 import (
@@ -12,30 +13,22 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/nice-platform/nice/pkg/niceclient"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 
 	"github.com/nice-platform/example/service-account-client/internal/domain"
 )
 
 const maxBody = 1 << 20
 
-// Doer is the part of niceclient.Client the gateway uses.
-type Doer interface {
-	Do(ctx context.Context, key niceclient.Key, req *http.Request) (*http.Response, error)
-}
-
 // Gateway fills the Gateway contract of the device use cases.
 type Gateway struct {
 	base string
-	nice Doer
+	http *http.Client
 }
 
-// New makes the gateway of the nadi at base.
-func New(base string, nice Doer) *Gateway { return &Gateway{base: base, nice: nice} }
-
-// key names the token of every call. A Service Account needs no subject, organization or project here: the SDK
-// fills its id, and NICE always issues the token for the project the account belongs to.
-var key = niceclient.Key{Audience: domain.ServiceSlug}
+// New makes the gateway of the nadi at base. hc must add the token of nadi to every request, as the client of
+// credentials.Client.HTTPClient does; it sends the token to base and to no other host.
+func New(base string, hc *http.Client) *Gateway { return &Gateway{base: base, http: hc} }
 
 // device is a device as nadi writes it.
 type device struct {
@@ -54,7 +47,7 @@ func (d device) domain() domain.Device {
 		CreatedBy: d.CreatedBy, CreateTime: d.CreateTime, UpdateTime: d.UpdateTime}
 }
 
-// send makes one call and decodes a 2xx answer into out. Do adds the Bearer token and, when nadi answers 401
+// send makes one call and decodes a 2xx answer into out. The client adds the Bearer token and, when nadi answers 401
 // token_stale or expired, gets a new token and sends the request once more. The API key never comes near this
 // request: only the SDK holds it, and only for the token endpoint of NICE.
 func (g *Gateway) send(ctx context.Context, method, path string, body, out any) error {
@@ -64,7 +57,7 @@ func (g *Gateway) send(ctx context.Context, method, path string, body, out any) 
 		if err != nil {
 			return err
 		}
-		// A bytes.Reader gives the request a GetBody, so Do can send it again after token_stale.
+		// A bytes.Reader gives the request a GetBody, so the client can send it again after token_stale.
 		rd = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, g.base+path, rd)
@@ -75,7 +68,7 @@ func (g *Gateway) send(ctx context.Context, method, path string, body, out any) 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := g.nice.Do(ctx, key, req)
+	resp, err := g.http.Do(req)
 	if err != nil {
 		return domainError(err)
 	}
@@ -99,14 +92,15 @@ func (g *Gateway) send(ctx context.Context, method, path string, body, out any) 
 	return nil
 }
 
-// domainError names a failure of the SDK in the terms of the use cases.
+// domainError names a failure of the SDK in the terms of the use cases. http.Client wraps every error in a
+// *url.Error, a failure to get a token included, so the SDK errors are looked for first.
 func domainError(err error) error {
-	var grant *niceclient.GrantError
+	var grant *credentials.GrantError
 	var urlErr *url.Error
 	switch {
 	case errors.As(err, &grant):
 		return &domain.GrantError{Code: grant.Code, Description: grant.Description, Permanent: grant.Permanent}
-	case niceclient.IsTemporary(err):
+	case credentials.IsTemporary(err):
 		return domain.ErrTemporary
 	case errors.As(err, &urlErr):
 		return domain.ErrUnreachable

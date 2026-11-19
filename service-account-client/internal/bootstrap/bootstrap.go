@@ -10,11 +10,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nice-platform/nice/pkg/niceclient"
+	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 
 	"github.com/nice-platform/example/service-account-client/internal/adapter/cli"
 	"github.com/nice-platform/example/service-account-client/internal/adapter/nadi"
 	deviceusecase "github.com/nice-platform/example/service-account-client/internal/app/device/usecase"
+	"github.com/nice-platform/example/service-account-client/internal/domain"
 	"github.com/nice-platform/example/service-account-client/internal/platform/config"
 )
 
@@ -23,7 +24,7 @@ import (
 type Options struct {
 	HTTP   *http.Client
 	Waiter deviceusecase.Waiter
-	// Now, Tick, RefreshAfter and Jitter go to niceclient.Config as they are.
+	// Now, Tick, RefreshAfter and Jitter go to credentials.Config as they are.
 	Now          func() time.Time
 	Tick         time.Duration
 	RefreshAfter time.Duration
@@ -65,16 +66,16 @@ func RunWith(ctx context.Context, args []string, lookup config.LookupFunc, doten
 
 // NewClient makes the SDK client of the Service Account. KindServiceAccount makes it prove the API key with
 // client_credentials; the key is given to the SDK here and to nothing else.
-func NewClient(cfg config.Config, log *slog.Logger, o Options) (*niceclient.Client, error) {
+func NewClient(cfg config.Config, log *slog.Logger, o Options) (*credentials.Client, error) {
 	hc := o.HTTP
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	return niceclient.New(niceclient.Config{
+	return credentials.New(credentials.Config{
 		Issuer:       cfg.Issuer,
 		ClientID:     cfg.AccountID,
 		ClientSecret: cfg.APIKey,
-		Kind:         niceclient.KindServiceAccount,
+		Kind:         credentials.KindServiceAccount,
 		HTTP:         hc,
 		Log:          log,
 		Now:          o.Now,
@@ -89,13 +90,16 @@ func NewClient(cfg config.Config, log *slog.Logger, o Options) (*niceclient.Clie
 	})
 }
 
-// NewDeviceService wires the device use cases to nadi through the SDK client.
-func NewDeviceService(cfg config.Config, client nadi.Doer, log *slog.Logger, o Options) *deviceusecase.Service {
+// NewDeviceService wires the device use cases to nadi through the SDK client. The key of the token names only the
+// service: the SDK fills the id of the Service Account, and NICE issues the token for the project the account belongs
+// to. The *http.Client of the key goes to the nadi gateway alone, since it sends the token to any host it calls.
+func NewDeviceService(cfg config.Config, client *credentials.Client, log *slog.Logger, o Options) *deviceusecase.Service {
 	w := o.Waiter
 	if w == nil {
 		w = timerWaiter{}
 	}
-	return &deviceusecase.Service{Gateway: nadi.New(cfg.NadiURL, client), Waiter: w, Log: log}
+	hc := client.HTTPClient(credentials.Key{Audience: domain.ServiceSlug})
+	return &deviceusecase.Service{Gateway: nadi.New(cfg.NadiURL, hc), Waiter: w, Log: log}
 }
 
 type timerWaiter struct{}

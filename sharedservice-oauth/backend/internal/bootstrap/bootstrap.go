@@ -1,4 +1,4 @@
-// Package bootstrap wires the NADI device service: configuration, nicetoken
+// Package bootstrap wires the NADI device service: configuration, niceauth/verify
 // verifier, storage, use cases and the HTTP server.
 package bootstrap
 
@@ -15,7 +15,7 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // Run loads the configuration, assembles the service and serves until ctx ends.
@@ -24,7 +24,7 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 	if err != nil {
 		return err
 	}
-	// nicetoken writes the JWKS copy through a temporary file in the same directory.
+	// niceauth/verify writes the JWKS copy through a temporary file in the same directory.
 	if err := os.MkdirAll(filepath.Dir(cfg.JWKSFile), 0o700); err != nil {
 		return fmt.Errorf("JWKS directory: %w", err)
 	}
@@ -33,7 +33,7 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 		return err
 	}
 	defer closeStore()
-	v, err := nicetoken.New(VerifierConfig(cfg, repo, log))
+	v, err := verify.New(VerifierConfig(cfg, repo, log))
 	if err != nil {
 		return err
 	}

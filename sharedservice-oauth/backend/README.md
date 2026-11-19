@@ -2,16 +2,16 @@
 
 [English](README.en.md)
 
-Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/nicetoken`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice/pkg/niceclient`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
+Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/niceauth/verify`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice/pkg/niceauth/credentials`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
 
-Diuji terhadap nice revisi: belum diuji manual (lihat [`../README.md`](../README.md)); service Bearer terakhir diuji terhadap `c7a5086` (2026-11-13).
+Diuji terhadap nice revisi: `00256d3` (2026-11-19) untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md).
 
 ## Isi
 
 | Berkas | Isi |
 |---|---|
 | `cmd/nadi/main.go` | titik masuk tipis, anotasi swag tingkat dokumen termasuk `x-nice-roles` |
-| `internal/bootstrap/` | perakitan: konfigurasi, `nicetoken` (`New`, `Run`, `StartFeed`), pemilihan penyimpanan perangkat, `niceclient` dan sesi, use case, server |
+| `internal/bootstrap/` | perakitan: konfigurasi, `niceauth/verify` (`New`, `Run`, `StartFeed`), pemilihan penyimpanan perangkat, `niceauth/credentials` dan sesi, use case, server |
 | `internal/adapter/rest/` | `routes.go` (rantai `CORS -> mux`), `device/` (tabel rute tunggal, handler, anotasi swag per operasi), `auth/` (`/auth/*` dan middleware sesi yang memasang token konteks aktif), `web/` (penyaji `web/dist`), `system/` (`/healthz`, `/openapi.json`, `/docs`) |
 | `internal/app/device/` | use case perangkat dan kontrak `Repo` yang menerima kunci scope |
 | `internal/app/session/` | use case sesi browser (login, konteks, pindah konteks, keluar) dan port `NICE` serta `Store` |
@@ -19,7 +19,7 @@ Diuji terhadap nice revisi: belum diuji manual (lihat [`../README.md`](../README
 | `internal/adapter/memory/device/` | penyimpanan perangkat per organisasi dan project di memori |
 | `internal/adapter/postgres/device/` | penyimpanan yang sama di PostgreSQL, dipilih bila `DATABASE_URL` diisi |
 | `internal/adapter/memory/session/` | sesi browser di memori |
-| `internal/adapter/nice/` | port `NICE` lewat `niceclient` (`Client` `KindBFF` dan `ExchangeClient`), `/oauth/userinfo`, dan `/api/v1/me/contexts` |
+| `internal/adapter/nice/` | port `NICE` lewat `niceauth/credentials` (`Client` `KindBFF` dan `ExchangeClient`), `/oauth/userinfo`, dan `/api/v1/me/contexts` |
 | `migrations/` | migrasi SQL (`tenants`, `devices`, beserta `down`), di-embed dan dijalankan saat start bila `DATABASE_URL` diisi |
 | `internal/platform/` | `config` (env dan `.env`), `httpx` (CORS untuk SPA lain yang terdaftar), dan `postgres` (pool dan runner migrasi) |
 | `Dockerfile` | image backend beserta hasil build UI (dipakai `compose.yml` di akar repo) |
@@ -43,7 +43,7 @@ internal/
     memory/device/                   *_repository.go      implementasi Repo di memori
     postgres/device/                 *_repository.go      implementasi Repo di PostgreSQL
     memory/session/                *_repository.go      sesi browser di memori
-    nice/                          *_gateway.go         port NICE lewat niceclient
+    nice/                          *_gateway.go         port NICE lewat niceauth/credentials
     rest/                          routes.go            perakit: verifikasi token, izin, sesi, CORS
     rest/device/                     device_routes.go       tabel rute + <aksi>_device_handler.go
     rest/auth/                     auth_routes.go       /auth/* + middleware sesi dan CSRF
@@ -69,7 +69,7 @@ Pola ini meniru modul di backend `nice` (`nice/AGENTS.md`, "Struktur satu modul"
 
 `GET /healthz`, `GET /openapi.json`, dan `GET /docs` (Swagger UI; asetnya dimuat dari CDN jsdelivr) terbuka tanpa token dan tidak ada di dokumen OpenAPI. Di `/docs`, tekan **Authorize** lalu isi `Bearer <JWT>` untuk mencoba operasi. Setelah impor, katalog NICE memuat role `nadi.viewer` (baca), `nadi.admin` (semua izin), dan `nadi.editor` (baca, buat, ubah; dari `x-nice-roles`).
 
-Body perangkat: `{"name": "...", "serial_number": "...", "status": "active", "location": "..."}`. `name` 1 sampai 120 dan `serial_number` 1 sampai 64 karakter setelah spasi di tepi dipangkas, `status` salah satu dari `active`, `inactive`, `maintenance`, dan `location` opsional (paling banyak 120 karakter, bawaan kosong). Galat aplikasi memakai bentuk yang sama dengan `nicetoken`: `{"error": "...", "error_description": "..."}`, mis. `400 {"error":"invalid_argument","error_description":"name"}` dan `404 {"error":"not_found"}`.
+Body perangkat: `{"name": "...", "serial_number": "...", "status": "active", "location": "..."}`. `name` 1 sampai 120 dan `serial_number` 1 sampai 64 karakter setelah spasi di tepi dipangkas, `status` salah satu dari `active`, `inactive`, `maintenance`, dan `location` opsional (paling banyak 120 karakter, bawaan kosong). Galat aplikasi memakai bentuk yang sama dengan `niceauth/verify`: `{"error": "...", "error_description": "..."}`, mis. `400 {"error":"invalid_argument","error_description":"name"}` dan `404 {"error":"not_found"}`.
 
 Perilaku yang perlu diketahui:
 
@@ -100,7 +100,7 @@ Perangkat yang dibuat dengan token seperti itu mencatat keduanya:
 {"id": "dev_...", "name": "Sensor Suhu", "serial_number": "SN-1", "status": "active", "location": "Gudang A", "created_by": "usr_...", "acted_by": "<client_id agen-backend>"}
 ```
 
-Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `nicetoken` (`internal/adapter/rest/device/create_device_handler.go`), dan tes `TestDeviceCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
+Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` milik `niceauth/verify` (`internal/adapter/rest/device/create_device_handler.go`), dan tes `TestDeviceCreatedByAnAgentRecordsTheActor` memakai token uji yang membawa `act`.
 
 ## Prasyarat
 

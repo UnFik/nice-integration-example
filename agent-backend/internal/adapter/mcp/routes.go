@@ -1,4 +1,4 @@
-// Package mcpadapter serves the agent over HTTP: the MCP endpoint behind nicetoken, the public endpoints, and the
+// Package mcpadapter serves the agent over HTTP: the MCP endpoint behind niceauth/verify, the public endpoints, and the
 // tools that call other services through the call use case.
 package mcpadapter
 
@@ -10,7 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
-	"github.com/nice-platform/nice/pkg/nicetoken"
+	"github.com/nice-platform/nice/pkg/niceauth/verify"
 
 	"github.com/nice-platform/example/agent-backend/internal/adapter/mcp/internal/caller"
 	"github.com/nice-platform/example/agent-backend/internal/adapter/mcp/internal/challenge"
@@ -30,7 +30,7 @@ var baseScopes = []string{"openid", "profile", "email", "offline_access"}
 
 // Deps is what the routes need from the assembly.
 type Deps struct {
-	Verifier  *nicetoken.Verifier
+	Verifier  *verify.Verifier
 	Calls     *callusecase.Service
 	Issuer    string
 	PublicURL string
@@ -52,7 +52,7 @@ func NewHandler(d Deps) http.Handler {
 	// tool calls of one client run in parallel.
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
-	// RequireBearerToken is only the way to hand the verified token to the tools: nicetoken already decided.
+	// RequireBearerToken is only the way to hand the verified token to the tools: niceauth/verify already decided.
 	handOver := auth.RequireBearerToken(caller.TokenInfo, &auth.RequireBearerTokenOptions{ClockSkew: time.Minute})
 
 	mux := http.NewServeMux()

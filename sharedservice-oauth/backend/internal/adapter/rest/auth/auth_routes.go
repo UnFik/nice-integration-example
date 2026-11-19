@@ -1,7 +1,7 @@
 // Package auth serves the browser session of the UI: sign-in through NICE,
 // the session, its contexts, switching context and signing out. It also puts
 // the token of the active context on the device requests that come with the
-// session cookie, so they pass the same nicetoken checks as a Bearer caller.
+// session cookie, so they pass the same niceauth/verify checks as a Bearer caller.
 package auth
 
 import (
