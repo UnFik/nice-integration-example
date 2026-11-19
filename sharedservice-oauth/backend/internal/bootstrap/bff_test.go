@@ -388,7 +388,9 @@ func TestUIServedFromTheBuild(t *testing.T) {
 		}
 	}
 	e := newTestEnv(t, nil)
-	v, err := verify.New(VerifierConfig(config.Config{Issuer: testIssuer}, e.store, slog.New(slog.DiscardHandler)))
+	vc := VerifierConfig(config.Config{Issuer: testIssuer}, e.store, slog.New(slog.DiscardHandler))
+	vc.StaticJWKS = testJWKS(t) // nothing is fetched: the issuer of the tests is a name, not an address
+	v, err := verify.New(vc)
 	if err != nil {
 		t.Fatal(err)
 	}

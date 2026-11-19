@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/nice-platform/example/service-account-client/internal/platform/config"
 )
 
 func TestListProvesTheKeyToNICEAndCallsNadiWithTheToken(t *testing.T) {
@@ -176,5 +178,21 @@ func TestAMissingSettingStopsBeforeAnyCall(t *testing.T) {
 	}
 	if len(w.nice.Requests()) != 0 || len(w.nadi.Calls()) != 0 {
 		t.Fatal("a call was made without the key")
+	}
+}
+
+// The SDK sends the token over https only, loopback excepted: a plain http address of nadi stops the command before
+// the key is proved to NICE.
+func TestANadiAddressInTheClearIsRefusedBeforeNICEIsCalled(t *testing.T) {
+	w := newWorld(t)
+	w.env[config.EnvNadiURL] = "http://nadi.example.com"
+	if code := w.run(context.Background(), nil, "list"); code != 1 {
+		t.Fatalf("exit %d, want 1: %s", code, w.err)
+	}
+	if !strings.Contains(w.err.String(), "FAILED:") || !strings.Contains(w.err.String(), "nadi.example.com") {
+		t.Fatalf("stderr names the address: %s", w.err)
+	}
+	if len(w.nice.Requests()) != 0 || len(w.nadi.Calls()) != 0 {
+		t.Fatalf("nothing is called: %d token requests, %d calls to nadi", len(w.nice.Requests()), len(w.nadi.Calls()))
 	}
 }

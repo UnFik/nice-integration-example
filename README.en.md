@@ -45,7 +45,7 @@ The OAuth protocol code in the browser (`oidc.ts`, the token manager) lives only
 | `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy) |
 | `public-client-pkce` | `c7a5086`; without `NICE_CORS_ALLOWED_ORIGINS` from `60939ed` (`add-delegated-nice-api`) |
 | `agent-backend` | `00256d3` (`rename-sdk-to-niceauth`; it already includes `add-token-exchange` from `6cc9986`, which `acted_by` in `sharedservice-oauth` needs too) |
-| `service-account-client` | `00256d3` (`rename-sdk-to-niceauth`: `nice/pkg/niceauth/credentials` and `Client.HTTPClient`) |
+| `service-account-client` | `df58337` (`harden-niceauth-sdk`: `Client.HTTPClient` is bound to the address of one service) |
 
 ## Prerequisites
 

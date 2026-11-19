@@ -14,9 +14,9 @@ client --client_credentials: client_id=sa_..., client_secret=API key, scope=nice
 client --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Minimum NICE version: `nice` `00256d3` or later (`rename-sdk-to-niceauth`: `nice/pkg/niceauth/credentials` and `Client.HTTPClient`).
+Minimum NICE version: `nice` `df58337` or later (`harden-niceauth-sdk`: `Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback).
 
-Tested against nice revision: `00256d3` (2026-11-19), NICE and `nadi` in Docker, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
+Tested against nice revision: `df58337` (2026-11-19), NICE and `nadi` in Docker: unit tests, a wrong key (`invalid_client`), and a `NICE_ISSUER` and a `NADI_URL` that are `http` and not loopback (refused before NICE is called). `scripts/smoke.sh`, `create`, and `list` were not run again at this revision because no API key was available. Against `00256d3`, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
 
 ## Folder structure
 
@@ -58,7 +58,7 @@ There are no update and delete commands. `DELETE /devices/{id}` is a sensitive o
 
 ### How a call works
 
-`bootstrap` makes one `credentials.Client` (`Kind: KindServiceAccount`, `ClientID` = the Service Account id, `ClientSecret` = the API key), runs `Run` in the background, and gives `adapter/nadi` a plain `*http.Client` from `client.HTTPClient(credentials.Key{Audience: "nadi"})`. The gateway does not call the SDK to send a request; it only reads the errors of the SDK. Every request through that client goes like this:
+`bootstrap` makes one `credentials.Client` (`Kind: KindServiceAccount`, `ClientID` = the Service Account id, `ClientSecret` = the API key), runs `Run` in the background, and gives `adapter/nadi` a plain `*http.Client` from `client.HTTPClient(credentials.Key{Audience: "nadi"}, cfg.NadiURL)`. The gateway does not call the SDK to send a request; it only reads the errors of the SDK. Every request through that client goes like this:
 
 1. No token yet: the SDK sends `client_credentials` to `/oauth/token` and keeps the token in memory.
 2. The token is still valid: it is reused, without contacting NICE.
@@ -68,7 +68,9 @@ There are no update and delete commands. `DELETE /devices/{id}` is a sensitive o
 
 The scope names no project: a Service Account token is always for the project the account was created in. There is no refresh token; "renewing" means proving the key again.
 
-That client sends the token to any host it calls, so only the `nadi` gateway uses it. A failure to get a token comes wrapped in a `*url.Error` from `http.Client`, so the gateway looks for `GrantError` and `IsTemporary` first, and only then for a `*url.Error` as `nadi` being unreachable.
+That client is bound to the address of `nadi` (`NADI_URL`): the SDK refuses to send the token to another host, a redirect target included, with the error `ErrForeignHost`. The token and the API key travel over `https` only. `http` is accepted for loopback (`localhost`, `127.0.0.1`), so a local stack needs no setting; a `NICE_ISSUER` or `NADI_URL` that is `http` to another host is refused when the client is built, before NICE is called. For a network where TLS ends somewhere else, an application sets `AllowInsecureHTTP` in `credentials.Config`; this example does not use it. The calls of the SDK to NICE follow no redirect.
+
+A failure to get a token comes wrapped in a `*url.Error` from `http.Client`, so the gateway looks for `GrantError` and `IsTemporary` first, and only then for a `*url.Error` as `nadi` being unreachable.
 
 ### Shortest form
 
@@ -93,7 +95,11 @@ func main() {
 		log.Fatal(err)
 	}
 	go c.Run(ctx)
-	hc := c.HTTPClient(credentials.Key{Audience: "nadi"})
+	// The client sends the token to this address only; it must be https unless it is loopback.
+	hc, err := c.HTTPClient(credentials.Key{Audience: "nadi"}, "http://127.0.0.1:8081")
+	if err != nil {
+		log.Fatal(err)
+	}
 	resp, err := hc.Get("http://127.0.0.1:8081/devices")
 	if err != nil {
 		log.Fatal(err)

@@ -4,7 +4,7 @@
 
 The backend of the [`sharedservice-oauth`](../README.en.md) example: a NICE SharedService in `nice_token` mode with the slug `nadi`, written in Go (`net/http`) with the reference library `nice/pkg/niceauth/verify`. Clients call this service directly with a NICE access token; NICE is not on the request path. The service verifies the token itself according to the [token verification contract](../../../nice/docs/token-verification.md), keeps data apart per organization and project, and checks sensitive operations online with NICE. The same backend also serves the UI in [`../web`](../web/README.en.md) as its backend-for-frontend (`/auth/*`, through `nice/pkg/niceauth/credentials`); how it works, the UI checklist and the browser tests are in [`../README.en.md`](../README.en.md).
 
-Tested against nice revision: `00256d3` (2026-11-19) for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md).
+Tested against nice revision: `df58337` (2026-11-19) for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md).
 
 ## Contents
 

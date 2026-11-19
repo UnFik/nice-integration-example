@@ -60,7 +60,12 @@ func RunWith(ctx context.Context, args []string, lookup config.LookupFunc, doten
 	go client.Run(ctx)
 
 	log.Debug("client ready", slog.Any("config", cfg))
-	h := &cli.Handler{Devices: NewDeviceService(cfg, client, log, o), Interval: cfg.WatchInterval, Out: stdout, Err: stderr}
+	devices, err := NewDeviceService(cfg, client, log, o)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "FAILED:", err)
+		return cli.ExitFailure
+	}
+	h := &cli.Handler{Devices: devices, Interval: cfg.WatchInterval, Out: stdout, Err: stderr}
 	return h.Dispatch(ctx, args)
 }
 
@@ -92,14 +97,18 @@ func NewClient(cfg config.Config, log *slog.Logger, o Options) (*credentials.Cli
 
 // NewDeviceService wires the device use cases to nadi through the SDK client. The key of the token names only the
 // service: the SDK fills the id of the Service Account, and NICE issues the token for the project the account belongs
-// to. The *http.Client of the key goes to the nadi gateway alone, since it sends the token to any host it calls.
-func NewDeviceService(cfg config.Config, client *credentials.Client, log *slog.Logger, o Options) *deviceusecase.Service {
+// to. The *http.Client is bound to the address of nadi: the SDK refuses to send the token to any other host, a
+// redirect included, and refuses an address that is plain http unless it is loopback.
+func NewDeviceService(cfg config.Config, client *credentials.Client, log *slog.Logger, o Options) (*deviceusecase.Service, error) {
 	w := o.Waiter
 	if w == nil {
 		w = timerWaiter{}
 	}
-	hc := client.HTTPClient(credentials.Key{Audience: domain.ServiceSlug})
-	return &deviceusecase.Service{Gateway: nadi.New(cfg.NadiURL, hc), Waiter: w, Log: log}
+	hc, err := client.HTTPClient(credentials.Key{Audience: domain.ServiceSlug}, cfg.NadiURL)
+	if err != nil {
+		return nil, err
+	}
+	return &deviceusecase.Service{Gateway: nadi.New(cfg.NadiURL, hc), Waiter: w, Log: log}, nil
 }
 
 type timerWaiter struct{}
