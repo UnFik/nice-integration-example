@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 
 	"github.com/nice-platform/example/service-account-client/internal/domain"
 )

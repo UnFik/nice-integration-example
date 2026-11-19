@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 
 	calldto "github.com/nice-platform/example/agent-backend/internal/app/call/dto"
 	"github.com/nice-platform/example/agent-backend/internal/domain"

@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 	sessiondto "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/dto"
 	sessionusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/usecase"
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 )
 
 // maxContextPages bounds the pages read, so a NICE that keeps answering a

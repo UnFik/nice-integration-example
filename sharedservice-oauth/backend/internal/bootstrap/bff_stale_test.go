@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // staleEnv signs in with tokens issued ten seconds ago and then starts the

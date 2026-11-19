@@ -2,9 +2,9 @@
 
 [English](README.en.md)
 
-Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice/pkg/niceauth/verify`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice/pkg/niceauth/credentials`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
+Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice-auth-sdk/verify`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice-auth-sdk/credentials`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
 
-Diuji terhadap nice revisi: `df58337` (2026-11-19) untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md).
+Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19, untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md).
 
 ## Isi
 
@@ -104,16 +104,7 @@ Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` mil
 
 ## Prasyarat
 
-- Susunan direktori: `replace github.com/nice-platform/nice => ../../../nice` di `go.mod` hanya berjalan bila repo `nice` berada di sebelah `example/`:
-
-  ```text
-  <induk>/
-    nice/
-    example/
-      sharedservice-oauth/
-        backend/
-  ```
-
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.1.0` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dev berjalan, bawaannya di `http://localhost:8080` (`cd ../../../nice && make db && make migrate && make dev`). NICE di alamat lain juga bisa: isikan ke `NICE_ISSUER` di `.env` dan ke `NICE` di shell checklist.
 

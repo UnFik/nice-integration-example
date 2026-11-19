@@ -3,9 +3,9 @@ module github.com/nice-platform/example/sharedservice-oauth/backend
 go 1.27
 
 require (
+	github.com/ABA-Developer/nice-auth-sdk v0.1.0
 	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/nice-platform/nice v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -36,7 +36,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/nice-platform/nice => ../../../nice
 
 tool github.com/swaggo/swag/cmd/swag

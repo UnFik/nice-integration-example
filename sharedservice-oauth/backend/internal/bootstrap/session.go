@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	sessionmemory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/session"
 	nicegateway "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/nice"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/auth"
 	sessionusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // Auth is the browser side of the service: niceauth/credentials for the confidential

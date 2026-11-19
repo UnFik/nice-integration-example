@@ -10,7 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 
 	"github.com/nice-platform/example/agent-backend/internal/adapter/mcp/internal/caller"
 	"github.com/nice-platform/example/agent-backend/internal/adapter/mcp/internal/challenge"

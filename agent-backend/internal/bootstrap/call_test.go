@@ -15,7 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 )
 
 // callEnv is the agent without the MCP layer, for the calls themselves.

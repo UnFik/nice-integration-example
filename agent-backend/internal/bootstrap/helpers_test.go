@@ -20,7 +20,7 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 )
 
 const (

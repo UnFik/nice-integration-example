@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // VerifierConfig wires niceauth/verify for this service. Tests reuse it and only swap

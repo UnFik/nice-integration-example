@@ -4,15 +4,15 @@
 
 A fullstack SharedService example for NICE with the slug `nadi` (NADI: IoT device CRUD). The Go backend is a `nice_token` service that verifies NICE tokens itself, and it is also the backend-for-frontend (BFF) of its UI: it signs in to NICE as a **confidential** OAuth client bound to `nadi`, keeps the refresh tokens on the server, and gives the browser a session cookie only. The React UI talks only to the backend on the same origin: it holds no token, never calls NICE, and loads no OAuth library.
 
-Tested against nice revision `df58337` (2026-11-19, NICE and `nadi` in Docker): the `nadi` image was rebuilt with the SDK of `harden-niceauth-sdk` (`https` addresses unless loopback, no redirect to NICE), and the unit tests and `backend/scripts/smoke.sh` pass. The UI flow below was not tested again at this revision. Against `4282316` (the NICE dev stack was built from it): login, callback, context discovery, org and project switching, data isolation per org and project (memory and PostgreSQL), CSRF, sign-out, and `scripts/smoke.sh` pass over HTTP. The browser click-through has not been tested by hand yet.
+Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the `nadi` image was rebuilt without the `nice` context, and the unit tests and `backend/scripts/smoke.sh` pass. The UI flow below was not tested again at this revision. Against `4282316` (the NICE dev stack was built from it): login, callback, context discovery, org and project switching, data isolation per org and project (memory and PostgreSQL), CSRF, sign-out, and `scripts/smoke.sh` pass over HTTP. The browser click-through has not been tested by hand yet.
 
-Minimum NICE version: `00256d3` (`rename-sdk-to-niceauth`: the Go SDK in `nice/pkg/niceauth`; it already includes `add-client-org-switch` and `add-signin-token-exchange`).
+Minimum NICE version: `4282316` (`add-client-org-switch` and `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.1.0`.
 
 ## Contents
 
 | Folder | Contents |
 |---|---|
-| [`backend/`](backend/README.en.md) | The `nadi` service (Go, `nice/pkg/niceauth/verify`) for Bearer callers, plus `/auth/*` for the UI (`nice/pkg/niceauth/credentials`, `KindBFF`), the server of `web/dist`, and the device store per organization and project (memory or PostgreSQL). Its README has the operations, the service setup checklist and the smoke test |
+| [`backend/`](backend/README.en.md) | The `nadi` service (Go, `nice-auth-sdk/verify`) for Bearer callers, plus `/auth/*` for the UI (`nice-auth-sdk/credentials`, `KindBFF`), the server of `web/dist`, and the device store per organization and project (memory or PostgreSQL). Its README has the operations, the service setup checklist and the smoke test |
 | [`web/`](web/README.en.md) | The React 19 + Vite UI: sign-in, context picker and device table. It calls only `/auth/*` and `/devices*` |
 
 ## How it works

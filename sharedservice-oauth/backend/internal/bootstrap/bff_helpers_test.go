@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/auth"
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 const (

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 
 	"github.com/nice-platform/example/service-account-client/internal/adapter/cli"
 	"github.com/nice-platform/example/service-account-client/internal/adapter/nadi"

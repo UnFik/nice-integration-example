@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	restdto "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/dto"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 func JSON(w http.ResponseWriter, status int, v any) {

@@ -2,7 +2,7 @@
 
 [Bahasa Indonesia](README.md)
 
-An example **machine caller**: an integration with no user (a job, a daemon, a partner service) that holds the API key of a Service Account, proves it to NICE, and calls the `nice_token` service `nadi` ([`../sharedservice-oauth/backend`](../sharedservice-oauth/backend/README.en.md)) with the token it gets. Written in Go on `nice/pkg/niceauth/credentials` with `KindServiceAccount`. It shows four things:
+An example **machine caller**: an integration with no user (a job, a daemon, a partner service) that holds the API key of a Service Account, proves it to NICE, and calls the `nice_token` service `nadi` ([`../sharedservice-oauth/backend`](../sharedservice-oauth/backend/README.en.md)) with the token it gets. Written in Go on `nice-auth-sdk/credentials` with `KindServiceAccount`. It shows four things:
 
 - the API key is **sent to the NICE token endpoint only**. `nadi` never sees the key, only `Authorization: Bearer <token>`;
 - one token is reused while it is valid, and renewed in the background before it expires;
@@ -14,9 +14,9 @@ client --client_credentials: client_id=sa_..., client_secret=API key, scope=nice
 client --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Minimum NICE version: `nice` `df58337` or later (`harden-niceauth-sdk`: `Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback).
+Minimum NICE version: `nice` `c7a5086` or later. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.1.0` (`Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback).
 
-Tested against nice revision: `df58337` (2026-11-19), NICE and `nadi` in Docker: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), a `NICE_ISSUER` and a `NADI_URL` that are `http` and not loopback (refused before NICE is called), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`). A key revoked in the same second its token was issued is not caught by the feed (`iat` has a resolution of one second); the client then stops when the token is renewed. Against `00256d3`, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
+Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the unit tests and `scripts/smoke.sh`. With the SDK of `nice` `df58337` (the same code, before it moved to the public module), against the same server: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), a `NICE_ISSUER` and a `NADI_URL` that are `http` and not loopback (refused before NICE is called), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`). A key revoked in the same second its token was issued is not caught by the feed (`iat` has a resolution of one second); the client then stops when the token is renewed. Against `00256d3`, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
 
 ## Folder structure
 
@@ -85,7 +85,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 )
 
 func main() {
@@ -138,7 +138,7 @@ Every failure is printed to stderr as `FAILED: <code> (<description>): <explanat
 
 ## Prerequisites
 
-- Directory layout: `replace github.com/nice-platform/nice => ../../nice` in `go.mod` only works when the `nice` repo sits next to `example/`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.1.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
 - `nadi` running and set up through step 7 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md).

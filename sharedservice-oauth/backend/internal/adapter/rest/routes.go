@@ -4,6 +4,7 @@ package rest
 import (
 	"net/http"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/docs"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/auth"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/device"
@@ -11,7 +12,6 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest/web"
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/httpx"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // DeviceRoutes is the table of device operations the tests compare with the OpenAPI document.
