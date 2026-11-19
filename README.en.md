@@ -73,6 +73,6 @@ Service registration, catalog import, entitlement, activation, bindings, OAuth c
 
 ## NICE contracts followed
 
-- [`docs/token-verification.md` in the SDK repo](https://github.com/ABA-Developer/nice-auth-sdk/blob/main/docs/token-verification.md) (in Indonesian): token verification in a service, the access change feed, and sensitive operations.
+- [`docs/token-verification.md` in the SDK repo](https://github.com/ABA-Developer/nice-auth-sdk/blob/main/docs/token-verification.md): token verification in a service, the access change feed, and sensitive operations.
 - [`nice/docs/gateway-integration.md`](../nice/docs/gateway-integration.md): the service and client integration flow.
 - [`nice/docs/api.md`](../nice/docs/api.md): sections "Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil", and "Token exchange: backend atas nama user".
