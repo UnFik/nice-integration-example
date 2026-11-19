@@ -27,7 +27,7 @@ type Gateway struct {
 }
 
 // New makes the gateway of the nadi at base. hc must add the token of nadi to every request, as the client of
-// credentials.Client.HTTPClient does; it sends the token to base and to no other host.
+// credentials.Client.HTTPClient made for base does; that client refuses to send the token to any other host.
 func New(base string, hc *http.Client) *Gateway { return &Gateway{base: base, http: hc} }
 
 // device is a device as nadi writes it.

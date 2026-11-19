@@ -14,9 +14,9 @@ klien --client_credentials: client_id=sa_..., client_secret=API key, scope=nice:
 klien --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Versi NICE minimum: `nice` `00256d3` atau sesudahnya (`rename-sdk-to-niceauth`: `nice/pkg/niceauth/credentials` dan `Client.HTTPClient`).
+Versi NICE minimum: `nice` `df58337` atau sesudahnya (`harden-niceauth-sdk`: `Client.HTTPClient` terikat ke alamat satu service, alamat wajib `https` kecuali loopback).
 
-Diuji terhadap nice revisi: `00256d3` (2026-11-19), NICE dan `nadi` di Docker, lewat `Client.HTTPClient`: `scripts/smoke.sh`, `create` lalu `list` (`created_by` berisi id Service Account), key salah (`invalid_client`), dan NICE tidak terjangkau (`nice_unavailable`). Terhadap `c7a3e33` (lewat `Client.Do`): `create` dengan role `nadi.viewer` (403 `permission_denied`), dan key dicabut saat `watch` berjalan (`watch` berhenti dengan `invalid_client` pada pembacaan berikutnya, feed aktif di `nadi`).
+Diuji terhadap nice revisi: `df58337` (2026-11-19), NICE dan `nadi` di Docker: tes unit, key salah (`invalid_client`), dan `NICE_ISSUER` serta `NADI_URL` berskema `http` bukan loopback (ditolak sebelum NICE dipanggil). `scripts/smoke.sh`, `create`, dan `list` belum dijalankan ulang di revisi ini karena tidak ada API key yang tersedia. Terhadap `00256d3`, lewat `Client.HTTPClient`: `scripts/smoke.sh`, `create` lalu `list` (`created_by` berisi id Service Account), key salah (`invalid_client`), dan NICE tidak terjangkau (`nice_unavailable`). Terhadap `c7a3e33` (lewat `Client.Do`): `create` dengan role `nadi.viewer` (403 `permission_denied`), dan key dicabut saat `watch` berjalan (`watch` berhenti dengan `invalid_client` pada pembacaan berikutnya, feed aktif di `nadi`).
 
 ## Struktur folder
 
@@ -58,7 +58,7 @@ Tidak ada perintah ubah dan hapus. `DELETE /devices/{id}` operasi sensitif yang 
 
 ### Cara kerja panggilan
 
-`bootstrap` membuat satu `credentials.Client` (`Kind: KindServiceAccount`, `ClientID` = id Service Account, `ClientSecret` = API key), menjalankan `Run` di latar, dan memberi `adapter/nadi` sebuah `*http.Client` biasa dari `client.HTTPClient(credentials.Key{Audience: "nadi"})`. Gateway tidak memanggil SDK untuk mengirim request; ia hanya membaca galat SDK. Setiap request lewat client itu:
+`bootstrap` membuat satu `credentials.Client` (`Kind: KindServiceAccount`, `ClientID` = id Service Account, `ClientSecret` = API key), menjalankan `Run` di latar, dan memberi `adapter/nadi` sebuah `*http.Client` biasa dari `client.HTTPClient(credentials.Key{Audience: "nadi"}, cfg.NadiURL)`. Gateway tidak memanggil SDK untuk mengirim request; ia hanya membaca galat SDK. Setiap request lewat client itu:
 
 1. Belum ada token: SDK mengirim `client_credentials` ke `/oauth/token` dan menyimpan tokennya di memori.
 2. Token masih berlaku: dipakai ulang, tanpa menghubungi NICE.
@@ -68,7 +68,9 @@ Tidak ada perintah ubah dan hapus. `DELETE /devices/{id}` operasi sensitif yang 
 
 Project tidak disebut di scope: token Service Account selalu untuk project tempat akun itu dibuat. Tidak ada refresh token; "memperbarui" berarti membuktikan key lagi.
 
-Client itu mengirim token ke host mana pun yang dipanggil lewatnya, jadi hanya gateway `nadi` yang memakainya. Galat memperoleh token datang terbungkus `*url.Error` dari `http.Client`, sehingga gateway memeriksa `GrantError` dan `IsTemporary` lebih dulu, baru `*url.Error` sebagai `nadi` tidak terjangkau.
+Client itu terikat ke alamat `nadi` (`NADI_URL`): SDK menolak mengirim token ke host lain, termasuk tujuan redirect, dengan galat `ErrForeignHost`. Token dan API key hanya berjalan lewat `https`. `http` diterima untuk loopback (`localhost`, `127.0.0.1`), jadi stack lokal tidak butuh pengaturan; `NICE_ISSUER` atau `NADI_URL` berskema `http` ke host lain ditolak saat klien dibuat, sebelum NICE dipanggil. Untuk jaringan yang TLS-nya berakhir di tempat lain, aplikasi mengisi `AllowInsecureHTTP` di `credentials.Config`; contoh ini tidak memakainya. Panggilan SDK ke NICE tidak mengikuti redirect.
+
+Galat memperoleh token datang terbungkus `*url.Error` dari `http.Client`, sehingga gateway memeriksa `GrantError` dan `IsTemporary` lebih dulu, baru `*url.Error` sebagai `nadi` tidak terjangkau.
 
 ### Bentuk tersingkat
 
@@ -93,7 +95,11 @@ func main() {
 		log.Fatal(err)
 	}
 	go c.Run(ctx)
-	hc := c.HTTPClient(credentials.Key{Audience: "nadi"})
+	// The client sends the token to this address only; it must be https unless it is loopback.
+	hc, err := c.HTTPClient(credentials.Key{Audience: "nadi"}, "http://127.0.0.1:8081")
+	if err != nil {
+		log.Fatal(err)
+	}
 	resp, err := hc.Get("http://127.0.0.1:8081/devices")
 	if err != nil {
 		log.Fatal(err)

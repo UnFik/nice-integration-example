@@ -42,7 +42,7 @@ make run | make test               jalankan satu perintah (ARGS="list" | "create
 make smoke                         uji terhadap NICE dan nadi yang sudah diatur (baca .env)
 ```
 
-Versi NICE minimum per contoh ada di `README.md` akar. Ketiga contoh Go (`sharedservice-oauth`, `agent-backend`, `service-account-client`) butuh `nice` `00256d3` atau sesudahnya (`rename-sdk-to-niceauth`, SDK Go di `nice/pkg/niceauth`), dan `shared-service-apikey` butuh `40ddb20` atau sesudahnya.
+Versi NICE minimum per contoh ada di `README.md` akar. `sharedservice-oauth` dan `agent-backend` butuh `nice` `00256d3` atau sesudahnya (`rename-sdk-to-niceauth`, SDK Go di `nice/pkg/niceauth`), `service-account-client` butuh `df58337` atau sesudahnya (`harden-niceauth-sdk`: `Client.HTTPClient` terikat ke alamat satu service, alamat wajib `https` kecuali loopback), dan `shared-service-apikey` butuh `40ddb20` atau sesudahnya.
 
 ## Aturan
 

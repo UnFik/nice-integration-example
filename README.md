@@ -45,7 +45,7 @@ Kode protokol OAuth di browser (`oidc.ts`, token manager) hanya ada di `public-c
 | `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy) |
 | `public-client-pkce` | `c7a5086`; tanpa `NICE_CORS_ALLOWED_ORIGINS` mulai `60939ed` (`add-delegated-nice-api`) |
 | `agent-backend` | `00256d3` (`rename-sdk-to-niceauth`; sudah memuat `add-token-exchange` dari `6cc9986`, yang juga dibutuhkan `acted_by` di `sharedservice-oauth`) |
-| `service-account-client` | `00256d3` (`rename-sdk-to-niceauth`: `nice/pkg/niceauth/credentials` dan `Client.HTTPClient`) |
+| `service-account-client` | `df58337` (`harden-niceauth-sdk`: `Client.HTTPClient` terikat ke alamat satu service) |
 
 ## Prasyarat
 
