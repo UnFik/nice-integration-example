@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# The backend serves the built UI from its own origin, so the image builds both. The module uses
-# `replace ../../../nice`, so the build also needs the nice repo as the named context "nice", and the UI
-# as the named context "web" (compose.yml passes both with additional_contexts). Only go.mod, go.sum and
-# pkg/ of nice are copied.
+# The backend serves the built UI from its own origin, so the image builds both. The UI comes from the named
+# context "web" (compose.yml passes it with additional_contexts). The Go modules, the NICE SDK included, are
+# downloaded from the module proxy.
 FROM node:22-alpine AS ui
 WORKDIR /web
 COPY --from=web package.json package-lock.json ./
@@ -12,9 +11,7 @@ COPY --from=web . .
 RUN npm run build
 
 FROM golang:1.27 AS build
-WORKDIR /src/example/sharedservice-oauth/backend
-COPY --from=nice go.mod go.sum /src/nice/
-COPY --from=nice pkg /src/nice/pkg
+WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .

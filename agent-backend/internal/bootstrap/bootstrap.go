@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 
 	mcpadapter "github.com/nice-platform/example/agent-backend/internal/adapter/mcp"
 	"github.com/nice-platform/example/agent-backend/internal/adapter/niceexchange"

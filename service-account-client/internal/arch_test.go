@@ -110,8 +110,8 @@ var forbidden = []struct {
 	layer string
 	deny  []string
 }{
-	{"domain/", []string{"net/http", "github.com/nice-platform/nice/", "/internal/app", "/internal/adapter", "/internal/platform"}},
-	{"app/", []string{"net/http", "github.com/nice-platform/nice/", "/internal/adapter", "/internal/platform", "/internal/bootstrap"}},
+	{"domain/", []string{"net/http", "github.com/ABA-Developer/nice-auth-sdk", "/internal/app", "/internal/adapter", "/internal/platform"}},
+	{"app/", []string{"net/http", "github.com/ABA-Developer/nice-auth-sdk", "/internal/adapter", "/internal/platform", "/internal/bootstrap"}},
 	{"adapter/", []string{"/internal/bootstrap"}},
 }
 

@@ -1,5 +1,5 @@
 // Package nicegateway implements the NICE port of the session use cases with
-// pkg/niceauth/credentials: a Client (KindBFF) that keeps the refresh token of every
+// nice-auth-sdk/credentials: a Client (KindBFF) that keeps the refresh token of every
 // session, and an ExchangeClient of the same confidential client that trades
 // the sign-in token for a delegated token of the NICE API.
 package nicegateway
@@ -14,9 +14,9 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 	sessionusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/session/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
-	"github.com/nice-platform/nice/pkg/niceauth/credentials"
 )
 
 // BaseScopes are sent with the sign-in and with every refresh, so userinfo

@@ -1,7 +1,7 @@
 // Command nadi is the backend of the sharedservice-oauth example: a NICE
 // SharedService in nice_token mode that clients call directly with a NICE
-// access token, verified with pkg/niceauth/verify, and the backend-for-frontend of
-// its UI, which signs users in with pkg/niceauth/credentials and keeps their tokens.
+// access token, verified with nice-auth-sdk/verify, and the backend-for-frontend of
+// its UI, which signs users in with nice-auth-sdk/credentials and keeps their tokens.
 //
 //	@title						NADI
 //	@version					1.0

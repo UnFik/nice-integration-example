@@ -13,7 +13,7 @@ import (
 
 	"github.com/nice-platform/example/agent-backend/internal/domain"
 
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 )
 
 // fakeNICE plays the part of NICE the agent talks to: the token endpoint (token exchange only). Its rules follow

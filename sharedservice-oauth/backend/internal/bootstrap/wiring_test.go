@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	devicememory "github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/memory/device"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/domain"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 func TestCheckerOnlyWithTheServiceKey(t *testing.T) {

@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ABA-Developer/nice-auth-sdk/verify"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/adapter/rest"
 	deviceusecase "github.com/nice-platform/example/sharedservice-oauth/backend/internal/app/device/usecase"
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
-	"github.com/nice-platform/nice/pkg/niceauth/verify"
 )
 
 // Run loads the configuration, assembles the service and serves until ctx ends.

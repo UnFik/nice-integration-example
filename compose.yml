@@ -29,7 +29,6 @@ services:
     build:
       context: ./sharedservice-oauth/backend
       additional_contexts:
-        nice: ../nice
         web: ./sharedservice-oauth/web
     env_file: ./sharedservice-oauth/backend/.env
     environment:
