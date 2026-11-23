@@ -4,7 +4,7 @@
 
 Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice-auth-sdk/verify`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice-auth-sdk/credentials`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
 
-Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19, untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md).
+Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19, untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md). Jalur `perms_ref` ("Uji izin yang tidak muat di token") diuji manual pada 2026-11-23 terhadap `nice` `b9eb8b3` dan SDK `4c9649d`, keduanya belum dirilis: token 154 izin terbit dengan `perms_ref`, UI membaca, membuat, dan menghapus perangkat, dan NICE menerima satu penyelesaian per proses `nadi`.
 
 ## Isi
 
