@@ -24,6 +24,9 @@ func VerifierConfig(cfg config.Config, tenants TenantCreator, log *slog.Logger) 
 	if cfg.ServiceAPIKey != "" {
 		// Without a checker, niceauth/verify refuses sensitive operations with 503 (fail closed).
 		c.Checker = verify.NewHTTPChecker(cfg.Issuer, cfg.ServiceAPIKey)
+		// A caller with more permissions than a token carries gets perms_ref in place of perms. The resolver asks NICE
+		// once for the list it names; without one, niceauth/verify refuses such a token with 503.
+		c.Resolver = verify.NewHTTPResolver(cfg.Issuer, cfg.ServiceAPIKey)
 	}
 	return c
 }
@@ -32,7 +35,7 @@ func VerifierConfig(cfg config.Config, tenants TenantCreator, log *slog.Logger) 
 // tokens issued before a revocation are refused with token_stale.
 func StartFeed(ctx context.Context, v *verify.Verifier, cfg config.Config, log *slog.Logger) error {
 	if cfg.ServiceAPIKey == "" {
-		log.Warn(config.EnvServiceAPIKey + " is not set: the access change feed is off, so revoked access is refused only when the token expires (up to 30 minutes), and DELETE /devices/{id} answers 503")
+		log.Warn(config.EnvServiceAPIKey + " is not set: the access change feed is off, so revoked access is refused only when the token expires (up to 30 minutes), DELETE /devices/{id} answers 503, and so does every call of a user whose permissions do not fit a token")
 		return nil
 	}
 	return v.StartFeed(ctx, verify.FeedConfig{APIKey: cfg.ServiceAPIKey})

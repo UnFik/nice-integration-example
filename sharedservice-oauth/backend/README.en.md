@@ -75,7 +75,8 @@ Behavior worth knowing:
 
 - The tenant is `nice_org_id` and the project is `prj` from the verified token, never a header, parameter, or body. An organization that calls for the first time gets a tenant at once (`ProvisionOnFirstUse`). A token without `prj` is answered `403 {"error":"insufficient_scope","error_description":"project_required"}`. Without `DATABASE_URL` data lives in memory only and is lost when the service stops.
 - A copy of the JWKS is kept at `JWKS_FILE`, so a service that restarts while NICE is down still verifies tokens that have not expired.
-- Without `NICE_SERVICE_API_KEY`, the service still runs and logs a warning at start: the access change feed is off (revocation takes effect only when the token expires, at most 30 minutes) and `DELETE /devices/{id}` answers `503`.
+- Without `NICE_SERVICE_API_KEY`, the service still runs and logs a warning at start: the access change feed is off (revocation takes effect only when the token expires, at most 30 minutes), `DELETE /devices/{id}` answers `503`, and so does every call with a token that carries `perms_ref`.
+- A token whose permissions do not fit it carries `perms_ref` in place of `perms`. NICE issues one to a caller whose `nadi` permissions exceed the token size limit (6 KB). `verify.NewHTTPResolver` fetches the permission list from NICE (`POST /api/v1/permission-resolutions`) once for each distinct list, checks it against `perms_ref`, and keeps it in memory. After that the service decides alone, also for other callers that hold the same permissions. When the permissions of the caller changed since the token was issued, NICE answers that the reference does not match and the service answers `401 token_stale`, so the client refreshes. When NICE cannot be reached and the list is not kept yet, the service answers `503`.
 
 ## Data per organization and project
 
@@ -123,7 +124,7 @@ Copy `.env.example` to `.env`. The service reads `.env` from the directory it ru
 | `WEB_DIR` | `../web/dist` | the built UI served at `/` |
 | `DATABASE_URL` | empty | a `postgres://` URL for the devices; empty keeps them in memory. Its value is never printed |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | other browser origins allowed to call with a Bearer token, comma separated, for `public-client-pkce`. The UI of this example needs no CORS since it shares the origin |
-| `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role (step 9); turns on the feed and the online check |
+| `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role (step 9); turns on the feed, the online check, and the resolution of `perms_ref` |
 | `SMOKE_SA_ID`, `SMOKE_API_KEY` | empty | read only by `scripts/smoke.sh`: a tenant Service Account and its API key (step 10) |
 
 ## Run and test
@@ -274,7 +275,7 @@ BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST 
 
 `nadi.editor` does not hold `nadi.devices.delete`; use `nadi.admin` to try deleting devices.
 
-### 9. Platform Service Account with `nice.service` (feed and online check)
+### 9. Platform Service Account with `nice.service` (feed, online check, and `perms_ref`)
 
 The Platform Admin creates a Service Account in a project of the platform organization (create the project if there is none), gives it the `nice.service` role, then an API key (there is no `allowed_services`: the rights come from the role of the Service Account). Console: **Service Account** in the platform organization project, then **Pengguna platform** for the `nice.service` role.
 

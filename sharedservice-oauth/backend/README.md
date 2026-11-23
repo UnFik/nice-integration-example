@@ -75,7 +75,8 @@ Perilaku yang perlu diketahui:
 
 - Tenant adalah `nice_org_id` dan project adalah `prj` dari token terverifikasi, tidak pernah dari header, parameter, atau body. Organisasi yang memanggil pertama kali langsung dibuatkan tenant (`ProvisionOnFirstUse`). Token tanpa `prj` dijawab `403 {"error":"insufficient_scope","error_description":"project_required"}`. Tanpa `DATABASE_URL` data hanya di memori dan hilang saat service berhenti.
 - Salinan JWKS disimpan di `JWKS_FILE`, sehingga service yang restart ketika NICE mati tetap memverifikasi token yang masih berlaku.
-- Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit) dan `DELETE /devices/{id}` dijawab `503`.
+- Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit), `DELETE /devices/{id}` dijawab `503`, dan setiap panggilan dengan token ber-`perms_ref` juga dijawab `503`.
+- Token yang izinnya tidak muat membawa `perms_ref` sebagai pengganti `perms`. NICE menerbitkannya untuk pemanggil yang izin `nadi`-nya melewati batas ukuran token (6 KB). `verify.NewHTTPResolver` mengambil daftar izinnya dari NICE (`POST /api/v1/permission-resolutions`) sekali untuk setiap daftar yang berbeda, memeriksanya terhadap `perms_ref`, lalu menyimpannya di memori. Setelah itu service memutuskan sendiri, juga untuk pemanggil lain yang memegang izin yang sama. Bila izin pemanggil berubah sejak token terbit, NICE menjawab tidak cocok dan service menjawab `401 token_stale`, sehingga klien me-refresh. Bila NICE tidak terjangkau dan daftarnya belum tersimpan, service menjawab `503`.
 
 ## Data per organisasi dan project
 
@@ -123,7 +124,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/` |
 | `DATABASE_URL` | kosong | URL `postgres://` untuk perangkat; kosong berarti memori. Nilainya tidak pernah dicetak |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser lain yang boleh memanggil dengan Bearer, dipisah koma, untuk `public-client-pkce`. UI contoh ini tidak butuh CORS karena satu origin |
-| `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed dan pemeriksaan online |
+| `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed, pemeriksaan online, dan penyelesaian `perms_ref` |
 | `SMOKE_SA_ID`, `SMOKE_API_KEY` | kosong | hanya dibaca `scripts/smoke.sh`: Service Account tenant dan API key-nya (langkah 10) |
 
 ## Menjalankan dan tes
@@ -274,7 +275,7 @@ BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST 
 
 `nadi.editor` tidak memuat `nadi.devices.delete`; pakai `nadi.admin` untuk mencoba hapus perangkat.
 
-### 9. Service Account platform `nice.service` (feed dan pemeriksaan online)
+### 9. Service Account platform `nice.service` (feed, pemeriksaan online, dan `perms_ref`)
 
 Platform Admin membuat Service Account di project organisasi platform (buat project bila belum ada), memberinya role `nice.service`, lalu API key (tanpa pembatasan service: API key tidak punya `allowed_services`; hak ditentukan role Service Account). Console: **Service Account** di project organisasi platform, lalu **Pengguna platform** untuk role `nice.service`.
 

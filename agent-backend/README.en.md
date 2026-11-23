@@ -119,6 +119,7 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `LISTEN_ADDR` | `127.0.0.1:8083` | listen address |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients use; the metadata `resource` is `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
+| `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role; turns on the resolution of `perms_ref`. Empty: a token with `perms_ref` (a caller whose `agen` permissions do not fit a token) answers `503` |
 
 An empty required variable stops the start with a message that names it.
 

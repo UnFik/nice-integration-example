@@ -119,6 +119,7 @@ Salin `.env.example` ke `.env`. Agen membaca `.env` di direktori tempat ia dijal
 | `LISTEN_ADDR` | `127.0.0.1:8083` | alamat listen |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | alamat yang dipakai MCP client; `resource` metadata adalah `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
+| `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service`; menyalakan penyelesaian `perms_ref`. Kosong: token ber-`perms_ref` (pemanggil yang izin `agen`-nya tidak muat di token) dijawab `503` |
 
 Variabel wajib yang kosong menghentikan start dengan pesan yang menyebut namanya.
 
