@@ -25,6 +25,7 @@ Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image 
 | `Dockerfile` | image backend beserta hasil build UI (dipakai `compose.yml` di akar repo) |
 | `docs/swagger.json` | Swagger 2.0 hasil `make swag`, di-embed dan disajikan di `/openapi.json` |
 | `scripts/smoke.sh` | uji smoke terhadap NICE yang sudah diatur |
+| `scripts/large-catalog.sh` | mencetak dokumen katalog `nadi` dengan operasi tambahan, untuk mencoba token ber-`perms_ref` |
 
 ## Struktur folder
 
@@ -351,3 +352,29 @@ curl -sS http://127.0.0.1:8081/devices -H "Authorization: Bearer $USER_TOKEN"   
 ```
 
 Jeda sebelum pencabutan dibutuhkan karena feed bekerja dengan resolusi detik: token yang terbit pada detik yang sama dengan pencabutan tidak tertangkap.
+
+## Uji izin yang tidak muat di token (opsional)
+
+Butuh `NICE_SERVICE_API_KEY` terisi (langkah 9). NICE membatasi token 6 KB, cukup untuk sekitar 65 sampai 100 izin. Pemanggil yang izin `nadi`-nya lebih banyak menerima token dengan `perms_ref` sebagai pengganti `perms`, dan `nadi` mengambil daftar izinnya dari NICE sekali. `nadi` sendiri hanya punya empat izin, jadi `scripts/large-catalog.sh` mencetak dokumennya dengan operasi tambahan yang masing-masing menyatakan satu izin (`nadi.catalog_test.pNNN.read`). Operasi itu tidak dilayani `nadi`: gunanya hanya memperpanjang daftar izin.
+
+```bash
+scripts/large-catalog.sh 150 > /tmp/nadi-large.json   # 154 izin
+```
+
+1. Impor `/tmp/nadi-large.json` sebagai katalog `nadi` (langkah 4, dengan berkas ini sebagai dokumennya) dan terapkan.
+2. Pastikan user memegang role `nadi.admin` di project (langkah 8). Role itu memuat semua izin aktif `nadi`, jadi sekarang 154.
+3. Masuk lewat UI di `PUBLIC_URL`. Daftar perangkat tampil dan perangkat bisa dibuat seperti biasa.
+
+Yang bisa diperiksa:
+
+```bash
+read -rsp 'Password user: ' USER_PASSWORD; echo
+USER_TOKEN=$(../../../nice/scripts/dev-token.sh "$USER_EMAIL" "$USER_PASSWORD" "" "openid nice:aud:nadi nice:prj:$PROJECT_ID"); unset USER_PASSWORD
+printf '%s' "$USER_TOKEN" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{perms_ref, perms}'   # perms_ref terisi, perms null
+printf '%s' "$USER_TOKEN" | wc -c                                                                        # di bawah 6144
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/devices -H "Authorization: Bearer $USER_TOKEN"   # 200
+```
+
+Bila NICE berjalan dengan `NICE_METRICS_ENABLED=true`, `nice_oauth_service_tokens_total{permissions="reference"}` naik setiap token seperti itu terbit, dan `nice_permission_resolutions_total{result="match"}` naik satu kali saja walau `GET /devices` dipanggil berulang: `nadi` menyimpan daftar izinnya setelah pengambilan pertama. Tanpa `NICE_SERVICE_API_KEY`, panggilan yang sama dijawab `503 permissions_unavailable`.
+
+Untuk mengembalikan katalog, impor `docs/swagger.json` (atau `/openapi.json`) lagi dan terapkan: operasi tambahan menjadi `removed` dan `nadi.admin` kembali memuat empat izin.
