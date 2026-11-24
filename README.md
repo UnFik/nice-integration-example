@@ -43,11 +43,11 @@ Kolom NICE adalah revisi server terlama yang punya fitur yang dipakai contoh. Ko
 
 | Contoh | Versi NICE minimum | SDK |
 |---|---|---|
-| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); jalur Bearer saja cukup `c7a5086` | `v0.2.1` |
+| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); jalur Bearer saja cukup `c7a5086` | `v0.2.2` |
 | `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy) | tidak dipakai |
 | `public-client-pkce` | `c7a5086`; tanpa `NICE_CORS_ALLOWED_ORIGINS` mulai `60939ed` (`add-delegated-nice-api`) | tidak dipakai |
-| `agent-backend` | `6cc9986` (`add-token-exchange`); `acted_by` di `sharedservice-oauth` juga butuh revisi ini | `v0.2.1` |
-| `service-account-client` | `c7a5086` (sama dengan jalur Bearer `sharedservice-oauth`) | `v0.2.1` |
+| `agent-backend` | `6cc9986` (`add-token-exchange`); `acted_by` di `sharedservice-oauth` juga butuh revisi ini | `v0.2.2` |
+| `service-account-client` | `c7a5086` (sama dengan jalur Bearer `sharedservice-oauth`) | `v0.2.2` |
 
 ## Prasyarat
 

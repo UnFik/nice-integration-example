@@ -15,9 +15,9 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer token hasil exchange (aud=inventaris, act.sub=agen-backend)--> inventaris /items
 ```
 
-Versi NICE minimum: revisi yang memuat `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, dan `add-token-exchange` (`nice` `6cc9986` atau sesudahnya). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.1`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
+Versi NICE minimum: revisi yang memuat `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, dan `add-token-exchange` (`nice` `6cc9986` atau sesudahnya). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
 
-Diuji terhadap nice revisi: `6cc9986` (2026-11-13). SDK `v0.1.0` (2026-11-19) hanya diuji dengan tes unit, karena `agen` dan `inventaris` tidak terdaftar di stack lokal; `make smoke` belum dijalankan ulang. SDK `v0.2.0` dan `v0.2.1` (2026-11-24) juga hanya diuji dengan tes unit.
+Diuji terhadap nice revisi: `6cc9986` (2026-11-13). SDK `v0.1.0` (2026-11-19) hanya diuji dengan tes unit, karena `agen` dan `inventaris` tidak terdaftar di stack lokal; `make smoke` belum dijalankan ulang. SDK `v0.2.0`, `v0.2.1`, dan `v0.2.2` (2026-11-24) juga hanya diuji dengan tes unit.
 
 ## Struktur folder
 
@@ -100,7 +100,7 @@ access_denied (organization is not usable): NICE refused a token for inventaris 
 
 ## Prasyarat
 
-- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.1` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dengan versi minimum di atas, bawaannya di `http://localhost:8080`.
 - `inventaris` berjalan dan sudah diatur sampai langkah 8 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md). User uji memegang role `inventaris.operator` di project yang sama.

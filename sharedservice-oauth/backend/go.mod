@@ -3,7 +3,7 @@ module github.com/nice-platform/example/sharedservice-oauth/backend
 go 1.27
 
 require (
-	github.com/ABA-Developer/nice-auth-sdk v0.2.1
+	github.com/ABA-Developer/nice-auth-sdk v0.2.2
 	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/jackc/pgx/v5 v5.9.2
 )
