@@ -21,15 +21,18 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 )
 
-func TestCheckerOnlyWithTheServiceKey(t *testing.T) {
+func TestCheckerAndResolverOnlyWithTheServiceKey(t *testing.T) {
 	store := devicememory.NewRepository()
 	log := slog.New(slog.DiscardHandler)
-	if c := VerifierConfig(config.Config{Issuer: testIssuer}, store, log); c.Checker != nil {
-		t.Fatalf("checker without %s = %T, want nil", config.EnvServiceAPIKey, c.Checker)
+	if c := VerifierConfig(config.Config{Issuer: testIssuer}, store, log); c.Checker != nil || c.Resolver != nil {
+		t.Fatalf("without %s: checker %T, resolver %T, want neither", config.EnvServiceAPIKey, c.Checker, c.Resolver)
 	}
 	c := VerifierConfig(config.Config{Issuer: testIssuer, ServiceAPIKey: "nice_sk_test.secret"}, store, log)
 	if _, ok := c.Checker.(*verify.HTTPChecker); !ok {
 		t.Fatalf("checker with %s = %T, want *verify.HTTPChecker", config.EnvServiceAPIKey, c.Checker)
+	}
+	if _, ok := c.Resolver.(*verify.HTTPResolver); !ok {
+		t.Fatalf("resolver with %s = %T, want *verify.HTTPResolver", config.EnvServiceAPIKey, c.Resolver)
 	}
 	if c.Service != domain.ServiceSlug || c.Tenants == nil {
 		t.Fatalf("verifier config = %+v", c)
@@ -137,10 +140,69 @@ func TestOnlineCheckAsksNICE(t *testing.T) {
 	}
 }
 
+// A caller with more permissions than a token carries gets perms_ref in place of perms: the service asks NICE once
+// for the list the reference names, and then decides alone.
+func TestAPermissionReferenceIsResolvedAtNICEOnce(t *testing.T) {
+	nice := newFakeNICE(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	e := nice.serviceEnv(ctx, t)
+	nice.setPermissions(allPerms)
+	byRef := func() string {
+		c := nice.claims(orgA)
+		delete(c, "perms")
+		c["perms_ref"], c["jti"] = verify.PermsRef(allPerms), time.Now().Format(time.RFC3339Nano)
+		return sign(t, c)
+	}
+
+	it := e.create(orgA, "Sensor")
+	for range 2 {
+		if r := e.do(http.MethodGet, "/devices", byRef(), nil); r.Status != http.StatusOK {
+			t.Fatalf("list with a token by reference = %d %s, want 200", r.Status, r.Body)
+		}
+	}
+	if r := e.do(http.MethodGet, "/devices/"+it.ID, byRef(), nil); r.Status != http.StatusOK {
+		t.Fatalf("get with a token by reference = %d %s, want 200", r.Status, r.Body)
+	}
+	want := `{"principal_type":"PRINCIPAL_TYPE_USER","principal_id":"usr_test","organization_id":"` + orgA +
+		`","project_id":"prj_test","service":"` + domain.ServiceSlug + `","perms_ref":"` + verify.PermsRef(allPerms) + `"}`
+	if got := nice.resolutions(); len(got) != 1 || got[0] != want {
+		t.Fatalf("resolutions = %v, want one of %s", got, want)
+	}
+	if got := nice.authorizations(); !slices.Contains(got, "POST /api/v1/permission-resolutions ApiKey "+fakeServiceKey) {
+		t.Fatalf("NICE saw %v, want the resolution made with the nice.service key", got)
+	}
+
+	// The permissions changed since the token was issued: NICE answers that the reference no longer matches.
+	nice.setPermissions([]string{domain.PermRead})
+	changed := nice.claims(orgA)
+	delete(changed, "perms")
+	changed["perms_ref"], changed["jti"] = verify.PermsRef([]string{domain.PermRead, domain.PermEdit}), "changed"
+	wantError(t, e.do(http.MethodGet, "/devices", sign(t, changed), nil), http.StatusUnauthorized, "invalid_token", "token_stale")
+}
+
+func TestWithoutTheServiceKeyATokenByReferenceIsRefusedWith503(t *testing.T) {
+	cfg := config.Config{Issuer: testIssuer, CORSOrigins: []string{testOrigin}}
+	store := devicememory.NewRepository()
+	vc := VerifierConfig(cfg, store, slog.New(slog.DiscardHandler))
+	vc.StaticJWKS = testJWKS(t)
+	v, err := verify.New(vc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &testEnv{t: t, store: store, handler: newHandler(v, store, cfg.CORSOrigins)}
+	c := claims(orgA)
+	delete(c, "perms")
+	c["perms_ref"], c["jti"] = verify.PermsRef(allPerms), "no-key"
+	if r := e.do(http.MethodGet, "/devices", sign(t, c), nil); r.Status != http.StatusServiceUnavailable {
+		t.Fatalf("a token by reference without %s = %d %s, want 503", config.EnvServiceAPIKey, r.Status, r.Body)
+	}
+}
+
 const fakeServiceKey = "nice_sk_test.secret"
 
-// fakeNICE answers the three NICE endpoints a nice_token service calls: the
-// JWKS, the access change feed and the online access check.
+// fakeNICE answers the four NICE endpoints a nice_token service calls: the
+// JWKS, the access change feed, the online access check and the permission resolution.
 type fakeNICE struct {
 	*httptest.Server
 	jwks    []byte
@@ -150,6 +212,9 @@ type fakeNICE struct {
 	allowed bool
 	seen    []string
 	checked []string
+	// perms are the permissions the principal holds now; a resolution matches when its perms_ref names them.
+	perms    []string
+	resolved []string
 }
 
 func newFakeNICE(t *testing.T) *fakeNICE {
@@ -183,6 +248,22 @@ func (f *fakeNICE) serve(w http.ResponseWriter, r *http.Request) {
 		allowed := f.allowed
 		f.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{"allowed": allowed})
+	case "POST /api/v1/permission-resolutions":
+		var body bytes.Buffer
+		_, _ = body.ReadFrom(r.Body)
+		var req struct {
+			PermsRef string `json:"perms_ref"`
+		}
+		_ = json.Unmarshal(body.Bytes(), &req)
+		f.mu.Lock()
+		f.resolved = append(f.resolved, strings.TrimSpace(body.String()))
+		perms := append([]string(nil), f.perms...)
+		f.mu.Unlock()
+		if verify.PermsRef(perms) != req.PermsRef {
+			_ = json.NewEncoder(w).Encode(map[string]any{"match": false})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"match": true, "permissions": perms})
 	default:
 		http.NotFound(w, r)
 	}
@@ -205,6 +286,18 @@ func (f *fakeNICE) authorizations() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.seen...)
+}
+
+func (f *fakeNICE) setPermissions(perms []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.perms = perms
+}
+
+func (f *fakeNICE) resolutions() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.resolved...)
 }
 
 func (f *fakeNICE) checks() []string {

@@ -15,9 +15,9 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer exchanged token (aud=inventaris, act.sub=agen-backend)--> inventaris /items
 ```
 
-Minimum NICE version: a revision with `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, and `add-token-exchange` (`nice` `6cc9986` or later). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.1.0`. The MCP SDK is pinned in `go.mod` at `v1.8.0`.
+Minimum NICE version: a revision with `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, and `add-token-exchange` (`nice` `6cc9986` or later). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.0`. The MCP SDK is pinned in `go.mod` at `v1.8.0`.
 
-Tested against nice revision: `6cc9986` (2026-11-13). SDK `v0.1.0` (2026-11-19) was tested with the unit tests only, since `agen` and `inventaris` are not registered in the local stack; `make smoke` was not run again.
+Tested against nice revision: `6cc9986` (2026-11-13). SDK `v0.1.0` (2026-11-19) was tested with the unit tests only, since `agen` and `inventaris` are not registered in the local stack; `make smoke` was not run again. SDK `v0.2.0` (2026-11-24) was tested with the unit tests only as well.
 
 ## Folder structure
 
@@ -100,7 +100,7 @@ access_denied (organization is not usable): NICE refused a token for inventaris 
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.1.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
 - `inventaris` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md). The test user holds `inventaris.operator` in the same project.
@@ -119,6 +119,7 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `LISTEN_ADDR` | `127.0.0.1:8083` | listen address |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients use; the metadata `resource` is `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
+| `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role; turns on the resolution of `perms_ref`. Empty: a token with `perms_ref` (a caller whose `agen` permissions do not fit a token) answers `503` |
 
 An empty required variable stops the start with a message that names it.
 
