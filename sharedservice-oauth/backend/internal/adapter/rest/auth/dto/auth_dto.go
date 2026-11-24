@@ -34,6 +34,7 @@ type Organization struct {
 	ID                string    `json:"id"`
 	Name              string    `json:"name"`
 	Slug              string    `json:"slug"`
+	ActAs             bool      `json:"act_as"`
 	Projects          []Project `json:"projects"`
 	ProjectsTruncated bool      `json:"projects_truncated"`
 }

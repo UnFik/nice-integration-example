@@ -200,6 +200,12 @@ func TestContextsComeFromNICEOverAllPages(t *testing.T) {
 	if !strings.Contains(r.Body, `"name":"Gudang"`) {
 		t.Fatalf("contexts carry no names: %s", r.Body)
 	}
+	for _, o := range m["organizations"].([]any) {
+		org := o.(map[string]any)
+		if want := org["id"] == orgC; org["act_as"] != want {
+			t.Fatalf("act_as of %v = %v, want %v", org["id"], org["act_as"], want)
+		}
+	}
 }
 
 func TestContextsWhenNICERefuses(t *testing.T) {

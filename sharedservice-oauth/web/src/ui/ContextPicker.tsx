@@ -20,6 +20,11 @@ export function ContextPicker(props: {
             <header className="org-head">
               <h3>{org.name || org.slug || org.id}</h3>
               {isCurrentOrg && !active && <span className="badge info">Organisasi saat ini</span>}
+              {org.actAs && (
+                <span className="badge" data-act-as={org.id} title="Anda bukan anggota organisasi ini; Anda masuk sebagai operator platform nadi.">
+                  Operator platform
+                </span>
+              )}
             </header>
             <p className="muted small">
               <code>{org.id}</code>

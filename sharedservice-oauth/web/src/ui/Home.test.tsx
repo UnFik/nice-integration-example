@@ -11,8 +11,8 @@ const session = new Session({ fetch: () => Promise.reject(new Error("offline")),
 const contexts: Contexts = {
   currentOrganizationId: ORG_A,
   organizations: [
-    { id: ORG_A, name: "Nusapala", slug: "nusapala", projects: [{ id: PRJ_P, name: "Parkir", slug: "parkir" }], projectsTruncated: false },
-    { id: ORG_B, name: "Bintang Laut", slug: "bintang-laut", projects: [], projectsTruncated: false },
+    { id: ORG_A, name: "Nusapala", slug: "nusapala", actAs: false, projects: [{ id: PRJ_P, name: "Parkir", slug: "parkir" }], projectsTruncated: false },
+    { id: ORG_B, name: "Bintang Laut", slug: "bintang-laut", actAs: false, projects: [], projectsTruncated: false },
   ],
 };
 

@@ -10,14 +10,15 @@ const contexts: Contexts = {
       id: "org-a",
       name: "Nusapala",
       slug: "nusapala",
+      actAs: false,
       projects: [
         { id: "prj-p", name: "Parkir", slug: "parkir" },
         { id: "prj-q", name: "Gudang", slug: "gudang" },
       ],
       projectsTruncated: false,
     },
-    { id: "org-b", name: "Bintang Laut", slug: "bintang-laut", projects: [{ id: "prj-r", name: "Retail", slug: "retail" }], projectsTruncated: true },
-    { id: "org-c", name: "Cakrawala", slug: "cakrawala", projects: [], projectsTruncated: false },
+    { id: "org-b", name: "Bintang Laut", slug: "bintang-laut", actAs: true, projects: [{ id: "prj-r", name: "Retail", slug: "retail" }], projectsTruncated: true },
+    { id: "org-c", name: "Cakrawala", slug: "cakrawala", actAs: false, projects: [], projectsTruncated: false },
   ],
 };
 
@@ -59,6 +60,13 @@ describe("ContextPicker", () => {
 
   it("says when NICE left projects out", () => {
     expect(render(undefined)).toMatch(/tidak mengirim semua project/);
+  });
+
+  it("marks only an organization reached as a platform operator", () => {
+    const markup = render(undefined);
+
+    expect(markup.match(/data-act-as=/g)).toHaveLength(1);
+    expect(markup).toMatch(/Bintang Laut[^]*?data-act-as="org-b"[^]*?Operator platform/);
   });
 
   it("disables every choice while a switch runs", () => {

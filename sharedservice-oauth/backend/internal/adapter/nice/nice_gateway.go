@@ -114,7 +114,7 @@ func exchangeError(err error) error {
 	return &sessionusecase.UnavailableError{Err: err}
 }
 
-// answerError reads the error of a NICE API answer that is not 2xx.
+// answerError reads the OAuth error of an answer of /oauth/userinfo that is not 2xx.
 func answerError(resp *http.Response) error {
 	var body struct {
 		Error       string `json:"error"`
