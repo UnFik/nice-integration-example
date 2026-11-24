@@ -19,9 +19,7 @@ type Organization struct {
 	Name string
 	Slug string
 	// ActAs marks an organization a platform operator of the service reaches without being a member of it.
-	ActAs bool
-	// Services are the services used in the organization itself (organization tenancy).
-	Services          []string
+	ActAs             bool
 	Projects          []Project
 	ProjectsTruncated bool
 }

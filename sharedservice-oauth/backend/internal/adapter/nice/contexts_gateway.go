@@ -20,7 +20,7 @@ func (g *Gateway) Contexts(ctx context.Context, signIn string) (sessiondto.Conte
 	}
 	out := sessiondto.Contexts{CurrentOrganizationID: cs.CurrentOrganization, Organizations: make([]sessiondto.Organization, 0, len(cs.Organizations))}
 	for _, o := range cs.Organizations {
-		org := sessiondto.Organization{ID: o.ID, Name: o.Name, Slug: o.Slug, ActAs: o.ActAs, Services: o.Services,
+		org := sessiondto.Organization{ID: o.ID, Name: o.Name, Slug: o.Slug, ActAs: o.ActAs,
 			ProjectsTruncated: o.ProjectsTruncated, Projects: make([]sessiondto.Project, 0, len(o.Projects))}
 		for _, p := range o.Projects {
 			org.Projects = append(org.Projects, sessiondto.Project{ID: p.ID, Name: p.Name, Slug: p.Slug, Services: p.Services})
