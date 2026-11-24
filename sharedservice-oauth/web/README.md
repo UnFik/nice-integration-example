@@ -12,6 +12,7 @@ UI React untuk service `nadi`. UI ini hanya bicara ke backend di [`../backend`](
 | `src/session.ts` | Status halaman: sesi, konteks aktif dan `perms`, pilihan konteks, pindah konteks, perangkat, keluar, serta galat `login_error`, 401 `session_ended`, 409 `context_refused`, dan 503 saat keluar |
 | `src/devices.ts` | Validasi isian perangkat dan kalimat galat |
 | `src/ui/`, `src/App.tsx` | Halaman masuk, bilah atas dengan konteks aktif, panel Konteks, tabel perangkat, dan dialog tambah/ubah/hapus. Tombol mengikuti `perms` dari `GET /auth/session` |
+| `Dockerfile`, `nginx.conf.template` | Image UI: nginx menyajikan hasil build dan meneruskan `/auth` serta `/devices` ke backend di `BACKEND_ADDR` (bawaan `nadi:8081`), sama dengan proxy Vite saat dev |
 
 Tombol Masuk adalah navigasi halaman ke `/auth/login` (backend mengalihkan ke NICE), bukan `fetch`.
 
@@ -26,3 +27,5 @@ npm run build    # web/dist, disajikan backend di 8081
 ```
 
 Proxy Vite tidak mengubah header `Origin` (`changeOrigin: false`), jadi backend melihat `http://localhost:5181`. Nilai itu harus sama dengan `PUBLIC_URL` backend saat dev, karena pemeriksaan CSRF membandingkannya.
+
+Di Docker, UI berjalan di container nginx sendiri di `http://localhost:5181` (lihat `compose.yml` di akar repo). nginx juga meneruskan `Origin` apa adanya, jadi `compose.yml` mengisi `PUBLIC_URL` backend dengan `http://localhost:5181`.

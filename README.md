@@ -65,7 +65,7 @@ Kolom NICE adalah revisi server terlama yang punya fitur yang dipakai contoh. Ko
 
 Daftarkan endpoint service dengan `127.0.0.1`, bukan `localhost`, supaya NICE tidak mencoba `::1`.
 
-Untuk NICE yang berjalan di Docker (`make up` di `nice/`), `docker compose up -d --build` di akar repo ini menjalankan `sharedservice-oauth` (backend dengan UI di `http://localhost:8081`) dan PostgreSQL-nya; daftarkan service sebagai `http://inventaris:8081`. Lihat komentar di `compose.yml`.
+Untuk NICE yang berjalan di Docker (`make up` di `nice/`), `docker compose up -d --build` di akar repo ini menjalankan `sharedservice-oauth` (backend di `http://localhost:8081`, dan UI dalam container nginx sendiri di `http://localhost:5181`) dan PostgreSQL-nya; daftarkan service sebagai `http://nadi:8081`. Lihat komentar di `compose.yml`.
 
 ## Setup di NICE
 

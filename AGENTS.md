@@ -4,7 +4,7 @@ Repo ini berisi lima contoh integrasi dengan NICE yang **berdiri sendiri**. Cont
 
 | Folder | Peran di NICE | Stack | Port |
 |---|---|---|---|
-| `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice-auth-sdk/verify` + `nice-auth-sdk/credentials`; Vite + React 19 + TypeScript | 8081 (UI build juga di 8081); 5181 saat dev |
+| `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice-auth-sdk/verify` + `nice-auth-sdk/credentials`; Vite + React 19 + TypeScript, nginx untuk image UI | 8081 (UI build satu proses juga di 8081); UI 5181 saat dev dan di Docker |
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
 | `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool memanggil service `nice_token` (`inventaris`) lewat token exchange | Go + SDK MCP Go + `nice-auth-sdk/credentials` | 8083 |
@@ -21,7 +21,7 @@ make swag | make swag-check        bangkitkan docs/swagger.json / pastikan masih
 scripts/smoke.sh                   uji terhadap NICE yang sudah diatur (baca .env)
 
 cd sharedservice-oauth/web
-npm run dev                        http://localhost:5181, /auth dan /items diteruskan ke 8081
+npm run dev                        http://localhost:5181, /auth dan /devices diteruskan ke 8081
 npm test | npm run typecheck | npm run build   (build: web/dist, disajikan backend di 8081)
 
 cd shared-service-apikey

@@ -65,7 +65,7 @@ The NICE column is the oldest server revision with the features the example uses
 
 Register service endpoints with `127.0.0.1`, not `localhost`, so NICE never tries `::1`.
 
-For a NICE that runs in Docker (`make up` in `nice/`), `docker compose up -d --build` at the root of this repository runs `sharedservice-oauth` (the backend with the UI at `http://localhost:8081`) and its PostgreSQL; register the service as `http://inventaris:8081`. See the comments in `compose.yml`.
+For a NICE that runs in Docker (`make up` in `nice/`), `docker compose up -d --build` at the root of this repository runs `sharedservice-oauth` (the backend at `http://localhost:8081`, and the UI in an nginx container of its own at `http://localhost:5181`) and its PostgreSQL; register the service as `http://nadi:8081`. See the comments in `compose.yml`.
 
 ## Setup in NICE
 

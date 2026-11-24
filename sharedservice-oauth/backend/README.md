@@ -22,7 +22,7 @@ Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image 
 | `internal/adapter/nice/` | port `NICE` lewat `niceauth/credentials` (`Client` `KindBFF` dan `ExchangeClient`), `/oauth/userinfo`, dan `/api/v1/me/contexts` |
 | `migrations/` | migrasi SQL (`tenants`, `devices`, beserta `down`), di-embed dan dijalankan saat start bila `DATABASE_URL` diisi |
 | `internal/platform/` | `config` (env dan `.env`), `httpx` (CORS untuk SPA lain yang terdaftar), dan `postgres` (pool dan runner migrasi) |
-| `Dockerfile` | image backend beserta hasil build UI (dipakai `compose.yml` di akar repo) |
+| `Dockerfile` | image backend saja; UI punya image sendiri (`../web/Dockerfile`). Keduanya dipakai `compose.yml` di akar repo |
 | `docs/swagger.json` | Swagger 2.0 hasil `make swag`, di-embed dan disajikan di `/openapi.json` |
 | `scripts/smoke.sh` | uji smoke terhadap NICE yang sudah diatur |
 | `scripts/large-catalog.sh` | mencetak dokumen katalog `nadi` dengan operasi tambahan, untuk mencoba token ber-`perms_ref` |
@@ -120,9 +120,9 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `LISTEN_ADDR` | `127.0.0.1:8081` | alamat listen |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
 | `NICE_CLIENT_ID`, `NICE_CLIENT_SECRET` | wajib | OAuth client confidential UI (langkah 2). Tanpa keduanya service berhenti dengan pesan yang menyebut nama variabelnya; secret tidak pernah dicetak |
-| `PUBLIC_URL` | `http://localhost:8081` | origin UI yang dilihat browser; redirect URI = `PUBLIC_URL/auth/callback`. Dev dengan Vite: `http://localhost:5181` |
+| `PUBLIC_URL` | `http://localhost:8081` | origin UI yang dilihat browser; redirect URI = `PUBLIC_URL/auth/callback`. Dev dengan Vite dan Docker: `http://localhost:5181` |
 | `SESSION_IDLE_TIMEOUT` | `8h` | umur sesi browser tanpa pemakaian |
-| `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/` |
+| `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/`; kosong di Docker, karena UI punya container sendiri |
 | `DATABASE_URL` | kosong | URL `postgres://` untuk perangkat; kosong berarti memori. Nilainya tidak pernah dicetak |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser lain yang boleh memanggil dengan Bearer, dipisah koma, untuk `public-client-pkce`. UI contoh ini tidak butuh CORS karena satu origin |
 | `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed, pemeriksaan online, dan penyelesaian `perms_ref` |
