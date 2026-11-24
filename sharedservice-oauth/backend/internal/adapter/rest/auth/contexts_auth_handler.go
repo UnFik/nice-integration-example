@@ -28,7 +28,7 @@ func (h *Handler) Contexts(w http.ResponseWriter, r *http.Request) {
 	}
 	out := authrestdto.Contexts{CurrentOrganizationID: cs.CurrentOrganizationID, Organizations: []authrestdto.Organization{}}
 	for _, o := range cs.Organizations {
-		org := authrestdto.Organization{ID: o.ID, Name: o.Name, Slug: o.Slug, ProjectsTruncated: o.ProjectsTruncated, Projects: []authrestdto.Project{}}
+		org := authrestdto.Organization{ID: o.ID, Name: o.Name, Slug: o.Slug, ActAs: o.ActAs, ProjectsTruncated: o.ProjectsTruncated, Projects: []authrestdto.Project{}}
 		for _, p := range o.Projects {
 			org.Projects = append(org.Projects, authrestdto.Project{ID: p.ID, Name: p.Name, Slug: p.Slug})
 		}

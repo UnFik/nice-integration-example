@@ -37,6 +37,7 @@ type fakeProject struct {
 type fakeOrg struct {
 	id, name string
 	projects []fakeProject
+	actAs    bool
 }
 
 // bffNICE is a NICE for the backend-for-frontend: the token endpoint (code,
@@ -71,9 +72,9 @@ func newBFFNICE(t *testing.T) *bffNICE {
 	t.Helper()
 	f := &bffNICE{t: t, firstOrg: orgA, refresh: map[string]string{}, spent: map[string]bool{}, refusedOrgs: map[string]bool{},
 		orgs: []fakeOrg{
-			{orgA, "Nusapala", []fakeProject{{projectP, "Gudang", allPerms}, {projectQ, "Toko", []string{domain.PermRead}}}},
-			{orgB, "Banua", []fakeProject{{projectR, "Pusat", allPerms}}},
-			{orgC, "Cakra", nil},
+			{orgA, "Nusapala", []fakeProject{{projectP, "Gudang", allPerms}, {projectQ, "Toko", []string{domain.PermRead}}}, false},
+			{orgB, "Banua", []fakeProject{{projectR, "Pusat", allPerms}}, false},
+			{orgC, "Cakra", nil, true},
 		}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
@@ -264,7 +265,7 @@ func (f *bffNICE) serveContexts(w http.ResponseWriter, r *http.Request) {
 	}
 	if f.contextsDown {
 		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "permission_denied"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": http.StatusForbidden, "error_code": "permission_denied", "message": "permission denied"})
 		return
 	}
 	i, _ := strconv.Atoi(r.URL.Query().Get("page_token"))
@@ -278,7 +279,7 @@ func (f *bffNICE) serveContexts(w http.ResponseWriter, r *http.Request) {
 		page["next_page_token"] = strconv.Itoa(i + 1)
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"current_organization_id": f.firstOrg, "services": []string{"nadi"},
-		"organizations": []map[string]any{{"id": o.id, "name": o.name, "slug": strings.ToLower(o.name), "projects": projects, "projects_truncated": false}},
+		"organizations": []map[string]any{{"id": o.id, "name": o.name, "slug": strings.ToLower(o.name), "projects": projects, "projects_truncated": false, "act_as": o.actAs}},
 		"page":          page})
 }
 

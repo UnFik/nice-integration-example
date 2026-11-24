@@ -42,7 +42,7 @@ make run | make test               jalankan satu perintah (ARGS="list" | "create
 make smoke                         uji terhadap NICE dan nadi yang sudah diatur (baca .env)
 ```
 
-Versi NICE minimum dan versi SDK per contoh ada di `README.md` akar. Ketiga contoh Go memakai SDK `v0.2.0`; menaikkannya berarti `go get github.com/ABA-Developer/nice-auth-sdk@vX.Y.Z && go mod tidy` di tiap contoh, lalu tes dan smoke.
+Versi NICE minimum dan versi SDK per contoh ada di `README.md` akar. Ketiga contoh Go memakai SDK `v0.2.1`; menaikkannya berarti `go get github.com/ABA-Developer/nice-auth-sdk@vX.Y.Z && go mod tidy` di tiap contoh, lalu tes dan smoke.
 
 ## Aturan
 

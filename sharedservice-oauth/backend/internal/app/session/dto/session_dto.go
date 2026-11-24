@@ -15,15 +15,18 @@ type Contexts struct {
 }
 
 type Organization struct {
-	ID                string
-	Name              string
-	Slug              string
+	ID   string
+	Name string
+	Slug string
+	// ActAs marks an organization a platform operator of the service reaches without being a member of it.
+	ActAs             bool
 	Projects          []Project
 	ProjectsTruncated bool
 }
 
 type Project struct {
-	ID   string
-	Name string
-	Slug string
+	ID       string
+	Name     string
+	Slug     string
+	Services []string
 }

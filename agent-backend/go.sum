@@ -1,5 +1,5 @@
-github.com/ABA-Developer/nice-auth-sdk v0.2.0 h1:grHf8SHE+cUHwCiuEQU90qDnwtqt3ODnINDVc5bYwH4=
-github.com/ABA-Developer/nice-auth-sdk v0.2.0/go.mod h1:ImKGAMbOM3KV62g/gwNt+ByCCT8UCBzo4qJXLsOAKJE=
+github.com/ABA-Developer/nice-auth-sdk v0.2.1 h1:cxo3FOxK/+7j6vNFQ9IbZg8/jf4AbXKp/1LkyNIOAHI=
+github.com/ABA-Developer/nice-auth-sdk v0.2.1/go.mod h1:ImKGAMbOM3KV62g/gwNt+ByCCT8UCBzo4qJXLsOAKJE=
 github.com/go-jose/go-jose/v4 v4.1.9 h1:pKfeQkig1NmgK4hJrZYXLEYURXfoJB61Larw0uIW4gY=
 github.com/go-jose/go-jose/v4 v4.1.9/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=

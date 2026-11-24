@@ -32,6 +32,7 @@ export interface ContextOrganization {
   id: string;
   name: string;
   slug: string;
+  actAs: boolean;
   projects: ContextProject[];
   projectsTruncated: boolean;
 }
@@ -168,6 +169,7 @@ function toContexts(raw: unknown): Contexts {
         id: text(org.id),
         name: text(org.name),
         slug: text(org.slug),
+        actAs: org.act_as === true,
         projects: projects.map((device: unknown) => {
           const project = record(device);
           return { id: text(project.id), name: text(project.name), slug: text(project.slug) };

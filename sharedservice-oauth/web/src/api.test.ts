@@ -66,13 +66,13 @@ describe("createApi", () => {
     const { api } = client(() =>
       json(200, {
         current_organization_id: "org_a",
-        organizations: [{ id: "org_a", name: "A", slug: "a", projects: [{ id: "prj_p", name: "P", slug: "p" }], projects_truncated: true }],
+        organizations: [{ id: "org_a", name: "A", slug: "a", projects: [{ id: "prj_p", name: "P", slug: "p" }], projects_truncated: true, act_as: true }],
       }),
     );
 
     await expect(api.contexts()).resolves.toEqual({
       currentOrganizationId: "org_a",
-      organizations: [{ id: "org_a", name: "A", slug: "a", projects: [{ id: "prj_p", name: "P", slug: "p" }], projectsTruncated: true }],
+      organizations: [{ id: "org_a", name: "A", slug: "a", actAs: true, projects: [{ id: "prj_p", name: "P", slug: "p" }], projectsTruncated: true }],
     });
   });
 

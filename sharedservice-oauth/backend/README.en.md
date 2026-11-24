@@ -106,7 +106,7 @@ Without `act`, there is no `acted_by` field. The code reads it from `Claims.Acto
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.1` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - A dev NICE running, at `http://localhost:8080` by default (`cd ../../../nice && make db && make migrate && make dev`). NICE at another address works too: put it in `NICE_ISSUER` in `.env` and in `NICE` in the checklist shell.
 
