@@ -13,7 +13,7 @@ Minimum NICE version: `4282316` (`add-client-org-switch` and `add-signin-token-e
 | Folder | Contents |
 |---|---|
 | [`backend/`](backend/README.en.md) | The `nadi` service (Go, `nice-auth-sdk/verify`) for Bearer callers, plus `/auth/*` for the UI (`nice-auth-sdk/credentials`, `KindBFF`), the server of `web/dist`, and the device store per organization and project (memory or PostgreSQL). Its README has the operations, the service setup checklist and the smoke test |
-| [`web/`](web/README.en.md) | The React 19 + Vite UI: sign-in, context picker and device table. It calls only `/auth/*` and `/devices*` |
+| [`web/`](web/README.en.md) | The React 19 + Vite UI: sign-in, context picker and device table. It calls only `/auth/*` and `/devices*`. Its `Dockerfile` builds an nginx image that serves the build and passes `/auth` and `/devices` to the backend |
 
 ## How it works
 
@@ -49,16 +49,16 @@ Device requests with the cookie may also be answered `401 unauthenticated`/`sess
 
 ## Configuration
 
-All configuration is in `backend/.env` (copy it from `backend/.env.example`). The UI has none.
+All configuration is in `backend/.env` (copy it from `backend/.env.example`). The UI has none; its Docker image reads only `BACKEND_ADDR`, the address of the backend (default `nadi:8081`).
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `NICE_ISSUER` | required | the NICE issuer, exactly the `iss` claim |
 | `NICE_CLIENT_ID` | required | `client_id` of the confidential OAuth client bound to `nadi` |
 | `NICE_CLIENT_SECRET` | required | the secret of that client. Sent to NICE only; never printed |
-| `PUBLIC_URL` | `http://localhost:8081` | the origin the browser sees. Development with Vite: `http://localhost:5181`. The redirect URI is derived as `PUBLIC_URL/auth/callback` |
+| `PUBLIC_URL` | `http://localhost:8081` | the origin the browser sees. Development with Vite, and Docker: `http://localhost:5181`. The redirect URI is derived as `PUBLIC_URL/auth/callback` |
 | `SESSION_IDLE_TIMEOUT` | `8h` | a session not used for this long ends |
-| `WEB_DIR` | `../web/dist` | the output of `npm run build`, served at `PUBLIC_URL`; without that directory the backend serves no UI |
+| `WEB_DIR` | `../web/dist` | the output of `npm run build`, served at `PUBLIC_URL`; without that directory the backend serves no UI. Docker leaves it empty, since the UI has a container of its own |
 | `DATABASE_URL` | empty | PostgreSQL for the devices; empty keeps them in memory |
 | `LISTEN_ADDR`, `JWKS_FILE`, `CORS_ALLOWED_ORIGINS`, `NICE_SERVICE_API_KEY`, `SMOKE_SA_ID`, `SMOKE_API_KEY` | | see [`backend/README.en.md`](backend/README.en.md#configuration) |
 
@@ -82,13 +82,18 @@ cd web && npm run build         # web/dist
 cd backend && make run          # serves web/dist on 8081
 ```
 
-Docker: `make up` in this folder (same as `docker compose up -d --build` at the repository root) runs the backend with the UI at `http://localhost:8081` and PostgreSQL for `DATABASE_URL` (see `compose.yml`). `backend/.env` is still needed for `NICE_ISSUER`, `NICE_CLIENT_ID`, and `NICE_CLIENT_SECRET`.
+Docker: `make up` in this folder (same as `docker compose up -d --build` at the repository root) runs the backend, the UI, and PostgreSQL for `DATABASE_URL` in separate containers (see `compose.yml`):
+
+- the backend (`backend/Dockerfile`) at `http://localhost:8081` for Bearer callers, with no UI;
+- the UI (`web/Dockerfile`, nginx) at `http://localhost:5181`, which passes `/auth` and `/devices` to the backend as the Vite proxy does, so the browser still sees one origin.
+
+`backend/.env` is still needed for `NICE_ISSUER`, `NICE_CLIENT_ID`, and `NICE_CLIENT_SECRET`; `compose.yml` sets `PUBLIC_URL`, `WEB_DIR`, and `DATABASE_URL`. The UI container and `npm run dev` both use port 5181, so run only one of them.
 
 Tests: `make test` in `backend/` (no NICE; a fake NICE on `httptest`), and `npm test` in `web/` (a fake backend through a `fetch` stub).
 
 ## NICE setup checklist
 
-1. Run steps 1-11 of [`backend/README.en.md`](backend/README.en.md#nice-setup-checklist). Step 2 creates the confidential OAuth client in a project of the platform organization with two redirect URIs (`http://localhost:5181/auth/callback` for development and `http://localhost:8081/auth/callback` for the build), and the smoke test of step 11 checks `/auth/session` and `/auth/login`.
+1. Run steps 1-11 of [`backend/README.en.md`](backend/README.en.md#nice-setup-checklist). Step 2 creates the confidential OAuth client in a project of the platform organization with two redirect URIs (`http://localhost:5181/auth/callback` for development and Docker, `http://localhost:8081/auth/callback` for the one-process build), and the smoke test of step 11 checks `/auth/session` and `/auth/login`.
 2. Bind the client to `nadi` (needs `nice.platform.catalog.manage`). The binding makes the client a service client: sign-in picks an organization of the user that is entitled to `nadi`, and the client may switch organizations through refresh.
 
    ```bash
@@ -105,7 +110,7 @@ Expected result: `GET /api/v1/projects/$UI_PROJECT_ID/clients/$OAUTH_CLIENT_ID/t
 
 ## Browser test checklist
 
-Open DevTools (the Network tab with **Preserve log**, and Application > Storage). A, B, C, P, Q, and R come from step 3 above. Run the backend and the UI as in "Running" (development or build), and keep the NICE log (`make dev`) in another terminal.
+Open DevTools (the Network tab with **Preserve log**, and Application > Storage). A, B, C, P, Q, and R come from step 3 above. Run the backend and the UI as in "Running" (development, build, or Docker), and keep the NICE log (`make dev`) in another terminal.
 
 | # | Requirement | Step | Expected result |
 |---|---|---|---|
@@ -124,7 +129,7 @@ Open DevTools (the Network tab with **Preserve log**, and Application > Storage)
 | 13 | Backend restart | Sign in, stop and start the backend, reload the page | `GET /auth/session` is answered `401`; the UI shows **Masuk** |
 | 14 | Sign-out | Press **Keluar** | `POST /auth/logout` is answered `204`; the NICE log shows `POST /oauth/revoke`; the cookie is gone and a reload shows **Masuk** |
 | 15 | Sign-out while NICE is down | Sign in, stop NICE, press **Keluar** | `503`; the UI stays signed in and offers to try again. Once NICE runs again, **Keluar** succeeds |
-| 16 | One origin | Development: the calls to `/auth/session` and `/devices` come from `http://localhost:5181` without an `OPTIONS` preflight. Build: open `http://localhost:8081` | `GET /` serves the UI and `GET /auth/session` is answered by the backend on the same origin |
+| 16 | One origin | Development: the calls to `/auth/session` and `/devices` come from `http://localhost:5181` without an `OPTIONS` preflight. Build: open `http://localhost:8081`. Docker: open `http://localhost:5181` | `GET /` serves the UI and `GET /auth/session` is answered by the backend on the same origin |
 
 ## Production notes
 

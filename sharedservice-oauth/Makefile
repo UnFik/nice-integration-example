@@ -10,6 +10,6 @@ run:
 	trap 'exit 130' INT; trap 'exit 143' TERM; \
 	wait -n $$backend $$web
 
-# Docker: backend with the built UI on 8081 plus its PostgreSQL (needs the NICE stack, `make up` in nice/).
+# Docker: the backend on 8081, the UI (nginx) on 5181 and PostgreSQL (needs the NICE stack, `make up` in nice/).
 up:
 	docker compose -f ../compose.yml up -d --build

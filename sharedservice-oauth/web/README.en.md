@@ -12,6 +12,7 @@ React UI for the `nadi` service. The UI talks only to the backend in [`../backen
 | `src/session.ts` | Page state: session, active context and `perms`, context choices, context switch, devices, sign-out, and the `login_error`, 401 `session_ended`, 409 `context_refused`, and sign-out 503 errors |
 | `src/devices.ts` | Device input validation and error sentences |
 | `src/ui/`, `src/App.tsx` | Sign-in screen, top bar with the active context, Context panel, devices table, and add/edit/delete dialogs. Buttons follow `perms` from `GET /auth/session` |
+| `Dockerfile`, `nginx.conf.template` | The UI image: nginx serves the build and passes `/auth` and `/devices` to the backend at `BACKEND_ADDR` (default `nadi:8081`), as the Vite proxy does in dev |
 
 The Masuk (sign in) button is a page navigation to `/auth/login` (the backend redirects to NICE), not a `fetch`.
 
@@ -26,3 +27,5 @@ npm run build    # web/dist, served by the backend on 8081
 ```
 
 The Vite proxy keeps the `Origin` header (`changeOrigin: false`), so the backend sees `http://localhost:5181`. That value must equal the backend `PUBLIC_URL` in dev, because the CSRF check compares them.
+
+In Docker, the UI runs in an nginx container of its own at `http://localhost:5181` (see `compose.yml` at the repository root). nginx also passes `Origin` unchanged, so `compose.yml` sets the backend `PUBLIC_URL` to `http://localhost:5181`.

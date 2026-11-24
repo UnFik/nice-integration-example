@@ -1,12 +1,12 @@
-# Runs nadi (sharedservice-oauth: backend and its UI on one origin) and its PostgreSQL next to a
-# NICE stack that runs in Docker (`make up` in nice/).
+# Runs nadi (sharedservice-oauth: the backend, its UI and its PostgreSQL) next to a NICE stack that runs in Docker
+# (`make up` in nice/).
 #
 #   docker compose up -d --build
 #
-# Open the UI at http://localhost:8081. The confidential client of the UI needs the redirect URI
-# http://localhost:8081/auth/callback, and NICE_CLIENT_ID and NICE_CLIENT_SECRET in
-# sharedservice-oauth/backend/.env. Register the service in NICE as http://nadi:8081 (same network as
-# NICE, resolved by name).
+# Open the UI at http://localhost:5181; the backend answers Bearer callers at http://localhost:8081. The
+# confidential client of the UI needs the redirect URI http://localhost:5181/auth/callback, and NICE_CLIENT_ID and
+# NICE_CLIENT_SECRET in sharedservice-oauth/backend/.env. Register the service in NICE as http://nadi:8081 (same
+# network as NICE, resolved by name).
 name: example
 
 services:
@@ -22,20 +22,20 @@ services:
       nice-network:
         aliases: [nadi]
       nadi:
+        aliases: [nadi]
     ports:
       - "127.0.0.1:8081:8081"
 
   nadi:
-    build:
-      context: ./sharedservice-oauth/backend
-      additional_contexts:
-        web: ./sharedservice-oauth/web
+    build: ./sharedservice-oauth/backend
     env_file: ./sharedservice-oauth/backend/.env
     environment:
       LISTEN_ADDR: 0.0.0.0:8081
       JWKS_FILE: /data/jwks.json
-      PUBLIC_URL: http://localhost:8081
-      WEB_DIR: /web
+      # The origin of nadi-web: the browser signs in and sends its writes there.
+      PUBLIC_URL: http://localhost:5181
+      # nadi-web serves the UI; this wins over WEB_DIR in .env.
+      WEB_DIR: ""
       # The password only guards a database on the private network below, never published.
       DATABASE_URL: postgres://nadi:${NADI_DB_PASSWORD:-nadi-dev}@nadi-db:5432/nadi?sslmode=disable
     network_mode: service:nice-localhost
@@ -47,6 +47,19 @@ services:
     restart: unless-stopped
     volumes:
       - nadi-data:/data
+
+  # The UI: nginx serves the build and passes /auth and /devices to nadi, so the browser sees one origin.
+  nadi-web:
+    build: ./sharedservice-oauth/web
+    environment:
+      BACKEND_ADDR: nadi:8081
+    depends_on:
+      nadi:
+        condition: service_started
+    restart: unless-stopped
+    networks: [nadi]
+    ports:
+      - "127.0.0.1:5181:8080"
 
   # Items per organization and project. On its own network, so its name never clashes with a database
   # of the NICE stack on nice-network.

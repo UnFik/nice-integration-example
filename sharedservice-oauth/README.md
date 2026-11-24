@@ -13,7 +13,7 @@ Versi NICE minimum: `4282316` (`add-client-org-switch` dan `add-signin-token-exc
 | Folder | Isi |
 |---|---|
 | [`backend/`](backend/README.md) | Service `nadi` (Go, `nice-auth-sdk/verify`) untuk pemanggil Bearer, ditambah `/auth/*` untuk UI (`nice-auth-sdk/credentials`, `KindBFF`), penyaji `web/dist`, dan penyimpanan perangkat per organisasi dan project (memori atau PostgreSQL). README-nya memuat operasi, checklist setup service, dan smoke |
-| [`web/`](web/README.md) | UI React 19 + Vite: masuk, pemilih konteks, dan tabel perangkat. Hanya memanggil `/auth/*` dan `/devices*` |
+| [`web/`](web/README.md) | UI React 19 + Vite: masuk, pemilih konteks, dan tabel perangkat. Hanya memanggil `/auth/*` dan `/devices*`. `Dockerfile`-nya membangun image nginx yang menyajikan hasil build dan meneruskan `/auth` serta `/devices` ke backend |
 
 ## Cara kerja
 
@@ -49,16 +49,16 @@ Request perangkat ber-cookie juga bisa dijawab `401 unauthenticated`/`session_en
 
 ## Konfigurasi
 
-Semua konfigurasi ada di `backend/.env` (salin dari `backend/.env.example`). UI tidak punya konfigurasi.
+Semua konfigurasi ada di `backend/.env` (salin dari `backend/.env.example`). UI tidak punya konfigurasi; image Docker-nya hanya membaca `BACKEND_ADDR`, alamat backend (bawaan `nadi:8081`).
 
 | Variabel | Bawaan | Arti |
 |---|---|---|
 | `NICE_ISSUER` | wajib | issuer NICE, sama persis dengan klaim `iss` |
 | `NICE_CLIENT_ID` | wajib | `client_id` OAuth client confidential yang diikat ke `nadi` |
 | `NICE_CLIENT_SECRET` | wajib | secret client itu. Hanya dikirim ke NICE; tidak pernah dicetak |
-| `PUBLIC_URL` | `http://localhost:8081` | origin yang dilihat browser. Dev dengan Vite: `http://localhost:5181`. Redirect URI diturunkan sebagai `PUBLIC_URL/auth/callback` |
+| `PUBLIC_URL` | `http://localhost:8081` | origin yang dilihat browser. Dev dengan Vite dan Docker: `http://localhost:5181`. Redirect URI diturunkan sebagai `PUBLIC_URL/auth/callback` |
 | `SESSION_IDLE_TIMEOUT` | `8h` | sesi yang tidak dipakai selama ini berakhir |
-| `WEB_DIR` | `../web/dist` | hasil `npm run build` yang disajikan di `PUBLIC_URL`; tanpa direktori itu backend tidak menyajikan UI |
+| `WEB_DIR` | `../web/dist` | hasil `npm run build` yang disajikan di `PUBLIC_URL`; tanpa direktori itu backend tidak menyajikan UI. Docker mengosongkannya, karena UI punya container sendiri |
 | `DATABASE_URL` | kosong | PostgreSQL untuk perangkat; kosong berarti memori |
 | `LISTEN_ADDR`, `JWKS_FILE`, `CORS_ALLOWED_ORIGINS`, `NICE_SERVICE_API_KEY`, `SMOKE_SA_ID`, `SMOKE_API_KEY` | | lihat [`backend/README.md`](backend/README.md#konfigurasi) |
 
@@ -82,13 +82,18 @@ cd web && npm run build         # web/dist
 cd backend && make run          # menyajikan web/dist di 8081
 ```
 
-Docker: `make up` di folder ini (setara `docker compose up -d --build` di akar repo) menjalankan backend dengan UI di `http://localhost:8081` dan PostgreSQL untuk `DATABASE_URL` (lihat `compose.yml`). `backend/.env` tetap dibutuhkan untuk `NICE_ISSUER`, `NICE_CLIENT_ID`, dan `NICE_CLIENT_SECRET`.
+Docker: `make up` di folder ini (setara `docker compose up -d --build` di akar repo) menjalankan backend, UI, dan PostgreSQL untuk `DATABASE_URL` dalam container terpisah (lihat `compose.yml`):
+
+- backend (`backend/Dockerfile`) di `http://localhost:8081` untuk pemanggil Bearer, tanpa UI;
+- UI (`web/Dockerfile`, nginx) di `http://localhost:5181`, yang meneruskan `/auth` dan `/devices` ke backend seperti proxy Vite, jadi browser tetap melihat satu origin.
+
+`backend/.env` tetap dibutuhkan untuk `NICE_ISSUER`, `NICE_CLIENT_ID`, dan `NICE_CLIENT_SECRET`; `PUBLIC_URL`, `WEB_DIR`, dan `DATABASE_URL` diisi `compose.yml`. Container UI dan `npm run dev` sama-sama memakai port 5181, jadi jalankan salah satunya saja.
 
 Tes: `make test` di `backend/` (tanpa NICE; NICE palsu `httptest`), dan `npm test` di `web/` (backend palsu lewat stub `fetch`).
 
 ## Checklist setup NICE
 
-1. Jalankan langkah 1-11 [`backend/README.md`](backend/README.md#checklist-setup-nice). Langkah 2 membuat OAuth client confidential di project organisasi platform dengan dua redirect URI (`http://localhost:5181/auth/callback` untuk dev dan `http://localhost:8081/auth/callback` untuk build), dan smoke di langkah 11 memeriksa `/auth/session` serta `/auth/login`.
+1. Jalankan langkah 1-11 [`backend/README.md`](backend/README.md#checklist-setup-nice). Langkah 2 membuat OAuth client confidential di project organisasi platform dengan dua redirect URI (`http://localhost:5181/auth/callback` untuk dev dan Docker, `http://localhost:8081/auth/callback` untuk build satu proses), dan smoke di langkah 11 memeriksa `/auth/session` serta `/auth/login`.
 2. Ikat client ke `nadi` (butuh `nice.platform.catalog.manage`). Ikatan menjadikan client itu service client: login memilih organisasi user yang meng-entitle `nadi`, dan client boleh pindah organisasi lewat refresh.
 
    ```bash
@@ -105,7 +110,7 @@ Hasil yang diharapkan: `GET /api/v1/projects/$UI_PROJECT_ID/clients/$OAUTH_CLIEN
 
 ## Checklist uji browser
 
-Buka DevTools (tab Network dengan **Preserve log**, dan Application > Storage). A, B, C, P, Q, dan R dari langkah 3 di atas. Jalankan backend dan UI seperti di "Menjalankan" (dev atau build), dan log NICE (`make dev`) di terminal lain.
+Buka DevTools (tab Network dengan **Preserve log**, dan Application > Storage). A, B, C, P, Q, dan R dari langkah 3 di atas. Jalankan backend dan UI seperti di "Menjalankan" (dev, build, atau Docker), dan log NICE (`make dev`) di terminal lain.
 
 | # | Requirement | Langkah | Hasil yang diharapkan |
 |---|---|---|---|
@@ -124,7 +129,7 @@ Buka DevTools (tab Network dengan **Preserve log**, dan Application > Storage). 
 | 13 | Restart backend | Login, hentikan dan jalankan ulang backend, muat ulang halaman | `GET /auth/session` dijawab `401`; UI menampilkan **Masuk** |
 | 14 | Keluar | Tekan **Keluar** | `POST /auth/logout` dijawab `204`; log NICE menunjukkan `POST /oauth/revoke`; cookie terhapus dan muat ulang menampilkan **Masuk** |
 | 15 | Keluar saat NICE mati | Login, hentikan NICE, tekan **Keluar** | `503`; UI tetap masuk dan menawarkan mencoba lagi. Setelah NICE berjalan lagi, **Keluar** berhasil |
-| 16 | Satu origin | Dev: panggilan `/auth/session` dan `/devices` berasal dari `http://localhost:5181` tanpa preflight `OPTIONS`. Build: buka `http://localhost:8081` | `GET /` menyajikan UI dan `GET /auth/session` dijawab backend di origin yang sama |
+| 16 | Satu origin | Dev: panggilan `/auth/session` dan `/devices` berasal dari `http://localhost:5181` tanpa preflight `OPTIONS`. Build: buka `http://localhost:8081`. Docker: buka `http://localhost:5181` | `GET /` menyajikan UI dan `GET /auth/session` dijawab backend di origin yang sama |
 
 ## Catatan produksi
 
