@@ -4,9 +4,9 @@
 
 A fullstack SharedService example for NICE with the slug `nadi` (NADI: IoT device CRUD). The Go backend is a `nice_token` service that verifies NICE tokens itself, and it is also the backend-for-frontend (BFF) of its UI: it signs in to NICE as a **confidential** OAuth client bound to `nadi`, keeps the refresh tokens on the server, and gives the browser a session cookie only. The React UI talks only to the backend on the same origin: it holds no token, never calls NICE, and loads no OAuth library.
 
-Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the `nadi` image was rebuilt without the `nice` context, and the unit tests and `backend/scripts/smoke.sh` pass. The UI flow below was not tested again at this revision. Against `4282316` (the NICE dev stack was built from it): login, callback, context discovery, org and project switching, data isolation per org and project (memory and PostgreSQL), CSRF, sign-out, and `scripts/smoke.sh` pass over HTTP. The browser click-through has not been tested by hand yet.
+Tested against nice revision: SDK `v0.2.0` (2026-11-24): the unit tests, and the `perms_ref` path tested by hand (see [`backend/README.en.md`](backend/README.en.md)). SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the `nadi` image was rebuilt without the `nice` context, and the unit tests and `backend/scripts/smoke.sh` pass. The UI flow below was not tested again at this revision. Against `4282316` (the NICE dev stack was built from it): login, callback, context discovery, org and project switching, data isolation per org and project (memory and PostgreSQL), CSRF, sign-out, and `scripts/smoke.sh` pass over HTTP. The browser click-through has not been tested by hand yet.
 
-Minimum NICE version: `4282316` (`add-client-org-switch` and `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.1.0`.
+Minimum NICE version: `4282316` (`add-client-org-switch` and `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.0`.
 
 ## Contents
 

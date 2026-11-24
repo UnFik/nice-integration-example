@@ -4,7 +4,7 @@
 
 The backend of the [`sharedservice-oauth`](../README.en.md) example: a NICE SharedService in `nice_token` mode with the slug `nadi`, written in Go (`net/http`) with the reference library `nice-auth-sdk/verify`. Clients call this service directly with a NICE access token; NICE is not on the request path. The service verifies the token itself according to the [token verification contract](../../../nice/docs/token-verification.md), keeps data apart per organization and project, and checks sensitive operations online with NICE. The same backend also serves the UI in [`../web`](../web/README.en.md) as its backend-for-frontend (`/auth/*`, through `nice-auth-sdk/credentials`); how it works, the UI checklist and the browser tests are in [`../README.en.md`](../README.en.md).
 
-Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19, for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md). The `perms_ref` path ("Trying permissions that do not fit a token") was tested by hand on 2026-11-23 against `nice` `b9eb8b3` and SDK `4c9649d`, both unreleased: a token of 154 permissions was issued with `perms_ref`, the UI read, created, and deleted a device, and NICE received one resolution per `nadi` process.
+Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19, for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md). The `perms_ref` path ("Trying permissions that do not fit a token") was tested by hand on 2026-11-23 against `nice` `b9eb8b3` and SDK `4c9649d` (released as `v0.2.0`): a token of 154 permissions was issued with `perms_ref`, the UI read, created, and deleted a device, and NICE received one resolution per `nadi` process.
 
 ## Contents
 
@@ -106,7 +106,7 @@ Without `act`, there is no `acted_by` field. The code reads it from `Claims.Acto
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.1.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - A dev NICE running, at `http://localhost:8080` by default (`cd ../../../nice && make db && make migrate && make dev`). NICE at another address works too: put it in `NICE_ISSUER` in `.env` and in `NICE` in the checklist shell.
 

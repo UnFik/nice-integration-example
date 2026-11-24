@@ -43,11 +43,11 @@ The NICE column is the oldest server revision with the features the example uses
 
 | Example | Minimum NICE version | SDK |
 |---|---|---|
-| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); the Bearer path alone needs `c7a5086` | `v0.1.0` |
+| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); the Bearer path alone needs `c7a5086` | `v0.2.0` |
 | `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy) | not used |
 | `public-client-pkce` | `c7a5086`; without `NICE_CORS_ALLOWED_ORIGINS` from `60939ed` (`add-delegated-nice-api`) | not used |
-| `agent-backend` | `6cc9986` (`add-token-exchange`); `acted_by` in `sharedservice-oauth` needs this revision too | `v0.1.0` |
-| `service-account-client` | `c7a5086` (the same as the Bearer path of `sharedservice-oauth`) | `v0.1.0` |
+| `agent-backend` | `6cc9986` (`add-token-exchange`); `acted_by` in `sharedservice-oauth` needs this revision too | `v0.2.0` |
+| `service-account-client` | `c7a5086` (the same as the Bearer path of `sharedservice-oauth`) | `v0.2.0` |
 
 ## Prerequisites
 

@@ -3,7 +3,7 @@ module github.com/nice-platform/example/agent-backend
 go 1.27
 
 require (
-	github.com/ABA-Developer/nice-auth-sdk v0.1.0
+	github.com/ABA-Developer/nice-auth-sdk v0.2.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 )
