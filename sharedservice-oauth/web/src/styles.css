@@ -378,7 +378,7 @@ select[aria-invalid="true"] {
   font-weight: 600;
 }
 
-.chip-context.empty {
+.chip-context.is-empty {
   background: var(--surface-2);
   color: var(--muted);
   font-weight: 500;

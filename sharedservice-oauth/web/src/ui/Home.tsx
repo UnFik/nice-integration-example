@@ -30,12 +30,12 @@ export function Home({ session, state }: { session: Session; state: SessionState
             </div>
           </div>
           <ul className="context-chips" aria-label="Konteks aktif">
-            <li className={`chip-context${orgLabel ? "" : " empty"}`} title={active?.org}>
+            <li className={`chip-context${orgLabel ? "" : " is-empty"}`} title={active?.org}>
               <Icon name="org" />
               <span className="visually-hidden">Organisasi: </span>
               {orgLabel ?? "Belum ada"}
             </li>
-            <li className={`chip-context${projectLabel ? "" : " empty"}`} title={active?.project}>
+            <li className={`chip-context${projectLabel ? "" : " is-empty"}`} title={active?.project}>
               <Icon name="project" />
               <span className="visually-hidden">Project: </span>
               {projectLabel ?? "Belum dipilih"}
