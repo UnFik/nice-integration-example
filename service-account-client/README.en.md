@@ -14,9 +14,9 @@ client --client_credentials: client_id=sa_..., client_secret=API key, scope=nice
 client --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Minimum NICE version: `nice` `c7a5086` or later. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.0` (`Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback).
+Minimum NICE version: `nice` `c7a5086` or later. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.1` (`Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback).
 
-Tested against nice revision: SDK `v0.2.0` (2026-11-24) was tested with the unit tests only. SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the unit tests and `scripts/smoke.sh`. With the SDK of `nice` `df58337` (the same code, before it moved to the public module), against the same server: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), a `NICE_ISSUER` and a `NADI_URL` that are `http` and not loopback (refused before NICE is called), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`). A key revoked in the same second its token was issued is not caught by the feed (`iat` has a resolution of one second); the client then stops when the token is renewed. Against `00256d3`, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
+Tested against nice revision: SDK `v0.2.1` and `v0.2.0` (2026-11-24) were tested with the unit tests only. SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the unit tests and `scripts/smoke.sh`. With the SDK of `nice` `df58337` (the same code, before it moved to the public module), against the same server: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), a `NICE_ISSUER` and a `NADI_URL` that are `http` and not loopback (refused before NICE is called), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`). A key revoked in the same second its token was issued is not caught by the feed (`iat` has a resolution of one second); the client then stops when the token is renewed. Against `00256d3`, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
 
 ## Folder structure
 
@@ -138,7 +138,7 @@ Every failure is printed to stderr as `FAILED: <code> (<description>): <explanat
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.0` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.1` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
 - `nadi` running and set up through step 7 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md).
