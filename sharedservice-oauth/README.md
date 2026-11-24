@@ -4,9 +4,9 @@
 
 Contoh SharedService fullstack untuk NICE dengan slug `nadi` (NADI: CRUD perangkat IoT). Backend Go adalah service `nice_token` yang memverifikasi token NICE sendiri, sekaligus backend-for-frontend (BFF) UI-nya: ia login ke NICE sebagai OAuth client **confidential** yang diikat ke `nadi`, menyimpan refresh token di server, dan memberi browser cookie sesi saja. UI React hanya berbicara ke backend di origin yang sama: tidak memegang token, tidak memanggil NICE, dan tidak memuat pustaka OAuth.
 
-Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19: image `nadi` dibangun ulang tanpa konteks `nice`, tes unit dan `backend/scripts/smoke.sh` lulus. Alur UI di bawah tidak diuji ulang di revisi ini. Terhadap `4282316` (NICE dev dibangun dari revisi itu): login, callback, penemuan konteks, pindah org dan project, isolasi data per org dan project (memori dan PostgreSQL), CSRF, keluar, dan `scripts/smoke.sh` lulus lewat HTTP. Langkah klik di browser belum diuji manual.
+Diuji terhadap nice revisi: SDK `v0.2.0` (2026-11-24): tes unit, dan jalur `perms_ref` diuji manual (lihat [`backend/README.md`](backend/README.md)). SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19: image `nadi` dibangun ulang tanpa konteks `nice`, tes unit dan `backend/scripts/smoke.sh` lulus. Alur UI di bawah tidak diuji ulang di revisi ini. Terhadap `4282316` (NICE dev dibangun dari revisi itu): login, callback, penemuan konteks, pindah org dan project, isolasi data per org dan project (memori dan PostgreSQL), CSRF, keluar, dan `scripts/smoke.sh` lulus lewat HTTP. Langkah klik di browser belum diuji manual.
 
-Versi NICE minimum: `4282316` (`add-client-org-switch` dan `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.1.0`.
+Versi NICE minimum: `4282316` (`add-client-org-switch` dan `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.0`.
 
 ## Isi
 

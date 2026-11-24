@@ -1,5 +1,5 @@
-github.com/ABA-Developer/nice-auth-sdk v0.1.0 h1:v7jwJUOISAzB9/8QsfvSWW0A3bvU362zO7kUJBnkeVE=
-github.com/ABA-Developer/nice-auth-sdk v0.1.0/go.mod h1:ImKGAMbOM3KV62g/gwNt+ByCCT8UCBzo4qJXLsOAKJE=
+github.com/ABA-Developer/nice-auth-sdk v0.2.0 h1:grHf8SHE+cUHwCiuEQU90qDnwtqt3ODnINDVc5bYwH4=
+github.com/ABA-Developer/nice-auth-sdk v0.2.0/go.mod h1:ImKGAMbOM3KV62g/gwNt+ByCCT8UCBzo4qJXLsOAKJE=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
