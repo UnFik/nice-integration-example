@@ -36,12 +36,12 @@ describe("createApi", () => {
   });
 
   it("sends the CSRF token and a JSON body on every write", async () => {
-    const { api, calls } = client((url) => (url === "/auth/logout" ? new Response(null, { status: 204 }) : json(200, stored)));
+    const { api, calls } = client((url) => (url === "/auth/logout" ? json(200, { end_session_url: "http://localhost:8080/oauth/end_session?client_id=c" }) : json(200, stored)));
 
     await api.createDevice({ name: "Sensor", serialNumber: "SN-1", status: "active", location: "Gudang A" });
     await api.updateDevice("dev/1", { name: "Sensor", serialNumber: "SN-1", status: "maintenance", location: "" });
     await api.removeDevice("dev_1");
-    await api.logout();
+    await expect(api.logout()).resolves.toEqual({ endSessionUrl: "http://localhost:8080/oauth/end_session?client_id=c" });
 
     expect(calls.map((call) => [call.init.method, call.url])).toEqual([
       ["POST", "/devices"],

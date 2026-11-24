@@ -45,6 +45,8 @@ export class FakeBackend {
   refused: Record<string, string> = {};
   contextsFailure?: Response;
   logoutFailure?: Response;
+  // endSessionUrl is what /auth/logout answers; empty answers none.
+  endSessionUrl = "http://localhost:8080/oauth/end_session?client_id=cli_nadi";
   devices: Record<string, StoredDevice[]> = {
     [`${ORG_A}/${PRJ_P}`]: [device("dev_1", "Sensor Suhu Gudang", "SN-2026-0001", "active", "Gudang A")],
     [`${ORG_B}/${PRJ_R}`]: [device("dev_9", "Gateway LoRa", "SN-2026-0009", "maintenance", "Atap")],
@@ -118,7 +120,7 @@ export class FakeBackend {
     if (method === "POST" && path === "/auth/logout") {
       if (this.logoutFailure) return this.logoutFailure;
       this.signedIn = false;
-      return new Response(null, { status: 204 });
+      return json(200, { end_session_url: this.endSessionUrl });
     }
     if (path === "/devices" || path.startsWith("/devices/")) return this.devicesRoute(method, path, body);
     return json(404, { error: "not_found" });

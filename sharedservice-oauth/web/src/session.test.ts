@@ -290,13 +290,56 @@ describe("devices", () => {
 });
 
 describe("sign out", () => {
-  it("removes the session and shows the signed-out screen", async () => {
+  it("removes the session, then ends the NICE session", async () => {
+    const current = await started();
+
+    await current.logout();
+
+    expect(current.getState()).toMatchObject({ phase: "signed-out", signedOut: true });
+    expect(navigations).toEqual(["http://localhost:8080/oauth/end_session?client_id=cli_nadi"]);
+  });
+
+  it("stops at the signed-out screen without an end-session address", async () => {
+    backend.endSessionUrl = "";
     const current = await started();
 
     await current.logout();
 
     expect(current.getState()).toMatchObject({ phase: "signed-out", signedOut: true });
     expect(navigations).toEqual([]);
+  });
+
+  it("never follows an end-session address that is not http(s)", async () => {
+    backend.endSessionUrl = "javascript:alert(1)";
+    const current = await started();
+
+    await current.logout();
+
+    expect(navigations).toEqual([]);
+  });
+
+  it("switches account through the account chooser of NICE, keeping the NICE session", async () => {
+    const current = await started();
+
+    await current.switchAccount();
+
+    expect(backend.requests.filter((request) => request.method === "POST").map((request) => request.url)).toEqual(["/auth/logout"]);
+    expect(current.getState()).toMatchObject({ phase: "signed-out" });
+    expect(navigations).toEqual(["/auth/login?prompt=select_account"]);
+  });
+
+  it("stays signed in when NICE did not answer the switch, and retries it as a switch", async () => {
+    const current = await started();
+    backend.logoutFailure = json(503, { error: "temporarily_unavailable" });
+
+    await current.switchAccount();
+
+    expect(current.getState()).toMatchObject({ phase: "signed-in", logoutError: expect.stringMatching(/belum keluar/) });
+    expect(navigations).toEqual([]);
+
+    backend.logoutFailure = undefined;
+    await current.retrySignOut();
+    expect(navigations).toEqual(["/auth/login?prompt=select_account"]);
   });
 
   it("keeps the session when NICE did not answer, then succeeds on retry", async () => {
@@ -312,7 +355,8 @@ describe("sign out", () => {
     expect(state.devices).toHaveLength(1);
 
     backend.logoutFailure = undefined;
-    await current.logout();
+    await current.retrySignOut();
     expect(current.getState()).toMatchObject({ phase: "signed-out", signedOut: true });
+    expect(navigations).toHaveLength(1);
   });
 });

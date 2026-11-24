@@ -43,3 +43,10 @@ type Contexts struct {
 	CurrentOrganizationID string         `json:"current_organization_id"`
 	Organizations         []Organization `json:"organizations"`
 }
+
+// Logout tells the UI where the browser ends its NICE session too ("sign
+// out"). For "switch account" the UI goes to /auth/login?prompt=select_account
+// instead, which keeps the NICE session and shows its account chooser.
+type Logout struct {
+	EndSessionURL string `json:"end_session_url"`
+}

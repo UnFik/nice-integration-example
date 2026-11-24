@@ -22,6 +22,7 @@ const (
 	EnvClientID      = "NICE_CLIENT_ID"
 	EnvClientSecret  = "NICE_CLIENT_SECRET"
 	EnvPublicURL     = "PUBLIC_URL"
+	EnvPostLogoutURL = "POST_LOGOUT_URL"
 	EnvSessionIdle   = "SESSION_IDLE_TIMEOUT"
 	EnvWebDir        = "WEB_DIR"
 )
@@ -60,6 +61,10 @@ type Config struct {
 	PublicURL string
 	// RedirectURI is PublicURL + CallbackPath; it must be registered on the client.
 	RedirectURI string
+	// PostLogoutURL is where NICE sends the browser after "sign out" ended its
+	// session; it must be registered as a post-logout redirect URI of the client.
+	// Default PublicURL + "/"; "none" leaves the browser on the page of NICE.
+	PostLogoutURL string
 	// SessionIdle ends a browser session that was not used for this long.
 	SessionIdle time.Duration
 	// WebDir holds the built UI (web/dist); a missing directory serves no UI.
@@ -130,6 +135,16 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		return Config{}, fmt.Errorf("config: %s must be an origin such as http://localhost:8081 (scheme, host and port only), got %q", EnvPublicURL, cfg.PublicURL)
 	}
 	cfg.RedirectURI = cfg.PublicURL + CallbackPath
+	switch post := get(EnvPostLogoutURL, ""); post {
+	case "":
+		cfg.PostLogoutURL = cfg.PublicURL + "/"
+	case "none":
+	default:
+		if u, err := url.Parse(post); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return Config{}, fmt.Errorf("config: %s must be an http or https URL, or none, got %q", EnvPostLogoutURL, post)
+		}
+		cfg.PostLogoutURL = post
+	}
 	idle := get(EnvSessionIdle, defaultSessionIdle)
 	d, err := time.ParseDuration(idle)
 	if err != nil || d <= 0 {

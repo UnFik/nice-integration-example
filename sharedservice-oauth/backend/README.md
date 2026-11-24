@@ -106,7 +106,7 @@ Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` mil
 
 ## Prasyarat
 
-- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.1` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dev berjalan, bawaannya di `http://localhost:8080` (`cd ../../../nice && make db && make migrate && make dev`). NICE di alamat lain juga bisa: isikan ke `NICE_ISSUER` di `.env` dan ke `NICE` di shell checklist.
 
@@ -121,6 +121,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
 | `NICE_CLIENT_ID`, `NICE_CLIENT_SECRET` | wajib | OAuth client confidential UI (langkah 2). Tanpa keduanya service berhenti dengan pesan yang menyebut nama variabelnya; secret tidak pernah dicetak |
 | `PUBLIC_URL` | `http://localhost:8081` | origin UI yang dilihat browser; redirect URI = `PUBLIC_URL/auth/callback`. Dev dengan Vite dan Docker: `http://localhost:5181` |
+| `POST_LOGOUT_URL` | `PUBLIC_URL/` | tujuan browser setelah **Keluar** mengakhiri sesi NICE; harus terdaftar sebagai post-logout redirect URI client (langkah 2). `none`: halaman keluar NICE |
 | `SESSION_IDLE_TIMEOUT` | `8h` | umur sesi browser tanpa pemakaian |
 | `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/`; kosong di Docker, karena UI punya container sendiri |
 | `DATABASE_URL` | kosong | URL `postgres://` untuk perangkat; kosong berarti memori. Nilainya tidak pernah dicetak |
@@ -186,7 +187,7 @@ NICE_OUTBOUND_ALLOW_CIDRS=127.0.0.0/8
 
 ### 2. OAuth client UI dan jalankan service
 
-Service tidak mau start tanpa OAuth client UI, jadi client dibuat lebih dulu: client **confidential** di project organisasi platform (client di organisasi tenant tidak bisa diikat ke service). Ikatan ke `nadi` menyusul setelah service terdaftar (langkah 2 di [`../README.md`](../README.md#checklist-setup-nice)). Console: Platform Admin, organisasi platform, **Project**, lalu halaman **OAuth client** project itu: tipe confidential, grant `authorization_code` dan `refresh_token`, dan dua redirect URI.
+Service tidak mau start tanpa OAuth client UI, jadi client dibuat lebih dulu: client **confidential** di project organisasi platform (client di organisasi tenant tidak bisa diikat ke service). Ikatan ke `nadi` menyusul setelah service terdaftar (langkah 2 di [`../README.md`](../README.md#checklist-setup-nice)). Console: Platform Admin, organisasi platform, **Project**, lalu halaman **OAuth client** project itu: tipe confidential, grant `authorization_code` dan `refresh_token`, dua redirect URI, dan dua post-logout redirect URI (`http://localhost:5181/` dan `http://localhost:8081/`, tujuan **Keluar**).
 
 ```bash
 PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
@@ -197,6 +198,7 @@ CLIENT=$(curl -sS "$NICE/api/v1/projects/$UI_PROJECT_ID/clients" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"nadi","client_type":"CLIENT_TYPE_CONFIDENTIAL",
        "redirect_uris":["http://localhost:5181/auth/callback","http://localhost:8081/auth/callback"],
+       "post_logout_redirect_uris":["http://localhost:5181/","http://localhost:8081/"],
        "grant_types":["authorization_code","refresh_token"]}')
 OAUTH_CLIENT_ID=$(jq -r .oauth_client.id <<<"$CLIENT")
 jq -r .oauth_client.client_id <<<"$CLIENT"   # ke NICE_CLIENT_ID

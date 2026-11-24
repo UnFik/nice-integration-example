@@ -97,8 +97,10 @@ export function createApi(fetcher: Fetch, csrfToken: () => string | undefined) {
     async switchContext(target: ActiveContext): Promise<SessionInfo> {
       return toSessionInfo(await send("/auth/context", "POST", { org: target.org, project: target.project }));
     },
-    async logout(): Promise<void> {
-      await send("/auth/logout", "POST");
+    // logout ends the session of nadi and answers where the browser ends its NICE session too.
+    async logout(): Promise<{ endSessionUrl?: string }> {
+      const answer = (await send("/auth/logout", "POST")) as { end_session_url?: unknown } | undefined;
+      return { endSessionUrl: navigable(answer?.end_session_url) };
     },
     async listDevices(): Promise<Device[]> {
       const answer = (await send("/devices", "GET")) as { devices?: unknown } | undefined;
@@ -115,6 +117,17 @@ export function createApi(fetcher: Fetch, csrfToken: () => string | undefined) {
       await send(devicePath(id), "DELETE");
     },
   };
+}
+
+// navigable keeps only an http(s) address, so the answer cannot send the page to a javascript: URL.
+function navigable(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // loginUrl is a page navigation, not a fetch: the backend answers with a

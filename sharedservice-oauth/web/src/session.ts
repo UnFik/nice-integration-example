@@ -48,6 +48,7 @@ export class Session {
   private csrf?: string;
   // epoch changes whenever the session is dropped, so late answers of the old one are ignored.
   private epoch = 0;
+  private lastSignOut: "logout" | "switch" = "logout";
 
   constructor(private readonly deps: SessionDeps) {
     this.api = createApi(deps.fetch, () => this.csrf);
@@ -150,24 +151,47 @@ export class Session {
     return this.mutate("delete", () => this.api.removeDevice(id));
   }
 
-  // logout keeps the session when the backend could not revoke the refresh
-  // token at NICE, so the user never looks signed out while it still works.
+  // logout signs out of nadi and then of NICE, so the next sign-in asks for
+  // the password. Without an end-session address it stops at the signed-out screen.
   async logout(): Promise<void> {
-    if (this.state.phase !== "signed-in" || this.state.loggingOut) return;
+    this.lastSignOut = "logout";
+    const endSessionUrl = await this.signOut();
+    if (endSessionUrl) this.deps.navigate(endSessionUrl);
+  }
+
+  // switchAccount signs out of nadi only: NICE keeps its session and shows its
+  // account chooser, so the user can pick or add another account.
+  async switchAccount(): Promise<void> {
+    this.lastSignOut = "switch";
+    if ((await this.signOut()) !== false) this.deps.navigate(loginUrl({ selectAccount: true }));
+  }
+
+  // retrySignOut repeats the sign-out that NICE did not answer, with the same intent.
+  retrySignOut(): Promise<void> {
+    return this.lastSignOut === "switch" ? this.switchAccount() : this.logout();
+  }
+
+  // signOut keeps the session when the backend could not revoke the refresh
+  // token at NICE, so the user never looks signed out while it still works.
+  // It answers false when the session was kept, else the end-session address.
+  private async signOut(): Promise<string | undefined | false> {
+    if (this.state.phase !== "signed-in" || this.state.loggingOut) return false;
     const epoch = this.epoch;
     this.set({ loggingOut: true, logoutError: undefined });
+    let endSessionUrl: string | undefined;
     try {
-      await this.withCsrf(() => this.api.logout());
+      ({ endSessionUrl } = await this.withCsrf(() => this.api.logout()));
     } catch (error) {
-      if (epoch !== this.epoch || this.dropped(error)) return;
+      if (epoch !== this.epoch || this.dropped(error)) return false;
       const message =
         error instanceof ApiError && error.status === 503
           ? "NICE tidak menjawab, jadi refresh token belum dicabut dan Anda belum keluar. Sesi tetap aktif."
           : `Keluar gagal, sesi tetap aktif. ${describe(error)}`;
       this.set({ loggingOut: false, logoutError: message });
-      return;
+      return false;
     }
     this.reset({ phase: "signed-out", signedOut: true });
+    return endSessionUrl;
   }
 
   private async run(href: string): Promise<void> {

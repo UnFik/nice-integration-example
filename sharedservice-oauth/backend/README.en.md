@@ -106,7 +106,7 @@ Without `act`, there is no `acted_by` field. The code reads it from `Claims.Acto
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.1` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - A dev NICE running, at `http://localhost:8080` by default (`cd ../../../nice && make db && make migrate && make dev`). NICE at another address works too: put it in `NICE_ISSUER` in `.env` and in `NICE` in the checklist shell.
 
@@ -121,6 +121,7 @@ Copy `.env.example` to `.env`. The service reads `.env` from the directory it ru
 | `JWKS_FILE` | `data/jwks.json` | JWKS copy on disk (`data/` is not committed) |
 | `NICE_CLIENT_ID`, `NICE_CLIENT_SECRET` | required | the confidential OAuth client of the UI (step 2). Without both the service stops with a message naming the variable; the secret is never printed |
 | `PUBLIC_URL` | `http://localhost:8081` | the UI origin the browser sees; redirect URI = `PUBLIC_URL/auth/callback`. Development with Vite, and Docker: `http://localhost:5181` |
+| `POST_LOGOUT_URL` | `PUBLIC_URL/` | where the browser goes after **Keluar** ended the NICE session; it must be a post-logout redirect URI of the client (step 2). `none`: the signed-out page of NICE |
 | `SESSION_IDLE_TIMEOUT` | `8h` | how long a browser session lives without use |
 | `WEB_DIR` | `../web/dist` | the built UI served at `/`; empty in Docker, where the UI has a container of its own |
 | `DATABASE_URL` | empty | a `postgres://` URL for the devices; empty keeps them in memory. Its value is never printed |
@@ -186,7 +187,7 @@ NICE_OUTBOUND_ALLOW_CIDRS=127.0.0.0/8
 
 ### 2. OAuth client of the UI and run the service
 
-The service does not start without the OAuth client of the UI, so the client comes first: a **confidential** client in a project of the platform organization (a client of a tenant organization cannot be bound to a service). The binding to `nadi` follows once the service is registered (step 2 of [`../README.en.md`](../README.en.md#nice-setup-checklist)). Console: Platform Admin, platform organization, **Project**, then the **OAuth client** page of that project: confidential type, grants `authorization_code` and `refresh_token`, and two redirect URIs.
+The service does not start without the OAuth client of the UI, so the client comes first: a **confidential** client in a project of the platform organization (a client of a tenant organization cannot be bound to a service). The binding to `nadi` follows once the service is registered (step 2 of [`../README.en.md`](../README.en.md#nice-setup-checklist)). Console: Platform Admin, platform organization, **Project**, then the **OAuth client** page of that project: confidential type, grants `authorization_code` and `refresh_token`, two redirect URIs, and two post-logout redirect URIs (`http://localhost:5181/` and `http://localhost:8081/`, where **Keluar** returns).
 
 ```bash
 PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
@@ -197,6 +198,7 @@ CLIENT=$(curl -sS "$NICE/api/v1/projects/$UI_PROJECT_ID/clients" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"nadi","client_type":"CLIENT_TYPE_CONFIDENTIAL",
        "redirect_uris":["http://localhost:5181/auth/callback","http://localhost:8081/auth/callback"],
+       "post_logout_redirect_uris":["http://localhost:5181/","http://localhost:8081/"],
        "grant_types":["authorization_code","refresh_token"]}')
 OAUTH_CLIENT_ID=$(jq -r .oauth_client.id <<<"$CLIENT")
 jq -r .oauth_client.client_id <<<"$CLIENT"   # into NICE_CLIENT_ID

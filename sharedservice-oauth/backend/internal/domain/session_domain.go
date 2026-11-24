@@ -27,7 +27,10 @@ type Session struct {
 	Pending bool
 	User    User
 	// Context is nil until the user has an active organization and project.
-	Context   *Context
+	Context *Context
+	// IDToken is the ID token of the sign-in, sent back to NICE as
+	// id_token_hint at sign-out. It names the user: never send it to the browser.
+	IDToken   string
 	CSRFToken string
 	Created   time.Time
 	LastUsed  time.Time

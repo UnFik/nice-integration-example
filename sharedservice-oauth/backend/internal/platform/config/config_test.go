@@ -83,7 +83,7 @@ func TestEnvExampleListsEveryVariableAndStarts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, k := range []string{EnvIssuer, EnvListen, EnvJWKSFile, EnvCORSOrigins, EnvServiceAPIKey, EnvDatabaseURL,
-		EnvClientID, EnvClientSecret, EnvPublicURL, EnvSessionIdle, EnvWebDir, "SMOKE_SA_ID", "SMOKE_API_KEY"} {
+		EnvClientID, EnvClientSecret, EnvPublicURL, EnvPostLogoutURL, EnvSessionIdle, EnvWebDir, "SMOKE_SA_ID", "SMOKE_API_KEY"} {
 		if _, ok := file[k]; !ok {
 			t.Errorf(".env.example does not list %s", k)
 		}
@@ -171,5 +171,26 @@ func TestLoadConfigRefusesAPublicURLThatIsNotAnOrigin(t *testing.T) {
 	_, err := Load(env(client(map[string]string{EnvIssuer: "http://localhost:8080", EnvSessionIdle: "forever"})), filepath.Join(t.TempDir(), ".env"))
 	if err == nil || !strings.Contains(err.Error(), EnvSessionIdle) {
 		t.Errorf("err = %v, want an error naming %s", err, EnvSessionIdle)
+	}
+}
+
+func TestLoadConfigPostLogoutURL(t *testing.T) {
+	load := func(vars map[string]string) (Config, error) {
+		vars[EnvIssuer] = "http://localhost:8080"
+		vars[EnvPublicURL] = "http://localhost:5181"
+		return Load(env(client(vars)), filepath.Join(t.TempDir(), ".env"))
+	}
+	if cfg, err := load(map[string]string{}); err != nil || cfg.PostLogoutURL != "http://localhost:5181/" {
+		t.Fatalf("default = %q, %v; want PUBLIC_URL + /", cfg.PostLogoutURL, err)
+	}
+	if cfg, err := load(map[string]string{EnvPostLogoutURL: "none"}); err != nil || cfg.PostLogoutURL != "" {
+		t.Fatalf("none = %q, %v; want the page of NICE", cfg.PostLogoutURL, err)
+	}
+	if cfg, err := load(map[string]string{EnvPostLogoutURL: "https://nadi.example.com/signed-out"}); err != nil ||
+		cfg.PostLogoutURL != "https://nadi.example.com/signed-out" {
+		t.Fatalf("set = %q, %v", cfg.PostLogoutURL, err)
+	}
+	if _, err := load(map[string]string{EnvPostLogoutURL: "/signed-out"}); err == nil || !strings.Contains(err.Error(), EnvPostLogoutURL) {
+		t.Fatalf("a path is refused: %v", err)
 	}
 }
