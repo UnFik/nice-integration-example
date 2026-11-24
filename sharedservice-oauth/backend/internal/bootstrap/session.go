@@ -46,7 +46,8 @@ func NewAuth(cfg config.Config, v *verify.Verifier, log *slog.Logger) (*Auth, er
 	store := sessionmemory.NewStore()
 	sessions := &sessionusecase.Service{
 		Store: store,
-		NICE:  &nicegateway.Gateway{Client: c, Exchange: x, Issuer: cfg.Issuer, RedirectURI: cfg.RedirectURI, HTTP: hc},
+		NICE:  &nicegateway.Gateway{Client: c, Exchange: x, Issuer: cfg.Issuer, RedirectURI: cfg.RedirectURI,
+			PostLogoutRedirectURI: cfg.PostLogoutURL, HTTP: hc},
 		Idle:  cfg.SessionIdle,
 		Stale: func(ctx context.Context, token string) bool { return stale(ctx, v, token) },
 	}

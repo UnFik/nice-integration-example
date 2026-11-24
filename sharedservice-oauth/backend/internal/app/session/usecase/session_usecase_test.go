@@ -39,16 +39,20 @@ func (f *fakeNICE) AuthorizeURL(_ context.Context, subject, session, _ string) (
 	return "http://nice.test/oauth/authorize?state=x", nil
 }
 
-func (f *fakeNICE) HandleCallback(_ context.Context, session string, q url.Values) (string, error) {
+func (f *fakeNICE) HandleCallback(_ context.Context, session string, q url.Values) (string, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.authorized[session]; !ok || q.Get("state") != "x" {
-		return "", sessionusecase.ErrStateMismatch
+		return "", "", sessionusecase.ErrStateMismatch
 	}
 	if e := q.Get("error"); e != "" {
-		return "", &sessionusecase.RefusedError{Code: e}
+		return "", "", &sessionusecase.RefusedError{Code: e}
 	}
-	return "usr_1", nil
+	return "usr_1", "id-token", nil
+}
+
+func (f *fakeNICE) EndSessionURL(idTokenHint string) (string, error) {
+	return "http://nice.test/oauth/end_session?hint=" + idTokenHint, nil
 }
 
 func (f *fakeNICE) ServiceToken(context.Context, string, domain.Context) (string, error) {
@@ -216,12 +220,17 @@ func TestLogout(t *testing.T) {
 	sess := signIn(t, s)
 	down := &sessionusecase.UnavailableError{Err: errors.New("down")}
 	n.disconnect = down
-	if err := s.Logout(ctx, sess); !errors.As(err, &down) || st.Len() != 1 {
-		t.Fatalf("logout while NICE is down = %v, %d sessions; want the session kept", err, st.Len())
+	if end, err := s.Logout(ctx, sess); !errors.As(err, &down) || st.Len() != 1 || end != "" {
+		t.Fatalf("logout while NICE is down = %q, %v, %d sessions; want the session kept", end, err, st.Len())
 	}
 	n.disconnect = nil
-	if err := s.Logout(ctx, sess); err != nil || st.Len() != 0 {
+	end, err := s.Logout(ctx, sess)
+	if err != nil || st.Len() != 0 {
 		t.Fatalf("logout = %v, %d sessions", err, st.Len())
+	}
+	// The ID token of the sign-in goes back to NICE as the hint.
+	if end != "http://nice.test/oauth/end_session?hint=id-token" {
+		t.Fatalf("end-session address = %q", end)
 	}
 }
 

@@ -142,8 +142,16 @@ func TestLogoutRevokesTheRefreshToken(t *testing.T) {
 	b.login()
 	live := e.nice.liveRefreshTokens()
 	cookie := b.cookie
-	if r := b.do(http.MethodPost, "/auth/logout", nil); r.Status != http.StatusNoContent {
+	r := b.do(http.MethodPost, "/auth/logout", nil)
+	if r.Status != http.StatusOK {
 		t.Fatalf("logout = %d %s", r.Status, r.Body)
+	}
+	end, err := url.Parse(r.JSON(t)["end_session_url"].(string))
+	if err != nil || end.String() != e.nice.URL+"/oauth/end_session?"+end.RawQuery {
+		t.Fatalf("end_session_url = %v, %v", end, err)
+	}
+	if q := end.Query(); q.Get("client_id") != testClientID || q.Get("post_logout_redirect_uri") != bffPublicURL+"/" || q.Get("id_token_hint") != bffIDToken {
+		t.Fatalf("end-session query = %v", q)
 	}
 	if b.cookie != "" || e.auth.Store.Len() != 0 {
 		t.Fatalf("cookie %q, %d sessions after logout", b.cookie, e.auth.Store.Len())
@@ -168,8 +176,21 @@ func TestLogoutWhileNICEIsDownKeepsTheSession(t *testing.T) {
 	}
 	b.session()
 	e.nice.set(func(f *bffNICE) { f.revokeDown = false })
-	if r := b.do(http.MethodPost, "/auth/logout", nil); r.Status != http.StatusNoContent {
+	if r := b.do(http.MethodPost, "/auth/logout", nil); r.Status != http.StatusOK {
 		t.Fatalf("logout once NICE is back = %d %s", r.Status, r.Body)
+	}
+}
+
+func TestLogoutWithoutASessionStillEndsTheNICESession(t *testing.T) {
+	e := newBFFEnv(t, nil)
+	b := e.browser()
+	r := b.do(http.MethodPost, "/auth/logout", nil)
+	if r.Status != http.StatusOK {
+		t.Fatalf("logout without a session = %d %s", r.Status, r.Body)
+	}
+	end, _ := url.Parse(r.JSON(t)["end_session_url"].(string))
+	if q := end.Query(); q.Get("client_id") != testClientID || q.Has("id_token_hint") {
+		t.Fatalf("end-session query = %v", q)
 	}
 }
 

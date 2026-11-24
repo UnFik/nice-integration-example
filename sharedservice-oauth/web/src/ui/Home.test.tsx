@@ -104,8 +104,16 @@ describe("Home", () => {
     expect(markup).toMatch(/Coba lagi/);
   });
 
-  it("disables Keluar while signing out", () => {
-    expect(render({ ...signedIn, loggingOut: true })).toMatch(/<button type="button" disabled="">.*Keluar…/);
+  it("puts the ways out behind the account menu, closed at first", () => {
+    const markup = render(signedIn);
+
+    expect(markup).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"/);
+    expect(markup).toMatch(/Menu akun/);
+    expect(markup).not.toMatch(/role="menu"/);
+  });
+
+  it("disables the account menu while signing out", () => {
+    expect(render({ ...signedIn, loggingOut: true })).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*disabled=""[^>]*>.*Keluar…/);
   });
 });
 

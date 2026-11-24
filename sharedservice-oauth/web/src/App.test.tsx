@@ -55,6 +55,6 @@ describe("App", () => {
     const markup = await screen("http://localhost:5181/");
 
     expect(markup).toContain("Sensor Suhu Gudang");
-    expect(markup).toMatch(/Keluar/);
+    expect(markup).toMatch(/Menu akun/);
   });
 });

@@ -28,36 +28,40 @@ type Gateway struct {
 	Exchange    *credentials.ExchangeClient
 	Issuer      string
 	RedirectURI string
-	HTTP        *http.Client
+	// PostLogoutRedirectURI is where NICE sends the browser after ending its
+	// session; it must be registered on the client. Empty shows the page of NICE.
+	PostLogoutRedirectURI string
+	HTTP                  *http.Client
 }
 
-// prompts are the values of prompt the UI may ask the sign-in for.
-var prompts = map[string]bool{"login": true, "select_account": true}
+// prompts are the values of prompt the UI may ask the sign-in for; any other
+// value signs in without one.
+var prompts = map[string]bool{credentials.PromptLogin: true, credentials.PromptSelectAccount: true}
 
 func (g *Gateway) AuthorizeURL(ctx context.Context, subject, session, prompt string) (string, error) {
-	u, err := g.Client.AuthorizeURL(ctx, credentials.ConnectRequest{Subject: subject, Session: session, RedirectURI: g.RedirectURI})
-	if err != nil {
-		return "", err
+	if !prompts[prompt] {
+		prompt = ""
 	}
-	if prompts[prompt] {
-		u += "&prompt=" + url.QueryEscape(prompt)
-	}
-	return u, nil
+	return g.Client.AuthorizeURL(ctx, credentials.ConnectRequest{Subject: subject, Session: session, RedirectURI: g.RedirectURI, Prompt: prompt})
 }
 
-func (g *Gateway) HandleCallback(ctx context.Context, session string, query url.Values) (string, error) {
+func (g *Gateway) HandleCallback(ctx context.Context, session string, query url.Values) (string, string, error) {
 	conn, err := g.Client.HandleCallback(ctx, session, query)
 	var ge *credentials.GrantError
 	switch {
 	case err == nil:
-		return conn.NiceSubject, nil
+		return conn.NiceSubject, conn.IDToken, nil
 	case errors.Is(err, credentials.ErrStateMismatch):
-		return "", sessionusecase.ErrStateMismatch
+		return "", "", sessionusecase.ErrStateMismatch
 	case errors.As(err, &ge):
 		// Every refusal at the callback (access_denied included) leaves no session to end.
-		return "", &sessionusecase.RefusedError{Code: ge.Code, Description: ge.Description}
+		return "", "", &sessionusecase.RefusedError{Code: ge.Code, Description: ge.Description}
 	}
-	return "", mapError(err)
+	return "", "", mapError(err)
+}
+
+func (g *Gateway) EndSessionURL(idTokenHint string) (string, error) {
+	return g.Client.EndSessionURL(credentials.EndSessionRequest{PostLogoutRedirectURI: g.PostLogoutRedirectURI, IDTokenHint: idTokenHint})
 }
 
 func (g *Gateway) ServiceToken(ctx context.Context, subject string, c domain.Context) (string, error) {

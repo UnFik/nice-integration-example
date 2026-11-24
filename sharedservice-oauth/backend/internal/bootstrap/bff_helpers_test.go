@@ -183,7 +183,7 @@ func (f *bffNICE) serveToken(w http.ResponseWriter, r *http.Request) {
 			oauthError(w, http.StatusBadRequest, "invalid_grant", "")
 			return
 		}
-		f.issue(w, f.firstOrg, "", "")
+		f.issueWithID(w, f.firstOrg)
 	case "refresh_token":
 		f.refreshes = append(f.refreshes, form.Get("scope"))
 		rt := form.Get("refresh_token")
@@ -239,6 +239,18 @@ func (f *bffNICE) serveFeed(w http.ResponseWriter, r *http.Request) {
 }
 
 // issue answers a token in org: for aud and prj, or the sign-in token without aud.
+// bffIDToken is the ID token the fake gives with the code.
+const bffIDToken = "id.token.of-the-sign-in"
+
+func (f *bffNICE) issueWithID(w http.ResponseWriter, org string) {
+	f.seq++
+	rt := "rt_" + strconv.Itoa(f.seq)
+	f.refresh[rt] = org
+	c := map[string]any{"aud": testClientID, "azp": testClientID, "nice_org_id": org}
+	_ = json.NewEncoder(w).Encode(map[string]any{"access_token": f.token(c), "refresh_token": rt, "id_token": bffIDToken,
+		"expires_in": 1800, "token_type": "Bearer"})
+}
+
 func (f *bffNICE) issue(w http.ResponseWriter, org, aud, prj string) {
 	f.seq++
 	rt := "rt_" + strconv.Itoa(f.seq)
@@ -295,7 +307,7 @@ func newBFFEnv(t *testing.T, checker verify.AccessChecker) *bffEnv {
 	t.Helper()
 	f := newBFFNICE(t)
 	cfg := config.Config{Issuer: f.URL, ClientID: testClientID, ClientSecret: testClientSecret, PublicURL: bffPublicURL,
-		RedirectURI: bffPublicURL + config.CallbackPath, SessionIdle: 8 * time.Hour, CORSOrigins: []string{testOrigin}}
+		RedirectURI: bffPublicURL + config.CallbackPath, PostLogoutURL: bffPublicURL + "/", SessionIdle: 8 * time.Hour, CORSOrigins: []string{testOrigin}}
 	store := devicememory.NewRepository()
 	log := slog.New(slog.DiscardHandler)
 	vc := VerifierConfig(cfg, store, log)

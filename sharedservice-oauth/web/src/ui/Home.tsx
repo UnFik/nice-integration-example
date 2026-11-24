@@ -1,3 +1,4 @@
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import type { Session, SessionState } from "../session";
 import { ContextPanel } from "./ContextPanel";
 import { initials, shortId } from "./format";
@@ -40,16 +41,7 @@ export function Home({ session, state }: { session: Session; state: SessionState
               {projectLabel ?? "Belum dipilih"}
             </li>
           </ul>
-          <div className="user">
-            <span className="avatar" aria-hidden="true">
-              {initials(name)}
-            </span>
-            <span className="user-name">{name ?? "user"}</span>
-            <button type="button" disabled={state.loggingOut} onClick={() => void session.logout()}>
-              <Icon name={state.loggingOut ? "spinner" : "logout"} className={state.loggingOut ? "spin" : undefined} />
-              {state.loggingOut ? "Keluar…" : "Keluar"}
-            </button>
-          </div>
+          <UserMenu session={session} state={state} name={name} />
         </div>
       </header>
 
@@ -75,7 +67,7 @@ export function Home({ session, state }: { session: Session; state: SessionState
           <div className="callout warning logout-error" role="alert">
             <Icon name="alert" />
             <span>{state.logoutError}</span>
-            <button type="button" disabled={state.loggingOut} onClick={() => void session.logout()}>
+            <button type="button" disabled={state.loggingOut} onClick={() => void session.retrySignOut()}>
               Coba lagi
             </button>
           </div>
@@ -92,6 +84,85 @@ export function Home({ session, state }: { session: Session; state: SessionState
         </div>
       </main>
       <ToastRegion toasts={toasts} onDismiss={dismiss} />
+    </div>
+  );
+}
+
+// UserMenu holds the two ways out: "Ganti akun" ends the session of nadi and
+// shows the account chooser of NICE, "Keluar" also ends the NICE session.
+function UserMenu({ session, state, name }: { session: Session; state: SessionState; name: string | undefined }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    root.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+
+  const choose = (action: () => Promise<void>) => {
+    setOpen(false);
+    void action();
+  };
+  const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    const items = [...(root.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next = (at + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+    items[next]?.focus();
+  };
+
+  return (
+    <div className="user" ref={root}>
+      <button
+        type="button"
+        ref={trigger}
+        className="user-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        disabled={state.loggingOut}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="avatar" aria-hidden="true">
+          {initials(name)}
+        </span>
+        <span className="user-name">{state.loggingOut ? "Keluar…" : (name ?? "user")}</span>
+        <Icon name={state.loggingOut ? "spinner" : "chevron"} className={state.loggingOut ? "spin" : undefined} />
+        <span className="visually-hidden">Menu akun</span>
+      </button>
+      {open && (
+        <div className="user-menu" id={menuId} role="menu" aria-label="Akun" onKeyDown={move}>
+          <div className="user-menu-head">
+            <strong>{name ?? "user"}</strong>
+            {state.user?.email && <span className="muted small">{state.user.email}</span>}
+          </div>
+          <button type="button" role="menuitem" onClick={() => choose(() => session.switchAccount())}>
+            <Icon name="switch" />
+            Ganti akun
+          </button>
+          <button type="button" role="menuitem" onClick={() => choose(() => session.logout())}>
+            <Icon name="logout" />
+            Keluar
+          </button>
+        </div>
+      )}
     </div>
   );
 }

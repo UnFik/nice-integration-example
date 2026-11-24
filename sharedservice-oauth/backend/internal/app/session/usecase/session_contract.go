@@ -31,8 +31,9 @@ type Store interface {
 type NICE interface {
 	// AuthorizeURL starts the sign-in of subject for the local session.
 	AuthorizeURL(ctx context.Context, subject, session, prompt string) (string, error)
-	// HandleCallback completes it and returns the NICE user (usr_...).
-	HandleCallback(ctx context.Context, session string, query url.Values) (string, error)
+	// HandleCallback completes it and returns the NICE user (usr_...) and the
+	// ID token of the sign-in, empty when NICE gave none.
+	HandleCallback(ctx context.Context, session string, query url.Values) (user, idToken string, err error)
 	// ServiceToken is the nadi token of subject in c.
 	ServiceToken(ctx context.Context, subject string, c domain.Context) (string, error)
 	// DropServiceToken forgets token if it is still the one kept for subject in
@@ -45,6 +46,9 @@ type NICE interface {
 	Contexts(ctx context.Context, signIn string) (sessiondto.Contexts, error)
 	// Disconnect revokes the refresh token of subject at NICE.
 	Disconnect(ctx context.Context, subject string) error
+	// EndSessionURL is where the browser ends its NICE session (RP-initiated
+	// logout); idTokenHint is optional.
+	EndSessionURL(idTokenHint string) (string, error)
 }
 
 var (

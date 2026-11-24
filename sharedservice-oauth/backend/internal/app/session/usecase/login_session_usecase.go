@@ -45,7 +45,7 @@ func (s *Service) FinishLogin(ctx context.Context, pendingID string, query url.V
 		return domain.Session{}, ErrStateMismatch
 	}
 	_ = s.Store.Delete(ctx, pendingID)
-	user, err := s.NICE.HandleCallback(ctx, pending.ID, query)
+	user, idToken, err := s.NICE.HandleCallback(ctx, pending.ID, query)
 	if err != nil {
 		return domain.Session{}, err
 	}
@@ -54,7 +54,7 @@ func (s *Service) FinishLogin(ctx context.Context, pendingID string, query url.V
 		return domain.Session{}, err
 	}
 	now := s.now()
-	sess := domain.Session{ID: ids[0], Subject: pending.Subject, CSRFToken: ids[1], User: domain.User{ID: user}, Created: now, LastUsed: now}
+	sess := domain.Session{ID: ids[0], Subject: pending.Subject, CSRFToken: ids[1], User: domain.User{ID: user}, IDToken: idToken, Created: now, LastUsed: now}
 	if signIn, err := s.NICE.SignInToken(ctx, sess.Subject); err == nil {
 		if info, err := s.NICE.UserInfo(ctx, signIn); err == nil {
 			sess.User.Name, sess.User.Email = info.Name, info.Email
