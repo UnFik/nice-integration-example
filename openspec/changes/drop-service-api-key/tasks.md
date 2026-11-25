@@ -27,7 +27,5 @@ Worktree: `.worktrees/example-drop-service-api-key`, branch `feat/drop-service-a
 
 ## 4. Setelah SDK di-tag
 
-- [ ] 4.1 Naikkan nice-auth-sdk di go.mod ke tag rilis baru lalu jalankan tes dengan GOWORK=off. Rinciannya:
-  - `go get github.com/ABA-Developer/nice-auth-sdk@<tag>` dan `go mod tidy` di `sharedservice-oauth/backend`, `agent-backend`, dan `service-account-client`; tes dengan `-race` dan `go vet` lewat `heavy` dengan `GOWORK=off` di ketiganya.
-  - Ganti "rilis sesudah `v0.2.2` (belum di-tag)" dengan tag itu di README contoh, tabel versi README akar, dan kalimat versi SDK di `AGENTS.md`; isi revisi NICE yang memuat `service-calls-without-service-account`.
-  - Jalankan smoke `nadi` dan `agen` terhadap NICE itu, lalu perbarui "Diuji terhadap".
+- [x] 4.1 Naikkan nice-auth-sdk ke `v0.2.3` di `sharedservice-oauth/backend`, `agent-backend`, dan `service-account-client` (`go get` + `go mod tidy`), lalu `heavy go test -race ./... -count=1` dan `heavy go vet ./...` dengan `GOWORK=off` di ketiganya. Ganti teks "rilis sesudah `v0.2.2` (belum di-tag)" dengan `v0.2.3` di README contoh, tabel versi README akar, dan `AGENTS.md`.
+- [ ] 4.2 Setelah change NICE `service-calls-without-service-account` di-merge ke `dev`: isi revisi NICE itu di baris versi minimum (README contoh dan tabel README akar), jalankan smoke `nadi` dan `agen` terhadap NICE itu, lalu perbarui "Diuji terhadap".

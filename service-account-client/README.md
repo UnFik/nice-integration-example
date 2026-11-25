@@ -14,7 +14,7 @@ klien --client_credentials: client_id=sa_..., client_secret=API key, scope=nice:
 klien --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Versi NICE minimum: `nice` `5def119` (awal riwayat `nice` sekarang) atau sesudahnya. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2` (`Client.HTTPClient` terikat ke alamat satu service, alamat wajib `https` kecuali loopback). Klien ini sendiri tidak berubah, tetapi `nadi` versi sekarang butuh NICE dengan change `service-calls-without-service-account` dan rilis SDK sesudah `v0.2.2` (belum di-tag).
+Versi NICE minimum: `nice` `5def119` (awal riwayat `nice` sekarang) atau sesudahnya. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.3` (`Client.HTTPClient` terikat ke alamat satu service, alamat wajib `https` kecuali loopback). Klien ini sendiri tidak berubah, tetapi `nadi` versi sekarang butuh NICE dengan change `service-calls-without-service-account` dan SDK `v0.2.3`.
 
 Diuji terhadap nice revisi: SDK `v0.2.2`, `v0.2.1`, dan `v0.2.0` (2026-11-24) hanya diuji dengan tes unit. SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19: tes unit dan `scripts/smoke.sh`. Dengan SDK dari `nice` `df58337` (kode yang sama, sebelum pindah ke modul publik), terhadap server yang sama: `scripts/smoke.sh`, `create` lalu `list` (`created_by` berisi id Service Account), key salah (`invalid_client`), `NICE_ISSUER` serta `NADI_URL` berskema `http` bukan loopback (ditolak sebelum NICE dipanggil), dan key dicabut saat `watch` berjalan (`watch` berhenti dengan `invalid_client` pada pembacaan berikutnya, feed aktif di `nadi`). Key yang dicabut pada detik yang sama dengan terbitnya token tidak tertangkap feed (resolusi `iat` satu detik); klien lalu berhenti saat token diperbarui. Terhadap `00256d3`, lewat `Client.HTTPClient`: `scripts/smoke.sh`, `create` lalu `list` (`created_by` berisi id Service Account), key salah (`invalid_client`), dan NICE tidak terjangkau (`nice_unavailable`). Terhadap `c7a3e33` (lewat `Client.Do`): `create` dengan role `nadi.viewer` (403 `permission_denied`), dan key dicabut saat `watch` berjalan (`watch` berhenti dengan `invalid_client` pada pembacaan berikutnya, feed aktif di `nadi`).
 
@@ -138,7 +138,7 @@ Setiap kegagalan dicetak ke stderr sebagai `FAILED: <kode> (<deskripsi>): <penje
 
 ## Prasyarat
 
-- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.3` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dengan versi minimum di atas, bawaannya di `http://localhost:8080`.
 - `nadi` berjalan dan sudah diatur sampai langkah 7 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md).
