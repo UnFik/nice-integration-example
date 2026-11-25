@@ -3,7 +3,9 @@ package bootstrap
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -21,44 +23,16 @@ import (
 	"github.com/nice-platform/example/sharedservice-oauth/backend/internal/platform/config"
 )
 
-func TestCheckerAndResolverOnlyWithTheServiceKey(t *testing.T) {
-	store := devicememory.NewRepository()
-	log := slog.New(slog.DiscardHandler)
-	if c := VerifierConfig(config.Config{Issuer: testIssuer}, store, log); c.Checker != nil || c.Resolver != nil {
-		t.Fatalf("without %s: checker %T, resolver %T, want neither", config.EnvServiceAPIKey, c.Checker, c.Resolver)
-	}
-	c := VerifierConfig(config.Config{Issuer: testIssuer, ServiceAPIKey: "nice_sk_test.secret"}, store, log)
+func TestCheckerAndResolverNeedNoConfiguration(t *testing.T) {
+	c := VerifierConfig(config.Config{Issuer: testIssuer}, devicememory.NewRepository(), slog.New(slog.DiscardHandler))
 	if _, ok := c.Checker.(*verify.HTTPChecker); !ok {
-		t.Fatalf("checker with %s = %T, want *verify.HTTPChecker", config.EnvServiceAPIKey, c.Checker)
+		t.Fatalf("checker = %T, want *verify.HTTPChecker", c.Checker)
 	}
 	if _, ok := c.Resolver.(*verify.HTTPResolver); !ok {
-		t.Fatalf("resolver with %s = %T, want *verify.HTTPResolver", config.EnvServiceAPIKey, c.Resolver)
+		t.Fatalf("resolver = %T, want *verify.HTTPResolver", c.Resolver)
 	}
 	if c.Service != domain.ServiceSlug || c.Tenants == nil {
 		t.Fatalf("verifier config = %+v", c)
-	}
-}
-
-func TestWithoutTheServiceKeyTheServiceWarnsAndStillServes(t *testing.T) {
-	var logs bytes.Buffer
-	log := slog.New(slog.NewTextHandler(&logs, nil))
-	cfg := config.Config{Issuer: testIssuer, CORSOrigins: []string{testOrigin}}
-	store := devicememory.NewRepository()
-	vc := VerifierConfig(cfg, store, log)
-	vc.StaticJWKS = testJWKS(t)
-	v, err := verify.New(vc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := StartFeed(context.Background(), v, cfg, log); err != nil {
-		t.Fatal(err)
-	}
-	if out := logs.String(); !strings.Contains(out, "level=WARN") || !strings.Contains(out, config.EnvServiceAPIKey) {
-		t.Fatalf("log = %q, want a warning naming %s", out, config.EnvServiceAPIKey)
-	}
-	e := &testEnv{t: t, store: store, handler: newHandler(v, store, cfg.CORSOrigins)}
-	if r := e.do(http.MethodGet, "/devices", token(t, orgA, domain.PermRead), nil); r.Status != http.StatusOK {
-		t.Fatalf("list without the feed = %d %s", r.Status, r.Body)
 	}
 }
 
@@ -97,8 +71,8 @@ func TestRestartWhileNICEIsDownUsesTheJWKSCopy(t *testing.T) {
 func TestFeedRefusesTokensIssuedBeforeARevocation(t *testing.T) {
 	nice := newFakeNICE(t)
 	revokedAt := time.Now().Add(-5 * time.Second)
-	nice.changes = []map[string]string{{"seq": "7", "organization_id": orgA, "kind": "binding_deleted",
-		"principal_id": "usr_test", "occurred_at": revokedAt.UTC().Format(time.RFC3339)}}
+	nice.changes = []map[string]string{{"seq": "7", "kind": "binding_deleted", "key": verify.FeedKey("p", "usr_test", orgA),
+		"org_key": verify.FeedKey("o", orgA), "occurred_at": revokedAt.UTC().Format(time.RFC3339)}}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	e := nice.serviceEnv(ctx, t)
@@ -109,8 +83,9 @@ func TestFeedRefusesTokensIssuedBeforeARevocation(t *testing.T) {
 	if r := e.do(http.MethodGet, "/devices", sign(t, nice.claims(orgA, domain.PermRead)), nil); r.Status != http.StatusOK {
 		t.Fatalf("a token issued after the revocation = %d %s, want 200", r.Status, r.Body)
 	}
-	if got := nice.authorizations(); !slices.Contains(got, "GET /api/v1/access-changes ApiKey "+fakeServiceKey) {
-		t.Fatalf("NICE saw %v, want the feed read with the nice.service key", got)
+	// The feed names changes by keys only, so it is read without a credential.
+	if got := nice.authorizations(); !slices.Contains(got, "GET /api/v1/access-changes ") {
+		t.Fatalf("NICE saw %v, want the feed read without Authorization", got)
 	}
 }
 
@@ -130,13 +105,13 @@ func TestOnlineCheckAsksNICE(t *testing.T) {
 	if r := e.do(http.MethodDelete, "/devices/"+it.ID, tok, nil); r.Status != http.StatusNoContent {
 		t.Fatalf("delete allowed by NICE = %d %s", r.Status, r.Body)
 	}
-	want := `{"principal_type":"PRINCIPAL_TYPE_USER","principal_id":"usr_test","organization_id":"` + orgA +
-		`","project_id":"prj_test","permission":"` + domain.PermDelete + `"}`
+	// NICE reads the caller from the forwarded token: the body names the permission only.
+	want := `{"permission":"` + domain.PermDelete + `"}`
 	if got := nice.checks(); len(got) != 2 || got[0] != want {
 		t.Fatalf("access checks = %v, want two of %s", got, want)
 	}
-	if got := nice.authorizations(); !slices.Contains(got, "POST /api/v1/access-checks ApiKey "+fakeServiceKey) {
-		t.Fatalf("NICE saw %v, want the check made with the nice.service key", got)
+	if got := nice.authorizations(); !slices.Contains(got, "POST /api/v1/access-checks Bearer "+tok) {
+		t.Fatalf("NICE saw %v, want the check made with the token of the request", got)
 	}
 }
 
@@ -156,21 +131,21 @@ func TestAPermissionReferenceIsResolvedAtNICEOnce(t *testing.T) {
 	}
 
 	it := e.create(orgA, "Sensor")
-	for range 2 {
-		if r := e.do(http.MethodGet, "/devices", byRef(), nil); r.Status != http.StatusOK {
+	first := byRef()
+	for _, tok := range []string{first, byRef()} {
+		if r := e.do(http.MethodGet, "/devices", tok, nil); r.Status != http.StatusOK {
 			t.Fatalf("list with a token by reference = %d %s, want 200", r.Status, r.Body)
 		}
 	}
 	if r := e.do(http.MethodGet, "/devices/"+it.ID, byRef(), nil); r.Status != http.StatusOK {
 		t.Fatalf("get with a token by reference = %d %s, want 200", r.Status, r.Body)
 	}
-	want := `{"principal_type":"PRINCIPAL_TYPE_USER","principal_id":"usr_test","organization_id":"` + orgA +
-		`","project_id":"prj_test","service":"` + domain.ServiceSlug + `","perms_ref":"` + verify.PermsRef(allPerms) + `"}`
-	if got := nice.resolutions(); len(got) != 1 || got[0] != want {
-		t.Fatalf("resolutions = %v, want one of %s", got, want)
+	// NICE takes the principal, the context and perms_ref from the forwarded token: the body is empty.
+	if got := nice.resolutions(); len(got) != 1 || got[0] != "{}" {
+		t.Fatalf("resolutions = %v, want one of {}", got)
 	}
-	if got := nice.authorizations(); !slices.Contains(got, "POST /api/v1/permission-resolutions ApiKey "+fakeServiceKey) {
-		t.Fatalf("NICE saw %v, want the resolution made with the nice.service key", got)
+	if got := nice.authorizations(); !slices.Contains(got, "POST /api/v1/permission-resolutions Bearer "+first) {
+		t.Fatalf("NICE saw %v, want the resolution made with the token of the request", got)
 	}
 
 	// The permissions changed since the token was issued: NICE answers that the reference no longer matches.
@@ -181,28 +156,30 @@ func TestAPermissionReferenceIsResolvedAtNICEOnce(t *testing.T) {
 	wantError(t, e.do(http.MethodGet, "/devices", sign(t, changed), nil), http.StatusUnauthorized, "invalid_token", "token_stale")
 }
 
-func TestWithoutTheServiceKeyATokenByReferenceIsRefusedWith503(t *testing.T) {
-	cfg := config.Config{Issuer: testIssuer, CORSOrigins: []string{testOrigin}}
-	store := devicememory.NewRepository()
-	vc := VerifierConfig(cfg, store, slog.New(slog.DiscardHandler))
-	vc.StaticJWKS = testJWKS(t)
-	v, err := verify.New(vc)
-	if err != nil {
-		t.Fatal(err)
+// NICE refuses a forwarded token it does not accept (revoked, expired) with 401: the service fails closed.
+func TestANICEThatRefusesTheForwardedTokenFailsClosed(t *testing.T) {
+	nice := newFakeNICE(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	e := nice.serviceEnv(ctx, t)
+	nice.setRefuseTokens(true)
+	it := e.create(orgA, "Sensor")
+	wantError(t, e.do(http.MethodDelete, "/devices/"+it.ID, sign(t, nice.claims(orgA, allPerms...)), nil),
+		http.StatusServiceUnavailable, "temporarily_unavailable", "access_check_unavailable")
+	if _, ok := e.get(orgA, it.ID); !ok {
+		t.Fatal("the device was deleted although NICE refused the token")
 	}
-	e := &testEnv{t: t, store: store, handler: newHandler(v, store, cfg.CORSOrigins)}
-	c := claims(orgA)
+	c := nice.claims(orgA)
 	delete(c, "perms")
-	c["perms_ref"], c["jti"] = verify.PermsRef(allPerms), "no-key"
+	c["perms_ref"] = verify.PermsRef(allPerms)
 	if r := e.do(http.MethodGet, "/devices", sign(t, c), nil); r.Status != http.StatusServiceUnavailable {
-		t.Fatalf("a token by reference without %s = %d %s, want 503", config.EnvServiceAPIKey, r.Status, r.Body)
+		t.Fatalf("a token by reference NICE refuses = %d %s, want 503", r.Status, r.Body)
 	}
 }
 
-const fakeServiceKey = "nice_sk_test.secret"
-
 // fakeNICE answers the four NICE endpoints a nice_token service calls: the
 // JWKS, the access change feed, the online access check and the permission resolution.
+// Like NICE, it authorizes the check and the resolution by the Bearer token they forward.
 type fakeNICE struct {
 	*httptest.Server
 	jwks    []byte
@@ -210,8 +187,10 @@ type fakeNICE struct {
 
 	mu      sync.Mutex
 	allowed bool
-	seen    []string
-	checked []string
+	// refuseTokens answers 401 to the check and the resolution, as NICE does for a token it no longer accepts.
+	refuseTokens bool
+	seen         []string
+	checked      []string
 	// perms are the permissions the principal holds now; a resolution matches when its perms_ref names them.
 	perms    []string
 	resolved []string
@@ -240,7 +219,27 @@ func (f *fakeNICE) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		// A long poll with no change: hold until the reader gives up, as NICE does.
 		<-r.Context().Done()
-	case "POST /api/v1/access-checks":
+	case "POST /api/v1/access-checks", "POST /api/v1/permission-resolutions":
+		f.serveForwarded(w, r)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// serveForwarded answers a check or a resolution from the forwarded token, which this NICE signed.
+func (f *fakeNICE) serveForwarded(w http.ResponseWriter, r *http.Request) {
+	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	f.mu.Lock()
+	refuse := f.refuseTokens
+	f.mu.Unlock()
+	fwd, err := payload(tok)
+	if !ok || refuse || err != nil || fwd.Issuer != f.URL {
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": http.StatusUnauthorized, "error_code": "unauthenticated"})
+		return
+	}
+	switch r.URL.Path {
+	case "/api/v1/access-checks":
 		var body bytes.Buffer
 		_, _ = body.ReadFrom(r.Body)
 		f.mu.Lock()
@@ -248,25 +247,38 @@ func (f *fakeNICE) serve(w http.ResponseWriter, r *http.Request) {
 		allowed := f.allowed
 		f.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{"allowed": allowed})
-	case "POST /api/v1/permission-resolutions":
+	case "/api/v1/permission-resolutions":
 		var body bytes.Buffer
 		_, _ = body.ReadFrom(r.Body)
-		var req struct {
-			PermsRef string `json:"perms_ref"`
-		}
-		_ = json.Unmarshal(body.Bytes(), &req)
 		f.mu.Lock()
 		f.resolved = append(f.resolved, strings.TrimSpace(body.String()))
 		perms := append([]string(nil), f.perms...)
 		f.mu.Unlock()
-		if verify.PermsRef(perms) != req.PermsRef {
+		if verify.PermsRef(perms) != fwd.PermsRef {
 			_ = json.NewEncoder(w).Encode(map[string]any{"match": false})
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"match": true, "permissions": perms})
-	default:
-		http.NotFound(w, r)
 	}
+}
+
+type forwarded struct {
+	Issuer   string `json:"iss"`
+	PermsRef string `json:"perms_ref"`
+}
+
+// payload reads the claims of a JWT without checking its signature; the fake only needs to know what it forwarded.
+func payload(tok string) (forwarded, error) {
+	var c forwarded
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		return c, errors.New("not a JWT")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return c, err
+	}
+	return c, json.Unmarshal(raw, &c)
 }
 
 // claims are those of a token this NICE issued.
@@ -280,6 +292,12 @@ func (f *fakeNICE) setAllowed(v bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.allowed = v
+}
+
+func (f *fakeNICE) setRefuseTokens(v bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refuseTokens = v
 }
 
 func (f *fakeNICE) authorizations() []string {
@@ -306,17 +324,17 @@ func (f *fakeNICE) checks() []string {
 	return append([]string(nil), f.checked...)
 }
 
-// serviceEnv runs the service as run() wires it, against this NICE and with the nice.service key set.
+// serviceEnv runs the service as run() wires it, against this NICE.
 func (f *fakeNICE) serviceEnv(ctx context.Context, t *testing.T) *testEnv {
 	t.Helper()
-	cfg := config.Config{Issuer: f.URL, JWKSFile: filepath.Join(t.TempDir(), "jwks.json"), ServiceAPIKey: fakeServiceKey}
+	cfg := config.Config{Issuer: f.URL, JWKSFile: filepath.Join(t.TempDir(), "jwks.json")}
 	log := slog.New(slog.DiscardHandler)
 	store := devicememory.NewRepository()
 	v, err := verify.New(VerifierConfig(cfg, store, log))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := StartFeed(ctx, v, cfg, log); err != nil {
+	if err := StartFeed(ctx, v); err != nil {
 		t.Fatal(err)
 	}
 	return &testEnv{t: t, store: store, handler: newHandler(v, store, nil)}

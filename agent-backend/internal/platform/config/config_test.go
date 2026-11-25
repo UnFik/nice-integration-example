@@ -118,6 +118,10 @@ func TestEnvExampleListsEveryVariableWithoutSecrets(t *testing.T) {
 	if file[EnvClientSecret] != "" || file[EnvClientID] != "" {
 		t.Errorf(".env.example holds a client id or secret")
 	}
+	// The agent holds no credential of NICE besides its service client.
+	if _, ok := file["NICE_SERVICE_API_KEY"]; ok {
+		t.Errorf(".env.example still lists NICE_SERVICE_API_KEY")
+	}
 	cfg, err := Load(env(map[string]string{EnvClientID: "id", EnvClientSecret: "s"}), "../../../.env.example")
 	if err != nil {
 		t.Fatalf(".env.example as .env with the client filled: %v", err)
@@ -131,21 +135,5 @@ func TestLoadConfigRefusesAMalformedDotEnv(t *testing.T) {
 	_, err := Load(env(nil), writeDotEnv(t, "NICE_ISSUER\n"))
 	if err == nil || !strings.Contains(err.Error(), "line 1") {
 		t.Fatalf("err = %v, want the bad line", err)
-	}
-}
-
-func TestLoadConfigReadsTheOptionalServiceKeyAndKeepsItOutOfLogs(t *testing.T) {
-	cfg, err := Load(env(fullEnv()), filepath.Join(t.TempDir(), ".env"))
-	if err != nil || cfg.ServiceAPIKey != "" {
-		t.Fatalf("without %s: key %q, err %v, want no key and no error", EnvServiceAPIKey, cfg.ServiceAPIKey, err)
-	}
-	vars := fullEnv()
-	vars[EnvServiceAPIKey] = "nice_sk_test.secret"
-	cfg, err = Load(env(vars), filepath.Join(t.TempDir(), ".env"))
-	if err != nil || cfg.ServiceAPIKey != "nice_sk_test.secret" {
-		t.Fatalf("with %s: key %q, err %v", EnvServiceAPIKey, cfg.ServiceAPIKey, err)
-	}
-	if logged := cfg.LogValue().String(); strings.Contains(logged, "nice_sk_test.secret") {
-		t.Fatalf("the service key is in the log value: %s", logged)
 	}
 }

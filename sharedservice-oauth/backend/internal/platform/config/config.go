@@ -17,7 +17,6 @@ const (
 	EnvListen        = "LISTEN_ADDR"
 	EnvJWKSFile      = "JWKS_FILE"
 	EnvCORSOrigins   = "CORS_ALLOWED_ORIGINS"
-	EnvServiceAPIKey = "NICE_SERVICE_API_KEY"
 	EnvDatabaseURL   = "DATABASE_URL"
 	EnvClientID      = "NICE_CLIENT_ID"
 	EnvClientSecret  = "NICE_CLIENT_SECRET"
@@ -45,9 +44,6 @@ type Config struct {
 	Listen      string
 	JWKSFile    string
 	CORSOrigins []string
-	// ServiceAPIKey is the API key of a platform Service Account with the
-	// nice.service role. Empty disables the feed and the online check.
-	ServiceAPIKey string
 	// DatabaseURL is the PostgreSQL URL of the device store. Empty keeps the
 	// devices in memory. It may hold a password, so it is never printed.
 	DatabaseURL string
@@ -91,15 +87,14 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		return def
 	}
 	cfg := Config{
-		Issuer:        get(EnvIssuer, ""),
-		Listen:        get(EnvListen, DefaultListen),
-		JWKSFile:      get(EnvJWKSFile, defaultJWKSFile),
-		ServiceAPIKey: get(EnvServiceAPIKey, ""),
-		DatabaseURL:   get(EnvDatabaseURL, ""),
-		ClientID:      get(EnvClientID, ""),
-		ClientSecret:  get(EnvClientSecret, ""),
-		PublicURL:     strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
-		WebDir:        get(EnvWebDir, defaultWebDir),
+		Issuer:       get(EnvIssuer, ""),
+		Listen:       get(EnvListen, DefaultListen),
+		JWKSFile:     get(EnvJWKSFile, defaultJWKSFile),
+		DatabaseURL:  get(EnvDatabaseURL, ""),
+		ClientID:     get(EnvClientID, ""),
+		ClientSecret: get(EnvClientSecret, ""),
+		PublicURL:    strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
+		WebDir:       get(EnvWebDir, defaultWebDir),
 	}
 	for o := range strings.SplitSeq(get(EnvCORSOrigins, defaultCORSOrigins), ",") {
 		if o = strings.TrimSpace(o); o != "" {

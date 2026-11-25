@@ -4,7 +4,7 @@
 
 Backend contoh [`sharedservice-oauth`](../README.md): SharedService NICE bermode `nice_token` dengan slug `nadi`, ditulis dalam Go (`net/http`) memakai pustaka rujukan `nice-auth-sdk/verify`. Klien memanggil service ini langsung dengan access token NICE; NICE tidak berada di jalur request. Service memverifikasi token sendiri sesuai [kontrak verifikasi token](../../../nice/docs/token-verification.md), memisahkan data per organisasi dan project, dan memeriksa operasi sensitif secara online ke NICE. Backend yang sama juga melayani UI di [`../web`](../web/README.md) sebagai backend-for-frontend (`/auth/*`, lewat `nice-auth-sdk/credentials`); cara kerja, checklist UI, dan uji browser ada di [`../README.md`](../README.md).
 
-Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19, untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md). Jalur `perms_ref` ("Uji izin yang tidak muat di token") diuji manual pada 2026-11-23 terhadap `nice` `b9eb8b3` dan SDK `4c9649d` (dirilis sebagai `v0.2.0`): token 154 izin terbit dengan `perms_ref`, UI membaca, membuat, dan menghapus perangkat, dan NICE menerima satu penyelesaian per proses `nadi`.
+Diuji terhadap nice revisi: SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19, untuk service Bearer: image dibangun ulang dan `scripts/smoke.sh` lulus. Alur UI lihat [`../README.md`](../README.md). Jalur `perms_ref` ("Uji izin yang tidak muat di token") diuji manual pada 2026-11-23 terhadap `nice` `b9eb8b3` dan SDK `4c9649d` (dirilis sebagai `v0.2.0`): token 154 izin terbit dengan `perms_ref`, UI membaca, membuat, dan menghapus perangkat, dan NICE menerima satu penyelesaian per proses `nadi`. Versi yang tidak lagi memegang kredensial NICE (SDK `v0.2.3`) diuji 2026-11-25 terhadap NICE lokal di Docker (image `nice:dev` dari `dev` `14c7119`): tes unit, `scripts/smoke.sh` lulus, dan feed dibaca tanpa kredensial (`GET /api/v1/access-changes` dijawab 200). Pemeriksaan online `DELETE /devices/{id}` dan jalur `perms_ref` belum diuji manual ulang.
 
 ## Isi
 
@@ -76,7 +76,8 @@ Perilaku yang perlu diketahui:
 
 - Tenant adalah `nice_org_id` dan project adalah `prj` dari token terverifikasi, tidak pernah dari header, parameter, atau body. Organisasi yang memanggil pertama kali langsung dibuatkan tenant (`ProvisionOnFirstUse`). Token tanpa `prj` dijawab `403 {"error":"insufficient_scope","error_description":"project_required"}`. Tanpa `DATABASE_URL` data hanya di memori dan hilang saat service berhenti.
 - Salinan JWKS disimpan di `JWKS_FILE`, sehingga service yang restart ketika NICE mati tetap memverifikasi token yang masih berlaku.
-- Tanpa `NICE_SERVICE_API_KEY`, service tetap berjalan dan mencatat peringatan saat start: feed perubahan akses mati (pencabutan baru berlaku saat token kedaluwarsa, paling lama 30 menit), `DELETE /devices/{id}` dijawab `503`, dan setiap panggilan dengan token ber-`perms_ref` juga dijawab `503`.
+- Feed perubahan akses, pemeriksaan online `DELETE /devices/{id}`, dan penyelesaian `perms_ref` selalu menyala tanpa konfigurasi. Feed dibaca tanpa kredensial, karena setiap perubahan hanya menyebut kunci tersamar (`key`, `org_key`) yang dihitung SDK dari klaim token. Pemeriksaan dan penyelesaian meneruskan token request itu sendiri ke NICE sebagai `Authorization: Bearer`, dan NICE membaca pemanggil, organisasi, dan project dari token itu. Service tidak memegang kredensial NICE selain OAuth client UI. Bila NICE tidak terjangkau atau menolak token yang diteruskan (`401`), `DELETE /devices/{id}` dijawab `503`, begitu juga token ber-`perms_ref` yang daftar izinnya belum tersimpan (fail closed).
+- Setiap replika menyimpan tanda pencabutan di memorinya sendiri, jadi setiap replika membuka long-poll feed-nya sendiri. NICE membatasi long-poll yang menunggu bersamaan per alamat sumber. Replika di belakang satu alamat keluar (NAT) berbagi batas itu; replika yang melewatinya terus dijawab `429 too_many_waits`, masuk status degraded (log menampilkan "the access change feed is silent"), dan pencabutan baru berlaku saat token kedaluwarsa.
 - Token yang izinnya tidak muat membawa `perms_ref` sebagai pengganti `perms`. NICE menerbitkannya untuk pemanggil yang izin `nadi`-nya melewati batas ukuran token (6 KB). `verify.NewHTTPResolver` mengambil daftar izinnya dari NICE (`POST /api/v1/permission-resolutions`) sekali untuk setiap daftar yang berbeda, memeriksanya terhadap `perms_ref`, lalu menyimpannya di memori. Setelah itu service memutuskan sendiri, juga untuk pemanggil lain yang memegang izin yang sama. Bila izin pemanggil berubah sejak token terbit, NICE menjawab tidak cocok dan service menjawab `401 token_stale`, sehingga klien me-refresh. Bila NICE tidak terjangkau dan daftarnya belum tersimpan, service menjawab `503`.
 
 ## Data per organisasi dan project
@@ -106,7 +107,7 @@ Tanpa `act`, field `acted_by` tidak ada. Kode membacanya dari `Claims.Actor` mil
 
 ## Prasyarat
 
-- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk`, jadi contoh ini bisa dibangun tanpa repo `nice`. Kodenya butuh SDK `v0.2.3` atau sesudahnya dan NICE dengan change `service-calls-without-service-account`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dev berjalan, bawaannya di `http://localhost:8080` (`cd ../../../nice && make db && make migrate && make dev`). NICE di alamat lain juga bisa: isikan ke `NICE_ISSUER` di `.env` dan ke `NICE` di shell checklist.
 
@@ -126,8 +127,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/`; kosong di Docker, karena UI punya container sendiri |
 | `DATABASE_URL` | kosong | URL `postgres://` untuk perangkat; kosong berarti memori. Nilainya tidak pernah dicetak |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser lain yang boleh memanggil dengan Bearer, dipisah koma, untuk `public-client-pkce`. UI contoh ini tidak butuh CORS karena satu origin |
-| `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service` (langkah 9); menyalakan feed, pemeriksaan online, dan penyelesaian `perms_ref` |
-| `SMOKE_SA_ID`, `SMOKE_API_KEY` | kosong | hanya dibaca `scripts/smoke.sh`: Service Account tenant dan API key-nya (langkah 10) |
+| `SMOKE_SA_ID`, `SMOKE_API_KEY` | kosong | hanya dibaca `scripts/smoke.sh`: Service Account tenant dan API key-nya (langkah 9) |
 
 ## Menjalankan dan tes
 
@@ -212,7 +212,7 @@ make run
 curl -sS http://127.0.0.1:8081/healthz
 ```
 
-Biarkan berjalan di terminal lain. Untuk dev dengan Vite, isi juga `PUBLIC_URL=http://localhost:5181`. Kunci lain di `.env` diisi pada langkah 9 dan 10.
+Biarkan berjalan di terminal lain. Untuk dev dengan Vite, isi juga `PUBLIC_URL=http://localhost:5181`. Kunci smoke di `.env` diisi pada langkah 9.
 
 ### 3. Daftarkan `nadi`
 
@@ -278,33 +278,7 @@ BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST 
 
 `nadi.editor` tidak memuat `nadi.devices.delete`; pakai `nadi.admin` untuk mencoba hapus perangkat.
 
-### 9. Service Account platform `nice.service` (feed, pemeriksaan online, dan `perms_ref`)
-
-Platform Admin membuat Service Account di project organisasi platform (buat project bila belum ada), memberinya role `nice.service`, lalu API key (tanpa pembatasan service: API key tidak punya `allowed_services`; hak ditentukan role Service Account). Console: **Service Account** di project organisasi platform, lalu **Pengguna platform** untuk role `nice.service`.
-
-```bash
-PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
-PLATFORM_PROJECT_ID=$(curl -sS "$NICE/api/v1/organizations/$PLATFORM_ORG_ID/projects" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"slug":"service-readers","name":"Service readers"}' | jq -r .project.id)
-FEED_SA_ID=$(curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/service-accounts" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"nadi-feed","description":"Feed perubahan akses dan pemeriksaan online nadi"}' | jq -r .service_account.id)
-curl -sS "$NICE/api/v1/admin/role-bindings" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$FEED_SA_ID\",\"role\":\"nice.service\"}"
-curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/api-keys" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$FEED_SA_ID\",\"name\":\"nadi-feed\"}" | jq -r .key
-```
-
-Key hanya tampil sekali. Isikan ke `NICE_SERVICE_API_KEY` di `.env`, lalu jalankan ulang `make run`; peringatan feed saat start hilang.
-
-IAM mengetahui Service Account baru secara asinkron, jadi binding yang dibuat tepat setelah akunnya dibuat bisa dijawab 400 `principal_not_in_org`. Tunggu beberapa detik lalu ulangi binding-nya; hal yang sama berlaku di langkah 10.
-
-Untuk deployment dengan beberapa replika, perlu diketahui bahwa setiap replika menyimpan tanda pencabutan di memorinya sendiri, jadi setiap replika membuka long-poll feed-nya sendiri. NICE hanya mengizinkan satu Service Account menahan 4 long-poll sekaligus. Bila replika kelima dan seterusnya memakai key dari Service Account yang sama, replika itu terus dijawab `429 too_many_waits`. Replika tersebut lalu masuk status degraded: log menampilkan "the access change feed is silent", dan pencabutan baru berlaku saat token kedaluwarsa. Karena itu, buat satu Service Account `nice.service` untuk setiap kelompok berisi paling banyak 4 replika.
-
-### 10. Service Account tenant untuk smoke
+### 9. Service Account tenant untuk smoke
 
 Console: project tenant, **Service Account** (buat akun dan API key) dan **IAM** (binding).
 
@@ -323,7 +297,9 @@ echo "$SMOKE_SA_ID"
 
 Isikan id Service Account ke `SMOKE_SA_ID` dan key ke `SMOKE_API_KEY` di `.env`.
 
-### 11. Smoke
+IAM mengetahui Service Account baru secara asinkron, jadi binding yang dibuat tepat setelah akunnya dibuat bisa dijawab 400 `principal_not_in_org`. Tunggu beberapa detik lalu ulangi binding-nya.
+
+### 10. Smoke
 
 ```bash
 scripts/smoke.sh
@@ -335,13 +311,13 @@ Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: 
 |---|---|
 | `.env` tidak ada, NICE atau service tidak terjangkau | 2 (dan NICE harus berjalan) |
 | `NICE_CLIENT_ID` atau `NICE_CLIENT_SECRET` kosong, `/auth/login` tidak mengarah ke NICE | 2 |
-| `invalid_client` | 10: id Service Account bukan pemilik key, key dicabut atau kedaluwarsa, akun nonaktif |
-| `invalid_scope` | 3 sampai 7, atau 10 (project Service Account harus mengaktifkan `nadi`) |
-| `403 permission_denied` dari service | 10: binding Service Account ke role nadi |
+| `invalid_client` | 9: id Service Account bukan pemilik key, key dicabut atau kedaluwarsa, akun nonaktif |
+| `invalid_scope` | 3 sampai 7, atau 9 (project Service Account harus mengaktifkan `nadi`) |
+| `403 permission_denied` dari service | 9: binding Service Account ke role nadi |
 
 ## Uji pencabutan (opsional)
 
-Butuh `NICE_SERVICE_API_KEY` terisi (langkah 9). Token user yang terbit sebelum binding dicabut ditolak `401 token_stale`.
+Feed selalu menyala, jadi token user yang terbit sebelum binding dicabut ditolak `401 token_stale`.
 
 ```bash
 read -rsp 'Password owner: ' OWNER_PASSWORD; echo
@@ -357,7 +333,7 @@ Jeda sebelum pencabutan dibutuhkan karena feed bekerja dengan resolusi detik: to
 
 ## Uji izin yang tidak muat di token (opsional)
 
-Butuh `NICE_SERVICE_API_KEY` terisi (langkah 9). NICE membatasi token 6 KB, cukup untuk sekitar 65 sampai 100 izin. Pemanggil yang izin `nadi`-nya lebih banyak menerima token dengan `perms_ref` sebagai pengganti `perms`, dan `nadi` mengambil daftar izinnya dari NICE sekali. `nadi` sendiri hanya punya empat izin, jadi `scripts/large-catalog.sh` mencetak dokumennya dengan operasi tambahan yang masing-masing menyatakan satu izin (`nadi.catalog_test.pNNN.read`). Operasi itu tidak dilayani `nadi`: gunanya hanya memperpanjang daftar izin.
+NICE membatasi token 6 KB, cukup untuk sekitar 65 sampai 100 izin. Pemanggil yang izin `nadi`-nya lebih banyak menerima token dengan `perms_ref` sebagai pengganti `perms`, dan `nadi` mengambil daftar izinnya dari NICE sekali. `nadi` sendiri hanya punya empat izin, jadi `scripts/large-catalog.sh` mencetak dokumennya dengan operasi tambahan yang masing-masing menyatakan satu izin (`nadi.catalog_test.pNNN.read`). Operasi itu tidak dilayani `nadi`: gunanya hanya memperpanjang daftar izin.
 
 ```bash
 scripts/large-catalog.sh 150 > /tmp/nadi-large.json   # 154 izin
@@ -377,6 +353,6 @@ printf '%s' "$USER_TOKEN" | wc -c                                               
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/devices -H "Authorization: Bearer $USER_TOKEN"   # 200
 ```
 
-Bila NICE berjalan dengan `NICE_METRICS_ENABLED=true`, `nice_oauth_service_tokens_total{permissions="reference"}` naik setiap token seperti itu terbit, dan `nice_permission_resolutions_total{result="match"}` naik satu kali saja walau `GET /devices` dipanggil berulang: `nadi` menyimpan daftar izinnya setelah pengambilan pertama. Tanpa `NICE_SERVICE_API_KEY`, panggilan yang sama dijawab `503 permissions_unavailable`.
+Bila NICE berjalan dengan `NICE_METRICS_ENABLED=true`, `nice_oauth_service_tokens_total{permissions="reference"}` naik setiap token seperti itu terbit, dan `nice_permission_resolutions_total{result="match"}` naik satu kali saja walau `GET /devices` dipanggil berulang: `nadi` menyimpan daftar izinnya setelah pengambilan pertama.
 
 Untuk mengembalikan katalog, impor `docs/swagger.json` (atau `/openapi.json`) lagi dan terapkan: operasi tambahan menjadi `removed` dan `nadi.admin` kembali memuat empat izin.

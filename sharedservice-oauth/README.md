@@ -6,7 +6,7 @@ Contoh SharedService fullstack untuk NICE dengan slug `nadi` (NADI: CRUD perangk
 
 Diuji terhadap nice revisi: SDK `v0.2.2` dan NICE `dev` `1b137fa` (2026-11-24): tes unit, dan menu akun diuji manual di browser. **Ganti akun** menampilkan pemilih akun NICE, lalu masuk sebagai akun lain. **Keluar** mencabut refresh token, mengakhiri sesi NICE lewat `/oauth/end_session`, kembali ke `PUBLIC_URL/`, dan login berikutnya meminta password. SDK `v0.2.1` dan NICE `dev` `d42b398` (2026-11-24): tes unit, dan login lewat UI, pemilih konteks dari `ExchangeClient.Contexts` dengan organisasi act-as operator platform, lalu pindah ke project organisasi lain, diuji manual. SDK `v0.2.0` (2026-11-24): tes unit, dan jalur `perms_ref` diuji manual (lihat [`backend/README.md`](backend/README.md)). SDK `v0.1.0` dan server NICE lokal di Docker (image `nice:dev` dari `c7a3e33`), 2026-11-19: image `nadi` dibangun ulang tanpa konteks `nice`, tes unit dan `backend/scripts/smoke.sh` lulus. Alur UI di bawah tidak diuji ulang di revisi ini. Terhadap `4282316` (NICE dev dibangun dari revisi itu): login, callback, penemuan konteks, pindah org dan project, isolasi data per org dan project (memori dan PostgreSQL), CSRF, keluar, dan `scripts/smoke.sh` lulus lewat HTTP. Langkah klik di browser belum diuji manual.
 
-Versi NICE minimum: `4282316` (`add-client-org-switch` dan `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`.
+Versi NICE minimum: `b361d25` (`service-calls-without-service-account`; sebelumnya `4282316`, `add-client-org-switch` dan `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.3`. Service tidak lagi memegang kredensial NICE selain OAuth client UI: feed perubahan akses, pemeriksaan online, dan penyelesaian `perms_ref` berjalan tanpa konfigurasi.
 
 ## Isi
 
@@ -63,7 +63,7 @@ Semua konfigurasi ada di `backend/.env` (salin dari `backend/.env.example`). UI 
 | `SESSION_IDLE_TIMEOUT` | `8h` | sesi yang tidak dipakai selama ini berakhir |
 | `WEB_DIR` | `../web/dist` | hasil `npm run build` yang disajikan di `PUBLIC_URL`; tanpa direktori itu backend tidak menyajikan UI. Docker mengosongkannya, karena UI punya container sendiri |
 | `DATABASE_URL` | kosong | PostgreSQL untuk perangkat; kosong berarti memori |
-| `LISTEN_ADDR`, `JWKS_FILE`, `CORS_ALLOWED_ORIGINS`, `NICE_SERVICE_API_KEY`, `SMOKE_SA_ID`, `SMOKE_API_KEY` | | lihat [`backend/README.md`](backend/README.md#konfigurasi) |
+| `LISTEN_ADDR`, `JWKS_FILE`, `CORS_ALLOWED_ORIGINS`, `SMOKE_SA_ID`, `SMOKE_API_KEY` | | lihat [`backend/README.md`](backend/README.md#konfigurasi) |
 
 Tanpa `NICE_ISSUER`, `NICE_CLIENT_ID`, atau `NICE_CLIENT_SECRET`, backend berhenti saat start dengan pesan yang menyebut nama variabelnya.
 
@@ -96,7 +96,7 @@ Tes: `make test` di `backend/` (tanpa NICE; NICE palsu `httptest`), dan `npm tes
 
 ## Checklist setup NICE
 
-1. Jalankan langkah 1-11 [`backend/README.md`](backend/README.md#checklist-setup-nice). Langkah 2 membuat OAuth client confidential di project organisasi platform dengan dua redirect URI (`http://localhost:5181/auth/callback` untuk dev dan Docker, `http://localhost:8081/auth/callback` untuk build satu proses), dan smoke di langkah 11 memeriksa `/auth/session` serta `/auth/login`.
+1. Jalankan langkah 1-10 [`backend/README.md`](backend/README.md#checklist-setup-nice). Langkah 2 membuat OAuth client confidential di project organisasi platform dengan dua redirect URI (`http://localhost:5181/auth/callback` untuk dev dan Docker, `http://localhost:8081/auth/callback` untuk build satu proses), dan smoke di langkah 10 memeriksa `/auth/session` serta `/auth/login`.
 2. Ikat client ke `nadi` (butuh `nice.platform.catalog.manage`). Ikatan menjadikan client itu service client: login memilih organisasi user yang meng-entitle `nadi`, dan client boleh pindah organisasi lewat refresh.
 
    ```bash
@@ -125,7 +125,7 @@ Buka DevTools (tab Network dengan **Preserve log**, dan Application > Storage). 
 | 6 | Pindah organisasi | Dari A/P, pilih B/R | Satu `POST /auth/context`; log NICE menunjukkan tepat satu refresh dengan `nice:org:<B> nice:aud:nadi nice:prj:<R>` dan audit `token.org_switch`. Halaman tidak berpindah; perangkat B tampil dan perangkat A tidak |
 | 7 | Izin dari token | Pilih A/Q (hanya `nadi.viewer`) | Tombol Tambah, Ubah, dan Hapus tidak tersedia; daftar perangkat Q tampil (kosong, terpisah dari P) |
 | 8 | Akses dicabut di antara | Buka pemilih, lalu nonaktifkan `nadi` di Q (console: project Q, **Product & Activation**), lalu pilih Q | `POST /auth/context` dijawab `409 context_refused` (`invalid_scope`), konteks aktif tetap, UI menampilkan alasannya dan memuat ulang pilihan; Q tidak lagi ditawarkan. Aktifkan lagi Q sesudahnya |
-| 9 | Kelola perangkat | Di A/P, tambah, ubah, lalu hapus perangkat | `POST /devices`, `PUT /devices/<id>`, `DELETE /devices/<id>` membawa `X-CSRF-Token` dan dijawab sukses (hapus butuh `nadi.admin` dan `NICE_SERVICE_API_KEY`). `created_by` perangkat adalah `usr_` user uji |
+| 9 | Kelola perangkat | Di A/P, tambah, ubah, lalu hapus perangkat | `POST /devices`, `PUT /devices/<id>`, `DELETE /devices/<id>` membawa `X-CSRF-Token` dan dijawab sukses (hapus butuh `nadi.admin` dan diperiksa online ke NICE dengan token konteks aktif). `created_by` perangkat adalah `usr_` user uji |
 | 10 | CSRF | Dari konsol DevTools di halaman lain (mis. `http://localhost:5180`), kirim form `POST` ke `/devices` di origin UI | Dijawab `403 csrf`; perangkat tidak bertambah |
 | 11 | Pemanggil Bearer | Jalankan `backend/scripts/smoke.sh` saat sesi browser masih ada | Smoke lulus; `GET /devices` dengan token Service Account dijawab `200` tanpa terpengaruh cookie |
 | 12 | Sesi NICE berakhir | Akhiri sesi user di NICE (console: akun, **Sesi**, cabut sesi ini), lalu pilih konteks yang belum pernah dipakai | `401 session_ended`; UI menampilkan sesi berakhir dan tombol **Masuk** |

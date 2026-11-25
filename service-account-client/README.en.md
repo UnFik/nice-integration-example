@@ -14,7 +14,7 @@ client --client_credentials: client_id=sa_..., client_secret=API key, scope=nice
 client --Bearer JWT (aud=nadi, nice_principal_type=service_account)--> nadi /devices
 ```
 
-Minimum NICE version: `nice` `5def119` (the start of the current `nice` history) or later. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2` (`Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback).
+Minimum NICE version: `nice` `5def119` (the start of the current `nice` history) or later. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.3` (`Client.HTTPClient` is bound to the address of one service, and addresses must be `https` unless loopback). This client itself does not change, but the current `nadi` needs NICE with the change `service-calls-without-service-account` and SDK `v0.2.3`.
 
 Tested against nice revision: SDK `v0.2.2`, `v0.2.1` and `v0.2.0` (2026-11-24) were tested with the unit tests only. SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the unit tests and `scripts/smoke.sh`. With the SDK of `nice` `df58337` (the same code, before it moved to the public module), against the same server: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), a `NICE_ISSUER` and a `NADI_URL` that are `http` and not loopback (refused before NICE is called), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`). A key revoked in the same second its token was issued is not caught by the feed (`iat` has a resolution of one second); the client then stops when the token is renewed. Against `00256d3`, through `Client.HTTPClient`: `scripts/smoke.sh`, `create` then `list` (`created_by` is the Service Account id), a wrong key (`invalid_client`), and NICE unreachable (`nice_unavailable`). Against `c7a3e33` (through `Client.Do`): `create` with the `nadi.viewer` role (403 `permission_denied`), and the key revoked while `watch` runs (`watch` stops with `invalid_client` at the next reading, feed on in `nadi`).
 
@@ -138,7 +138,7 @@ Every failure is printed to stderr as `FAILED: <code> (<description>): <explanat
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.3` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
 - `nadi` running and set up through step 7 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md).
@@ -187,7 +187,7 @@ A token lasts 30 minutes; get a new one when `curl` is answered 401.
 
 ### 1. `nadi` runs and is registered
 
-Follow [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md) steps 1 through 7: the service runs at `http://127.0.0.1:8081`, is registered as `nadi`, its catalog is imported, it is active, entitled to the tenant organization, and active in `PROJECT_ID`. Step 9 of that example (`NICE_SERVICE_API_KEY`) is not required, but it is needed to try `token_stale`.
+Follow [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md) steps 1 through 7: the service runs at `http://127.0.0.1:8081`, is registered as `nadi`, its catalog is imported, it is active, entitled to the tenant organization, and active in `PROJECT_ID`. The access change feed of `nadi`, which is needed to try `token_stale`, is always on with no extra step.
 
 ### 2. Tenant Service Account
 
@@ -270,8 +270,8 @@ The script reads `.env` only, never prints the key or a token, and checks: NICE 
 
    How soon `watch` stops depends on `nadi`, because the service verifies the token, not the key:
 
-   - **The access change feed is on in `nadi`** (`NICE_SERVICE_API_KEY` is set): the next reading is answered 401 `token_stale`, the client proves the key again, NICE answers `invalid_client`, and `watch` exits within one interval. This is what was observed when the example was tested.
-   - **Without the feed:** the token already issued is still accepted until the client renews it, about ten minutes after the token was issued.
+   - **The access change feed of `nadi` runs** (always on, with no configuration): the next reading is answered 401 `token_stale`, the client proves the key again, NICE answers `invalid_client`, and `watch` exits within one interval. This is what was observed when the example was tested.
+   - **The feed of `nadi` is degraded** (NICE is unreachable from `nadi`): the token already issued is still accepted until the client renews it, about ten minutes after the token was issued.
 
    On both paths the log holds "NICE refused the API key for good", and `watch` exits with `FAILED: invalid_client` and code `1`.
 
