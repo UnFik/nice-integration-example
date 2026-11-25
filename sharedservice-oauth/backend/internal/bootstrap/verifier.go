@@ -12,31 +12,23 @@ import (
 // VerifierConfig wires niceauth/verify for this service. Tests reuse it and only swap
 // the key source and the checker.
 func VerifierConfig(cfg config.Config, tenants TenantCreator, log *slog.Logger) verify.Config {
-	c := verify.Config{
+	return verify.Config{
 		Issuer:   cfg.Issuer,
 		Service:  domain.ServiceSlug,
 		JWKSFile: cfg.JWKSFile,
 		// A valid token for this service already proves that NICE entitled the
 		// organization, so its first request is a safe moment to create the tenant.
 		Tenants: verify.ProvisionOnFirstUse(tenants.CreateTenant),
-		Log:     log,
+		// The online check of DELETE /devices/{id} and the resolution of perms_ref forward the token of the request:
+		// NICE reads the caller from it, so the service holds no credential of NICE.
+		Checker:  verify.NewHTTPChecker(cfg.Issuer),
+		Resolver: verify.NewHTTPResolver(cfg.Issuer),
+		Log:      log,
 	}
-	if cfg.ServiceAPIKey != "" {
-		// Without a checker, niceauth/verify refuses sensitive operations with 503 (fail closed).
-		c.Checker = verify.NewHTTPChecker(cfg.Issuer, cfg.ServiceAPIKey)
-		// A caller with more permissions than a token carries gets perms_ref in place of perms. The resolver asks NICE
-		// once for the list it names; without one, niceauth/verify refuses such a token with 503.
-		c.Resolver = verify.NewHTTPResolver(cfg.Issuer, cfg.ServiceAPIKey)
-	}
-	return c
 }
 
-// StartFeed reads the access change feed when the nice.service key is set, so
-// tokens issued before a revocation are refused with token_stale.
-func StartFeed(ctx context.Context, v *verify.Verifier, cfg config.Config, log *slog.Logger) error {
-	if cfg.ServiceAPIKey == "" {
-		log.Warn(config.EnvServiceAPIKey + " is not set: the access change feed is off, so revoked access is refused only when the token expires (up to 30 minutes), DELETE /devices/{id} answers 503, and so does every call of a user whose permissions do not fit a token")
-		return nil
-	}
-	return v.StartFeed(ctx, verify.FeedConfig{APIKey: cfg.ServiceAPIKey})
+// StartFeed reads the access change feed, so tokens issued before a revocation
+// are refused with token_stale. The feed needs no credential.
+func StartFeed(ctx context.Context, v *verify.Verifier) error {
+	return v.StartFeed(ctx, verify.FeedConfig{})
 }

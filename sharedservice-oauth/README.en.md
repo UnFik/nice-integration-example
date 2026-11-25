@@ -6,7 +6,7 @@ A fullstack SharedService example for NICE with the slug `nadi` (NADI: IoT devic
 
 Tested against nice revision: SDK `v0.2.2` and NICE `dev` `1b137fa` (2026-11-24): the unit tests, and the account menu by hand in a browser. **Ganti akun** shows the account chooser of NICE, then signs in with another account. **Keluar** revokes the refresh token, ends the NICE session through `/oauth/end_session`, comes back to `PUBLIC_URL/`, and the next sign-in asks for the password. SDK `v0.2.1` and NICE `dev` `d42b398` (2026-11-24): the unit tests, and by hand the sign-in through the UI, the context picker from `ExchangeClient.Contexts` with organizations reached as a platform operator, and a switch to a project of another organization. SDK `v0.2.0` (2026-11-24): the unit tests, and the `perms_ref` path tested by hand (see [`backend/README.en.md`](backend/README.en.md)). SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19: the `nadi` image was rebuilt without the `nice` context, and the unit tests and `backend/scripts/smoke.sh` pass. The UI flow below was not tested again at this revision. Against `4282316` (the NICE dev stack was built from it): login, callback, context discovery, org and project switching, data isolation per org and project (memory and PostgreSQL), CSRF, sign-out, and `scripts/smoke.sh` pass over HTTP. The browser click-through has not been tested by hand yet.
 
-Minimum NICE version: `4282316` (`add-client-org-switch` and `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`.
+Minimum NICE version: NICE with the change `service-calls-without-service-account` (not merged yet; before it, `4282316`, `add-client-org-switch` and `add-signin-token-exchange`). SDK: `github.com/ABA-Developer/nice-auth-sdk`, the release after `v0.2.2` (not tagged yet; `go.mod` still says `v0.2.2`). The service holds no NICE credential besides the OAuth client of the UI: the access change feed, the online check, and the resolution of `perms_ref` run without configuration.
 
 ## Contents
 
@@ -63,7 +63,7 @@ All configuration is in `backend/.env` (copy it from `backend/.env.example`). Th
 | `SESSION_IDLE_TIMEOUT` | `8h` | a session not used for this long ends |
 | `WEB_DIR` | `../web/dist` | the output of `npm run build`, served at `PUBLIC_URL`; without that directory the backend serves no UI. Docker leaves it empty, since the UI has a container of its own |
 | `DATABASE_URL` | empty | PostgreSQL for the devices; empty keeps them in memory |
-| `LISTEN_ADDR`, `JWKS_FILE`, `CORS_ALLOWED_ORIGINS`, `NICE_SERVICE_API_KEY`, `SMOKE_SA_ID`, `SMOKE_API_KEY` | | see [`backend/README.en.md`](backend/README.en.md#configuration) |
+| `LISTEN_ADDR`, `JWKS_FILE`, `CORS_ALLOWED_ORIGINS`, `SMOKE_SA_ID`, `SMOKE_API_KEY` | | see [`backend/README.en.md`](backend/README.en.md#configuration) |
 
 Without `NICE_ISSUER`, `NICE_CLIENT_ID`, or `NICE_CLIENT_SECRET`, the backend stops at start with a message that names the variable.
 
@@ -96,7 +96,7 @@ Tests: `make test` in `backend/` (no NICE; a fake NICE on `httptest`), and `npm 
 
 ## NICE setup checklist
 
-1. Run steps 1-11 of [`backend/README.en.md`](backend/README.en.md#nice-setup-checklist). Step 2 creates the confidential OAuth client in a project of the platform organization with two redirect URIs (`http://localhost:5181/auth/callback` for development and Docker, `http://localhost:8081/auth/callback` for the one-process build), and the smoke test of step 11 checks `/auth/session` and `/auth/login`.
+1. Run steps 1-10 of [`backend/README.en.md`](backend/README.en.md#nice-setup-checklist). Step 2 creates the confidential OAuth client in a project of the platform organization with two redirect URIs (`http://localhost:5181/auth/callback` for development and Docker, `http://localhost:8081/auth/callback` for the one-process build), and the smoke test of step 10 checks `/auth/session` and `/auth/login`.
 2. Bind the client to `nadi` (needs `nice.platform.catalog.manage`). The binding makes the client a service client: sign-in picks an organization of the user that is entitled to `nadi`, and the client may switch organizations through refresh.
 
    ```bash
@@ -125,7 +125,7 @@ Open DevTools (the Network tab with **Preserve log**, and Application > Storage)
 | 6 | Organization switch | From A/P, pick B/R | One `POST /auth/context`; the NICE log shows exactly one refresh with `nice:org:<B> nice:aud:nadi nice:prj:<R>` and the audit record `token.org_switch`. The page does not navigate; the devices of B show and those of A do not |
 | 7 | Permission from the token | Pick A/Q (`nadi.viewer` only) | The Add, Edit, and Delete buttons are not available; the devices of Q show (empty, apart from P) |
 | 8 | Access revoked in between | Open the picker, then turn `nadi` off in Q (console: project Q, **Product & Activation**), then pick Q | `POST /auth/context` is answered `409 context_refused` (`invalid_scope`), the active context stays, the UI shows the reason and reloads the choices; Q is no longer offered. Turn Q back on afterwards |
-| 9 | Managing devices | In A/P, add, edit, then delete a device | `POST /devices`, `PUT /devices/<id>`, `DELETE /devices/<id>` carry `X-CSRF-Token` and succeed (delete needs `nadi.admin` and `NICE_SERVICE_API_KEY`). The device's `created_by` is the `usr_` of the test user |
+| 9 | Managing devices | In A/P, add, edit, then delete a device | `POST /devices`, `PUT /devices/<id>`, `DELETE /devices/<id>` carry `X-CSRF-Token` and succeed (delete needs `nadi.admin` and is checked online at NICE with the token of the active context). The device's `created_by` is the `usr_` of the test user |
 | 10 | CSRF | From a page of another origin (for example `http://localhost:5180`), submit a `POST` form to `/devices` of the UI origin | Answered `403 csrf`; no device is added |
 | 11 | Bearer caller | Run `backend/scripts/smoke.sh` while the browser session exists | The smoke test passes; `GET /devices` with the Service Account token is answered `200`, unaffected by the cookie |
 | 12 | NICE session ended | End the user's session in NICE (console: account, **Sessions**, revoke this session), then pick a context not used before | `401 session_ended`; the UI shows that the session ended and the **Masuk** button |

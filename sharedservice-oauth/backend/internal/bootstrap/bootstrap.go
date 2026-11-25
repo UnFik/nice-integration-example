@@ -38,7 +38,7 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 		return err
 	}
 	go v.Run(ctx)
-	if err := StartFeed(ctx, v, cfg, log); err != nil {
+	if err := StartFeed(ctx, v); err != nil {
 		return err
 	}
 
@@ -57,7 +57,7 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 	}()
 	log.Info("nadi listening", slog.String("addr", cfg.Listen), slog.String("issuer", cfg.Issuer),
 		slog.String("public_url", cfg.PublicURL), slog.String("client_id", cfg.ClientID), slog.Bool("ui", hasUI(cfg.WebDir)),
-		slog.Any("cors_origins", cfg.CORSOrigins), slog.Bool("feed", cfg.ServiceAPIKey != ""), slog.String("store", StoreName(cfg)))
+		slog.Any("cors_origins", cfg.CORSOrigins), slog.String("store", StoreName(cfg)))
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

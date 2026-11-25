@@ -39,7 +39,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != "127.0.0.1:8081" || cfg.JWKSFile != "data/jwks.json" || cfg.ServiceAPIKey != "" || cfg.DatabaseURL != "" ||
+	if cfg.Listen != "127.0.0.1:8081" || cfg.JWKSFile != "data/jwks.json" || cfg.DatabaseURL != "" ||
 		!slices.Equal(cfg.CORSOrigins, []string{"http://localhost:5180"}) {
 		t.Fatalf("defaults = %+v", cfg)
 	}
@@ -51,7 +51,6 @@ NICE_ISSUER="http://localhost:8080"
 export LISTEN_ADDR=127.0.0.1:9000
 
 CORS_ALLOWED_ORIGINS= http://localhost:5180 , http://127.0.0.1:5180,
-NICE_SERVICE_API_KEY='nice_sk_from_file'
 JWKS_FILE=/tmp/from-file.json
 `)
 	cfg, err := Load(env(client(map[string]string{EnvJWKSFile: "/tmp/from-env.json"})), dotenv)
@@ -60,10 +59,10 @@ JWKS_FILE=/tmp/from-file.json
 	}
 	want := Config{
 		Issuer: "http://localhost:8080", Listen: "127.0.0.1:9000", JWKSFile: "/tmp/from-env.json",
-		CORSOrigins: []string{"http://localhost:5180", "http://127.0.0.1:5180"}, ServiceAPIKey: "nice_sk_from_file",
+		CORSOrigins: []string{"http://localhost:5180", "http://127.0.0.1:5180"},
 	}
 	if cfg.Issuer != want.Issuer || cfg.Listen != want.Listen || cfg.JWKSFile != want.JWKSFile ||
-		cfg.ServiceAPIKey != want.ServiceAPIKey || !slices.Equal(cfg.CORSOrigins, want.CORSOrigins) {
+		!slices.Equal(cfg.CORSOrigins, want.CORSOrigins) {
 		t.Fatalf("config = %+v, want %+v", cfg, want)
 	}
 }
@@ -82,16 +81,20 @@ func TestEnvExampleListsEveryVariableAndStarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{EnvIssuer, EnvListen, EnvJWKSFile, EnvCORSOrigins, EnvServiceAPIKey, EnvDatabaseURL,
+	for _, k := range []string{EnvIssuer, EnvListen, EnvJWKSFile, EnvCORSOrigins, EnvDatabaseURL,
 		EnvClientID, EnvClientSecret, EnvPublicURL, EnvPostLogoutURL, EnvSessionIdle, EnvWebDir, "SMOKE_SA_ID", "SMOKE_API_KEY"} {
 		if _, ok := file[k]; !ok {
 			t.Errorf(".env.example does not list %s", k)
 		}
 	}
-	for _, secret := range []string{EnvServiceAPIKey, EnvDatabaseURL, EnvClientSecret, "SMOKE_API_KEY"} {
+	for _, secret := range []string{EnvDatabaseURL, EnvClientSecret, "SMOKE_API_KEY"} {
 		if file[secret] != "" {
 			t.Errorf(".env.example holds a value for the secret %s", secret)
 		}
+	}
+	// The feed, the online check and the resolution of perms_ref need no credential of NICE.
+	if _, ok := file["NICE_SERVICE_API_KEY"]; ok {
+		t.Errorf(".env.example still lists NICE_SERVICE_API_KEY")
 	}
 	cfg, err := Load(env(map[string]string{EnvClientID: "cli_test", EnvClientSecret: "s3cret-client"}), "../../../.env.example")
 	if err != nil {

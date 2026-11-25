@@ -21,7 +21,7 @@ for cmd in curl jq; do
 done
 
 [[ -f .env ]] || fail ".env tidak ditemukan di $(pwd)." \
-  "Salin .env.example ke .env lalu isi kuncinya (checklist README langkah 2, 9, dan 10)."
+  "Salin .env.example ke .env lalu isi kuncinya (checklist README langkah 2 dan 9)."
 set -a
 # shellcheck source=/dev/null
 source ./.env
@@ -33,7 +33,7 @@ set +a
     "Buat OAuth client confidential untuk UI dan isi keduanya (checklist langkah 2)."
 [[ -n ${SMOKE_SA_ID:-} && -n ${SMOKE_API_KEY:-} ]] ||
   fail "SMOKE_SA_ID atau SMOKE_API_KEY kosong di .env." \
-    "Buat Service Account tenant beserta API key-nya (checklist langkah 10)."
+    "Buat Service Account tenant beserta API key-nya (checklist langkah 9)."
 
 nice=${NICE_ISSUER%/}
 listen=${LISTEN_ADDR:-127.0.0.1:8081}
@@ -91,12 +91,12 @@ if [[ $status != 200 ]]; then
   case $error in
     invalid_client)
       fail "NICE menolak kredensial Service Account: invalid_client." \
-        "Periksa checklist langkah 10: SMOKE_SA_ID harus id Service Account (sa_...) pemilik SMOKE_API_KEY," \
+        "Periksa checklist langkah 9: SMOKE_SA_ID harus id Service Account (sa_...) pemilik SMOKE_API_KEY," \
         "key belum dicabut atau kedaluwarsa, dan Service Account tidak dinonaktifkan." ;;
     invalid_scope)
       fail "NICE menolak scope nice:aud:nadi: invalid_scope $(field error_description)." \
         "Kemungkinan langkah yang terlewat: 3 (registrasi), 4 (impor), 5 (aktivasi service), 6 (entitlement organisasi)," \
-        "7 (aktivasi di project milik Service Account), atau 10 (project Service Account harus mengaktifkan nadi)." ;;
+        "7 (aktivasi di project milik Service Account), atau 9 (project Service Account harus mengaktifkan nadi)." ;;
     "")
       fail "permintaan token ke $nice/oauth/token gagal (HTTP $status)." ;;
     *)
@@ -115,7 +115,7 @@ if [[ $status != 200 ]]; then
   case $reason in
     permission_denied)
       fail "GET /devices dijawab 403 permission_denied: token tidak memuat nadi.devices.read." \
-        "Periksa checklist langkah 10: binding Service Account ke role nadi (mis. nadi.viewer) di project-nya." ;;
+        "Periksa checklist langkah 9: binding Service Account ke role nadi (mis. nadi.viewer) di project-nya." ;;
     wrong_issuer)
       fail "GET /devices dijawab 401 wrong_issuer: NICE_ISSUER di .env berbeda dengan iss token." \
         "Samakan dengan NICE_ISSUER di nice/.env lalu jalankan ulang service (checklist langkah 2)." ;;

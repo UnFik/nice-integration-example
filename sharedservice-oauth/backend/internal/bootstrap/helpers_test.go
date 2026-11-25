@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	testIssuer = "http://nice.test"
+	testIssuer = "https://nice.test"
 	testKID    = "test-key"
 	testOrigin = "http://localhost:5180"
 	// testClientID and testClientSecret are the confidential client of the UI.
@@ -136,9 +136,8 @@ func newTestEnvWith(t *testing.T, checker verify.AccessChecker, store testStore)
 	cfg := config.Config{Issuer: testIssuer, CORSOrigins: []string{testOrigin}}
 	vc := VerifierConfig(cfg, store, slog.New(slog.DiscardHandler))
 	vc.StaticJWKS = testJWKS(t)
-	if checker != nil {
-		vc.Checker = checker
-	}
+	// nice.test is a name, not an address: no test here reaches NICE, and without a checker the verifier fails closed.
+	vc.Checker = checker
 	v, err := verify.New(vc)
 	if err != nil {
 		t.Fatal(err)

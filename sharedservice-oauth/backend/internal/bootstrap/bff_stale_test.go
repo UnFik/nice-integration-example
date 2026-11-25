@@ -18,14 +18,14 @@ func staleEnv(t *testing.T) (*bffEnv, *browser) {
 	e := newBFFEnv(t, nil)
 	e.nice.set(func(f *bffNICE) {
 		f.iatShift = -10 * time.Second
-		f.changes = []map[string]string{{"seq": "1", "organization_id": orgA, "kind": "binding_deleted",
-			"principal_id": bffUser, "occurred_at": time.Now().Add(-5 * time.Second).UTC().Format(time.RFC3339)}}
+		f.changes = []map[string]string{{"seq": "1", "kind": "binding_deleted", "key": verify.FeedKey("p", bffUser, orgA),
+			"org_key": verify.FeedKey("o", orgA), "occurred_at": time.Now().Add(-5 * time.Second).UTC().Format(time.RFC3339)}}
 	})
 	b := e.browser()
 	b.login()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if err := e.v.StartFeed(ctx, verify.FeedConfig{APIKey: "nice_sk_test.secret"}); err != nil {
+	if err := e.v.StartFeed(ctx, verify.FeedConfig{}); err != nil {
 		t.Fatal(err)
 	}
 	return e, b

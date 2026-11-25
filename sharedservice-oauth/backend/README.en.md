@@ -4,7 +4,7 @@
 
 The backend of the [`sharedservice-oauth`](../README.en.md) example: a NICE SharedService in `nice_token` mode with the slug `nadi`, written in Go (`net/http`) with the reference library `nice-auth-sdk/verify`. Clients call this service directly with a NICE access token; NICE is not on the request path. The service verifies the token itself according to the [token verification contract](../../../nice/docs/token-verification.md), keeps data apart per organization and project, and checks sensitive operations online with NICE. The same backend also serves the UI in [`../web`](../web/README.en.md) as its backend-for-frontend (`/auth/*`, through `nice-auth-sdk/credentials`); how it works, the UI checklist and the browser tests are in [`../README.en.md`](../README.en.md).
 
-Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19, for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md). The `perms_ref` path ("Trying permissions that do not fit a token") was tested by hand on 2026-11-23 against `nice` `b9eb8b3` and SDK `4c9649d` (released as `v0.2.0`): a token of 154 permissions was issued with `perms_ref`, the UI read, created, and deleted a device, and NICE received one resolution per `nadi` process.
+Tested against nice revision: SDK `v0.1.0` and a local NICE server in Docker (the `nice:dev` image from `c7a3e33`), 2026-11-19, for the Bearer service: the image was rebuilt and `scripts/smoke.sh` passes. For the UI flow see [`../README.en.md`](../README.en.md). The `perms_ref` path ("Trying permissions that do not fit a token") was tested by hand on 2026-11-23 against `nice` `b9eb8b3` and SDK `4c9649d` (released as `v0.2.0`): a token of 154 permissions was issued with `perms_ref`, the UI read, created, and deleted a device, and NICE received one resolution per `nadi` process. The version that holds no NICE credential anymore (the SDK release after `v0.2.2`, not tagged yet, and NICE with the change `service-calls-without-service-account`): tested only with the unit tests against a fake NICE, 2026-11-25; the smoke test and the manual tests have not been run again.
 
 ## Contents
 
@@ -76,7 +76,8 @@ Behavior worth knowing:
 
 - The tenant is `nice_org_id` and the project is `prj` from the verified token, never a header, parameter, or body. An organization that calls for the first time gets a tenant at once (`ProvisionOnFirstUse`). A token without `prj` is answered `403 {"error":"insufficient_scope","error_description":"project_required"}`. Without `DATABASE_URL` data lives in memory only and is lost when the service stops.
 - A copy of the JWKS is kept at `JWKS_FILE`, so a service that restarts while NICE is down still verifies tokens that have not expired.
-- Without `NICE_SERVICE_API_KEY`, the service still runs and logs a warning at start: the access change feed is off (revocation takes effect only when the token expires, at most 30 minutes), `DELETE /devices/{id}` answers `503`, and so does every call with a token that carries `perms_ref`.
+- The access change feed, the online check of `DELETE /devices/{id}`, and the resolution of `perms_ref` are always on, with no configuration. The feed is read without a credential, because each change names only opaque keys (`key`, `org_key`) that the SDK computes from the claims of a token. The check and the resolution forward the token of the request itself to NICE as `Authorization: Bearer`, and NICE reads the caller, the organization, and the project from that token. The service holds no NICE credential besides the OAuth client of the UI. When NICE is unreachable or refuses the forwarded token (`401`), `DELETE /devices/{id}` answers `503`, and so does a token with `perms_ref` whose permission list is not kept yet (fail closed).
+- Each replica keeps its revocation marks in its own memory, so each replica opens its own long poll on the feed. NICE limits the long polls waiting at once per source address. Replicas behind one egress address (NAT) share that limit; a replica above it keeps getting `429 too_many_waits`, goes degraded (the log shows "the access change feed is silent"), and revocation takes effect only when the token expires.
 - A token whose permissions do not fit it carries `perms_ref` in place of `perms`. NICE issues one to a caller whose `nadi` permissions exceed the token size limit (6 KB). `verify.NewHTTPResolver` fetches the permission list from NICE (`POST /api/v1/permission-resolutions`) once for each distinct list, checks it against `perms_ref`, and keeps it in memory. After that the service decides alone, also for other callers that hold the same permissions. When the permissions of the caller changed since the token was issued, NICE answers that the reference does not match and the service answers `401 token_stale`, so the client refreshes. When NICE cannot be reached and the list is not kept yet, the service answers `503`.
 
 ## Data per organization and project
@@ -106,7 +107,7 @@ Without `act`, there is no `acted_by` field. The code reads it from `Claims.Acto
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk`, so this example builds without the `nice` repo. The code needs the SDK release after `v0.2.2` (not tagged yet; `go.mod` still says `v0.2.2` and is raised once that tag exists) and NICE with the change `service-calls-without-service-account`. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - A dev NICE running, at `http://localhost:8080` by default (`cd ../../../nice && make db && make migrate && make dev`). NICE at another address works too: put it in `NICE_ISSUER` in `.env` and in `NICE` in the checklist shell.
 
@@ -126,8 +127,7 @@ Copy `.env.example` to `.env`. The service reads `.env` from the directory it ru
 | `WEB_DIR` | `../web/dist` | the built UI served at `/`; empty in Docker, where the UI has a container of its own |
 | `DATABASE_URL` | empty | a `postgres://` URL for the devices; empty keeps them in memory. Its value is never printed |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | other browser origins allowed to call with a Bearer token, comma separated, for `public-client-pkce`. The UI of this example needs no CORS since it shares the origin |
-| `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role (step 9); turns on the feed, the online check, and the resolution of `perms_ref` |
-| `SMOKE_SA_ID`, `SMOKE_API_KEY` | empty | read only by `scripts/smoke.sh`: a tenant Service Account and its API key (step 10) |
+| `SMOKE_SA_ID`, `SMOKE_API_KEY` | empty | read only by `scripts/smoke.sh`: a tenant Service Account and its API key (step 9) |
 
 ## Run and test
 
@@ -212,7 +212,7 @@ make run
 curl -sS http://127.0.0.1:8081/healthz
 ```
 
-Leave it running in another terminal. For development with Vite, also set `PUBLIC_URL=http://localhost:5181`. The other keys in `.env` are filled in at steps 9 and 10.
+Leave it running in another terminal. For development with Vite, also set `PUBLIC_URL=http://localhost:5181`. The smoke keys in `.env` are filled in at step 9.
 
 ### 3. Register `nadi`
 
@@ -278,33 +278,7 @@ BINDING_ID=$(curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST 
 
 `nadi.editor` does not hold `nadi.devices.delete`; use `nadi.admin` to try deleting devices.
 
-### 9. Platform Service Account with `nice.service` (feed, online check, and `perms_ref`)
-
-The Platform Admin creates a Service Account in a project of the platform organization (create the project if there is none), gives it the `nice.service` role, then an API key (there is no `allowed_services`: the rights come from the role of the Service Account). Console: **Service Account** in the platform organization project, then **Pengguna platform** for the `nice.service` role.
-
-```bash
-PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
-PLATFORM_PROJECT_ID=$(curl -sS "$NICE/api/v1/organizations/$PLATFORM_ORG_ID/projects" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"slug":"service-readers","name":"Service readers"}' | jq -r .project.id)
-FEED_SA_ID=$(curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/service-accounts" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"nadi-feed","description":"Access change feed and online check for nadi"}' | jq -r .service_account.id)
-curl -sS "$NICE/api/v1/admin/role-bindings" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"principal_type\":\"PRINCIPAL_TYPE_SERVICE_ACCOUNT\",\"principal_id\":\"$FEED_SA_ID\",\"role\":\"nice.service\"}"
-curl -sS "$NICE/api/v1/projects/$PLATFORM_PROJECT_ID/api-keys" -X POST \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"service_account_id\":\"$FEED_SA_ID\",\"name\":\"nadi-feed\"}" | jq -r .key
-```
-
-The key is shown once. Put it in `NICE_SERVICE_API_KEY` in `.env`, then restart `make run`; the feed warning at start is gone.
-
-IAM learns about a new Service Account asynchronously, so a binding made right after creating it can be answered 400 `principal_not_in_org`. Wait a few seconds and repeat the binding; the same holds for step 10.
-
-For a deployment with several replicas, note that each replica keeps its revocation marks in its own memory, so each replica opens its own long poll on the feed. NICE lets one Service Account hold only 4 long polls at once. If a fifth or later replica uses a key of the same Service Account, it keeps getting `429 too_many_waits`. That replica then goes degraded: the log shows "the access change feed is silent", and revocation takes effect only when the token expires. So create one `nice.service` Service Account for each group of at most 4 replicas.
-
-### 10. Tenant Service Account for the smoke test
+### 9. Tenant Service Account for the smoke test
 
 Console: tenant project, **Service Account** (account and API key) and **IAM** (binding).
 
@@ -323,7 +297,9 @@ echo "$SMOKE_SA_ID"
 
 Put the Service Account id in `SMOKE_SA_ID` and the key in `SMOKE_API_KEY` in `.env`.
 
-### 11. Smoke
+IAM learns about a new Service Account asynchronously, so a binding made right after creating it can be answered 400 `principal_not_in_org`. Wait a few seconds and repeat the binding.
+
+### 10. Smoke
 
 ```bash
 scripts/smoke.sh
@@ -335,13 +311,13 @@ The script reads only `.env`, never prints a key or a token, and checks: NICE an
 |---|---|
 | no `.env`, NICE or service unreachable | 2 (and NICE must be running) |
 | `NICE_CLIENT_ID` or `NICE_CLIENT_SECRET` empty, `/auth/login` does not lead to NICE | 2 |
-| `invalid_client` | 10: the Service Account id does not own the key, the key is revoked or expired, the account is disabled |
-| `invalid_scope` | 3 to 7, or 10 (the project of the Service Account must activate `nadi`) |
-| `403 permission_denied` from the service | 10: binding of the Service Account to an nadi role |
+| `invalid_client` | 9: the Service Account id does not own the key, the key is revoked or expired, the account is disabled |
+| `invalid_scope` | 3 to 7, or 9 (the project of the Service Account must activate `nadi`) |
+| `403 permission_denied` from the service | 9: binding of the Service Account to an nadi role |
 
 ## Revocation test (optional)
 
-Needs `NICE_SERVICE_API_KEY` set (step 9). A user token issued before the binding is revoked is refused with `401 token_stale`.
+The feed is always on, so a user token issued before the binding is revoked is refused with `401 token_stale`.
 
 ```bash
 read -rsp 'Owner password: ' OWNER_PASSWORD; echo
@@ -357,7 +333,7 @@ The pause before revoking is needed because the feed works at one-second resolut
 
 ## Trying permissions that do not fit a token (optional)
 
-Needs `NICE_SERVICE_API_KEY` set (step 9). NICE limits a token to 6 KB, enough for about 65 to 100 permissions. A caller with more `nadi` permissions gets a token with `perms_ref` in place of `perms`, and `nadi` fetches the permission list from NICE once. `nadi` itself has only four permissions, so `scripts/large-catalog.sh` prints its document with extra operations that each declare one permission (`nadi.catalog_test.pNNN.read`). `nadi` does not serve those operations: they only make the permission list longer.
+NICE limits a token to 6 KB, enough for about 65 to 100 permissions. A caller with more `nadi` permissions gets a token with `perms_ref` in place of `perms`, and `nadi` fetches the permission list from NICE once. `nadi` itself has only four permissions, so `scripts/large-catalog.sh` prints its document with extra operations that each declare one permission (`nadi.catalog_test.pNNN.read`). `nadi` does not serve those operations: they only make the permission list longer.
 
 ```bash
 scripts/large-catalog.sh 150 > /tmp/nadi-large.json   # 154 permissions
@@ -377,6 +353,6 @@ printf '%s' "$USER_TOKEN" | wc -c                                               
 curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8081/devices -H "Authorization: Bearer $USER_TOKEN"   # 200
 ```
 
-When NICE runs with `NICE_METRICS_ENABLED=true`, `nice_oauth_service_tokens_total{permissions="reference"}` goes up for every such token, and `nice_permission_resolutions_total{result="match"}` goes up only once however often `GET /devices` is called: `nadi` keeps the permission list after the first fetch. Without `NICE_SERVICE_API_KEY`, the same call answers `503 permissions_unavailable`.
+When NICE runs with `NICE_METRICS_ENABLED=true`, `nice_oauth_service_tokens_total{permissions="reference"}` goes up for every such token, and `nice_permission_resolutions_total{result="match"}` goes up only once however often `GET /devices` is called: `nadi` keeps the permission list after the first fetch.
 
 To restore the catalog, import `docs/swagger.json` (or `/openapi.json`) again and apply it: the extra operations become `removed` and `nadi.admin` holds four permissions again.
