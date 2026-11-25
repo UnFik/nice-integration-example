@@ -101,6 +101,23 @@ curl -s http://127.0.0.1:8082/healthz        # {"status":"ok"}
 curl -s http://127.0.0.1:8082/openapi.json | jq '.paths | keys'
 ```
 
+## Running in a container
+
+The `Dockerfile` builds a Node 22 alpine image with the runtime dependencies only (no build, the `.ts` files run through type stripping) that runs as the `node` user. Image defaults: `LISTEN_ADDR=0.0.0.0:8082`, `KEYS_FILE=/data/keys.json` on the `/data` volume, and a `HEALTHCHECK` on `/healthz`.
+
+```bash
+cd example/shared-service-apikey
+docker build -t pengiriman .
+docker volume create pengiriman-data
+export SERVICE_CREDENTIAL         # value from .env; not written in the command arguments
+docker run -d --name pengiriman --restart unless-stopped --network <NICE-network> \
+  -e SERVICE_CREDENTIAL -v pengiriman-data:/data pengiriman
+```
+
+- **The service must stay private.** Only the NICE proxy may reach it (see [Warning](#warning-x-nice--headers)). Do not map the port to a public interface (`-p 8082:8082`) and do not publish it through Cloudflare Tunnel. Run it on the same Docker network as NICE, register the endpoint by container name (for example `http://pengiriman:8082`) in step 4, import from `http://pengiriman:8082/openapi.json` in step 5, and allow the address of that network in `NICE_OUTBOUND_ALLOW_CIDRS` (step 1).
+- **The data volume must persist.** `keys.json` holds the hash of every mirrored key. If it is lost, the service refuses every key NICE holds with 401, so every Service Account call through the proxy fails. Use a named volume or a backed-up bind mount, not the anonymous volume of `docker run --rm`.
+- Do not use `--env-file .env`: `LISTEN_ADDR=127.0.0.1:8082` in the dev `.env` makes the service unreachable from outside the container.
+
 ## Tests
 
 ```bash
@@ -188,7 +205,7 @@ curl -sS -X POST "$NICE/api/v1/shared-services/pengiriman/catalog-imports/$(jq -
   -d "$(jq '{hash}' <<<"$PREVIEW")"
 ```
 
-The preview must show exactly three operations: `listShipments` (`pengiriman.shipments.read`), `createShipment` (`pengiriman.shipments.create`), and `cancelShipment` (`pengiriman.shipments.cancel`), plus the roles `pengiriman.viewer` and `pengiriman.admin`.
+The preview must show exactly three operations: `listShipments` (`pengiriman.shipments.read`), `createShipment` (`pengiriman.shipments.create`), and `cancelShipment` (`pengiriman.shipments.cancel`), plus the roles `pengiriman.viewer`, `pengiriman.admin`, and `pengiriman.operator`. NICE derives the `pengiriman.operator` role (since `nice` `b65a3e3`) for every service other than `nice`: it has platform scope, holds every active permission of the service, and only a superadmin can grant it through `POST /api/v1/admin/role-bindings`. This example does not use it.
 
 ### 6. Activate the service
 
@@ -339,3 +356,4 @@ curl -sS -X POST "$NICE/pengiriman/shipments/<id>/cancel" -H "Authorization: Bea
 | `src/shipments.ts` | shipment routes with `createRoute` and `x-nice-permission` |
 | `src/app.ts` | app assembly, key operations, `/healthz`, `/openapi.json` |
 | `scripts/smoke.sh` | smoke test against NICE |
+| `Dockerfile` | container image (see [Running in a container](#running-in-a-container)) |

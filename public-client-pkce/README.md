@@ -2,9 +2,9 @@
 
 [English](README.en.md)
 
-SPA React yang menjadi **OAuth client tenant bertipe public** di NICE. SPA masuk dengan authorization code + PKCE (`S256`), menampilkan identitas user, lalu memanggil satu atau lebih service `nice_token` (mis. `inventaris` dari `../sharedservice-oauth/backend`) dengan **token terpisah per service** yang diambil lewat refresh token yang berotasi.
+SPA React yang menjadi **OAuth client tenant bertipe public** di NICE. SPA masuk dengan authorization code + PKCE (`S256`), menampilkan identitas user, lalu memanggil satu atau lebih service `nice_token` (mis. `nadi` dari `../sharedservice-oauth/backend`) dengan **token terpisah per service** yang diambil lewat refresh token yang berotasi.
 
-Diuji terhadap nice revisi: `c7a5086` (2026-11-13)
+Diuji terhadap nice revisi: `dev` `eb17848` (2026-11-25), hanya tes unit. Uji manual browser belum diulang di revisi ini.
 
 ### Client tenant atau service client
 
@@ -27,12 +27,13 @@ Pakai contoh ini untuk aplikasi milik satu organisasi. UI service first-party ya
 | `src/session.ts` | Perekat: login, muat ulang, identitas lewat userinfo, panggil service, sesi berakhir, logout |
 | `src/config.ts` | Validasi `VITE_*` |
 | `src/ui/`, `src/App.tsx` | Halaman. `App` memeriksa `location.pathname === "/callback"`, tanpa router |
+| `Dockerfile`, `nginx.conf` | Image container (lihat [Image container](#image-container)) |
 
 ## Prasyarat
 
 - Node 22.18+ dan npm.
 - NICE dev berjalan (`cd nice && make dev`, bawaannya `http://localhost:8080`). Untuk NICE di alamat lain, pakai alamat itu di `NICE` di bawah dan di `VITE_NICE_ISSUER`.
-- Service yang dipanggil sudah terdaftar, diimpor, aktif, di-entitle ke organisasi tenant, aktif di project, dan user yang akan login punya binding role di project itu. Untuk `inventaris`, ikuti langkah 1-8 di [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md), lalu jalankan servicenya (`make run`, port 8081).
+- Service yang dipanggil sudah terdaftar, diimpor, aktif, di-entitle ke organisasi tenant, aktif di project, dan user yang akan login punya binding role di project itu. Untuk `nadi`, ikuti langkah 1-8 di [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md); service dijalankan di langkah 2 (`make run`, port 8081).
 
 ## Checklist setup NICE
 
@@ -45,12 +46,12 @@ OWNER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD");
 
 ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $OWNER_TOKEN" | jq -r .organization.id)
 curl -sS "$NICE/api/v1/organizations/$ORG_ID/projects" -H "Authorization: Bearer $OWNER_TOKEN" | jq '.projects[] | {id, name}'
-PROJECT_ID=prj_...   # project tenant tempat inventaris aktif
+PROJECT_ID=prj_...   # project tenant tempat nadi aktif
 ```
 
 ### 1. Env NICE
 
-Pada NICE yang memuat change `add-delegated-nice-api` (`nice` `60939ed` atau sesudahnya), tidak ada yang perlu diubah: NICE mengizinkan origin redirect URI setiap OAuth client `public`, termasuk `http://localhost:5180` dari langkah 2, dalam 60 detik setelah client dibuat. `NICE_CORS_ALLOWED_ORIGINS` tidak wajib lagi.
+Pada NICE yang memuat change `add-delegated-nice-api` (setiap revisi di riwayat `nice` sekarang, sejak `5def119`), tidak ada yang perlu diubah: NICE mengizinkan origin redirect URI setiap OAuth client `public`, termasuk `http://localhost:5180` dari langkah 2, dalam 60 detik setelah client dibuat. `NICE_CORS_ALLOWED_ORIGINS` tidak wajib lagi.
 
 Pada NICE yang lebih lama, tambahkan origin SPA ke `nice/.env`, lalu jalankan ulang NICE. Daftar dipisah koma, persis tanpa garis miring di akhir:
 
@@ -85,7 +86,7 @@ Salin `client_id` ke `VITE_NICE_CLIENT_ID`; untuk OAuth client tenant nilainya s
 
 ### 3. Hak user
 
-User yang login di SPA harus anggota organisasi tenant itu dan punya binding role service di project (console: halaman **IAM**; untuk `inventaris` lihat langkah 8 README service). Tanpa binding, NICE tetap menerbitkan token, tetapi service menjawab 403 `permission_denied`.
+User yang login di SPA harus anggota organisasi tenant itu dan punya binding role service di project (console: halaman **IAM**; untuk `nadi` lihat langkah 8 README service). Tanpa binding, NICE tetap menerbitkan token, tetapi service menjawab 403 `permission_denied`.
 
 ## Konfigurasi SPA
 
@@ -103,7 +104,7 @@ cp .env.example .env    # lalu isi VITE_NICE_CLIENT_ID
 
 Konfigurasi yang hilang atau tidak sah menampilkan halaman galat yang menyebut nama variabelnya, dan login tidak dimulai. Variabel `VITE_*` dibaca saat `npm run dev` mulai; jalankan ulang setelah mengubah `.env`.
 
-Daftar service sengaja dibaca dari konfigurasi, bukan dari API NICE: token client non-sistem ditolak API NICE (`/api/v1`).
+Daftar service sengaja dibaca dari konfigurasi, bukan dari API NICE, supaya contoh ini hanya memakai endpoint OIDC NICE. Token client tenant tanpa `nice:aud:nice` ditolak API NICE (`/api/v1`). Client tenant bisa meminta token penawaran `nice:aud:nice` untuk sebagian API NICE (lihat `nice/docs/api.md`, "Token penawaran untuk tenant client"), tetapi `GET /api/v1/me/contexts` tetap menolaknya.
 
 ## Menjalankan dan tes
 
@@ -114,6 +115,28 @@ npm test           # Vitest, tanpa NICE
 npm run typecheck
 npm run build
 ```
+
+## Image container
+
+`Dockerfile` membangun SPA di stage Node lalu menyajikan `dist/` dengan `nginxinc/nginx-unprivileged:1.30-alpine` di port 8080 (`nginx.conf`): setiap path tanpa ekstensi, termasuk `/callback`, dijawab `index.html`; `index.html` tidak di-cache, dan aset ber-hash di `/assets/` di-cache satu tahun. TLS tidak diakhiri di container; letakkan di belakang proxy `https`, mis. Cloudflare Tunnel.
+
+Vite membakukan `VITE_*` ke bundle saat build, jadi konfigurasi diberikan sebagai build arg dan satu image hanya untuk satu konfigurasi. `.env` tidak ikut masuk konteks build.
+
+```bash
+cd example/public-client-pkce
+docker build -t public-client-pkce \
+  --build-arg VITE_NICE_ISSUER=https://auth.example.id \
+  --build-arg VITE_NICE_CLIENT_ID=cli_... \
+  --build-arg VITE_SERVICES='[{"slug":"nadi","endpoint":"https://nadi.example.id","path":"/devices"}]' \
+  .
+docker run -d --name public-client-pkce -p 127.0.0.1:8080:8080 public-client-pkce
+```
+
+- `VITE_NICE_ISSUER` harus sama persis dengan `NICE_ISSUER` NICE (skema, host, dan port). Host selain loopback wajib `https`.
+- `VITE_REDIRECT_URI` dan `VITE_POST_LOGOUT_REDIRECT_URI` boleh tidak diisi: bawaannya `<origin>/callback` dan `<origin>/` dari origin yang dibuka browser.
+- `endpoint` di `VITE_SERVICES` dipanggil langsung oleh browser, jadi harus alamat `https` publik service, bukan `127.0.0.1` atau nama container. Service itu harus mengizinkan origin SPA di CORS-nya (untuk `nadi`: `CORS_ALLOWED_ORIGINS=https://<host>`).
+- OAuth client (langkah 2) harus mendaftarkan redirect URI `https://<host>/callback` dan post-logout redirect URI `https://<host>/`, dengan `<host>` alamat publik SPA.
+- Tanpa `VITE_NICE_CLIENT_ID` atau dengan nilai yang tidak sah, build tetap berhasil, tetapi SPA menampilkan halaman "Konfigurasi belum benar" yang menyebut variabelnya.
 
 ## Cara kerja
 
@@ -139,7 +162,7 @@ SPA tidak memakai `localStorage` atau cookie. Klaim yang ditampilkan didekode di
 
 ## Syarat CORS service yang dipanggil
 
-Browser memanggil service langsung, dengan header `Authorization`, jadi service harus menjawab preflight `OPTIONS` dari origin `http://localhost:5180` dengan `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods` yang memuat `GET`, dan `Access-Control-Allow-Headers` yang memuat `Authorization`. Mengekspos `WWW-Authenticate` lewat `Access-Control-Expose-Headers` dianjurkan tetapi tidak wajib, karena SPA juga membaca `error_description` dari body. Contoh `inventaris` sudah melakukannya (`CORS_ALLOWED_ORIGINS=http://localhost:5180` di `.env`-nya).
+Browser memanggil service langsung, dengan header `Authorization`, jadi service harus menjawab preflight `OPTIONS` dari origin `http://localhost:5180` dengan `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods` yang memuat `GET`, dan `Access-Control-Allow-Headers` yang memuat `Authorization`. Mengekspos `WWW-Authenticate` lewat `Access-Control-Expose-Headers` dianjurkan tetapi tidak wajib, karena SPA juga membaca `error_description` dari body. Contoh `nadi` sudah melakukannya (`CORS_ALLOWED_ORIGINS=http://localhost:5180` di `.env`-nya).
 
 ## Mengapa SPA ini tidak memanggil service `api_key`
 
@@ -149,7 +172,7 @@ Service `api_key` dipanggil lewat proxy NICE di `<NICE>/<slug>/...`, dan CORS NI
 
 - **Tab yang diduplikasi mengakhiri kedua tab.** Menduplikasi tab menyalin `sessionStorage`, sehingga dua tab memegang refresh token yang sama. Begitu satu tab memakai refresh token yang sudah dirotasi tab lain, NICE menganggapnya replay dan mencabut seluruh keluarga token (audit `token.refresh_reuse`). Tab itu langsung mendapat `invalid_grant`, dan tab satunya mendapat `invalid_grant` pada refresh berikutnya, jadi **kedua** tab menampilkan "Sesi berakhir". Berbagi satu sesi di banyak tab di luar cakupan contoh ini.
 - Tanda tangan ID token tidak diverifikasi di SPA; token diterima langsung dari endpoint token, sesuai OIDC untuk alur kode.
-- Hanya untuk dev: tidak ada build produksi, kontainer, atau TLS.
+- TLS tidak ada di contoh ini; image container perlu proxy `https` di depannya (lihat [Image container](#image-container)).
 
 ## Checklist uji manual
 
@@ -162,14 +185,14 @@ Buka DevTools (tab Network dan Application > Session Storage). Setiap langkah me
 | 3 | Identitas | Lihat halaman utama | Bagian Identitas menampilkan `sub`, nama, email (dari `email`), dan `nice_org_id` dengan keterangan bahwa nilainya dari klaim access token client. `preferred_username` hanya muncul di jawaban userinfo lengkap. Kartu "Access token client" menampilkan `aud` berisi `client_id`. Ada keterangan "tidak diverifikasi oleh SPA" |
 | 4 | State tidak cocok | Buka `http://localhost:5180/callback?code=x&state=palsu` | Layar "Login gagal" dengan tombol **Masuk lagi**; tidak ada `POST /oauth/token` |
 | 5 | Login kedaluwarsa | Tekan **Masuk**, biarkan halaman login NICE lebih dari 30 menit, lalu login | SPA langsung mengarah ke authorize baru tanpa layar galat |
-| 6 | Panggil service | Tekan **Panggil** pada `inventaris` | Satu `POST /oauth/token` dengan `grant_type=refresh_token` dan `scope=openid profile email offline_access nice:aud:inventaris`, lalu `GET http://127.0.0.1:8081/items` dengan `Authorization: Bearer ...`. Panel menampilkan status 200 dan body. Kartu token `inventaris` muncul dengan `aud=inventaris` |
+| 6 | Panggil service | Tekan **Panggil** pada `nadi` | Satu `POST /oauth/token` dengan `grant_type=refresh_token` dan `scope=openid profile email offline_access nice:aud:nadi`, lalu `GET http://127.0.0.1:8081/devices` dengan `Authorization: Bearer ...`. Panel menampilkan status 200 dan body. Kartu token `nadi` muncul dengan `aud=nadi` |
 | 7 | Token dipakai lagi | Tekan **Panggil** lagi dalam satu menit | Tidak ada `POST /oauth/token` baru |
-| 8 | Service kedua dan dua sekaligus | Tambahkan entri kedua, mis. `inventaris` dengan `"project":"<PROJECT_ID>"`, jalankan ulang, muat ulang SPA, tekan **Panggil semua** | Setelah satu refresh scope dasar untuk identitas saat muat ulang, dua `POST /oauth/token` berurutan (yang kedua mulai setelah yang pertama selesai), `refresh_token` di request kedua sama dengan yang dijawab request pertama, keduanya 200, tidak ada redirect ke NICE |
-| 9 | Tanpa hak | Tambahkan entri dengan slug yang tidak aktif di project, mis. `{"slug":"belumada","endpoint":"http://127.0.0.1:8081","path":"/items"}`, lalu **Panggil** | Entri itu menampilkan `invalid_scope`; entri `inventaris` tetap bisa dipanggil |
-| 10 | Token basi | Dengan feed `inventaris` aktif (langkah 9 README service), panggil `inventaris`, ubah binding user di halaman **IAM**, tunggu beberapa detik, panggil lagi | `GET /items` pertama dijawab 401 `token_stale`, lalu satu `POST /oauth/token` dan satu `GET /items` ulang; panel menampilkan hasil pengulangan (mis. 200, atau 403 `permission_denied` bila binding dicabut) |
+| 8 | Service kedua dan dua sekaligus | Tambahkan entri kedua, mis. `nadi` dengan `"project":"<PROJECT_ID>"`, jalankan ulang, muat ulang SPA, tekan **Panggil semua** | Setelah satu refresh scope dasar untuk identitas saat muat ulang, dua `POST /oauth/token` berurutan (yang kedua mulai setelah yang pertama selesai), `refresh_token` di request kedua sama dengan yang dijawab request pertama, keduanya 200, tidak ada redirect ke NICE |
+| 9 | Tanpa hak | Tambahkan entri dengan slug yang tidak aktif di project, mis. `{"slug":"belumada","endpoint":"http://127.0.0.1:8081","path":"/devices"}`, lalu **Panggil** | Entri itu menampilkan `invalid_scope`; entri `nadi` tetap bisa dipanggil |
+| 10 | Token basi | Dengan feed `nadi` aktif (langkah 9 README service), panggil `nadi`, ubah binding user di halaman **IAM**, tunggu beberapa detik, panggil lagi | `GET /devices` pertama dijawab 401 `token_stale`, lalu satu `POST /oauth/token` dan satu `GET /devices` ulang; panel menampilkan hasil pengulangan (mis. 200, atau 403 `permission_denied` bila binding dicabut) |
 | 11 | Sesi berakhir | Di Session Storage, ubah `nice-example.refresh_token` menjadi `rusak`, lalu tekan **Panggil** pada entri yang belum punya token (atau muat ulang dulu) | `POST /oauth/token` dijawab `invalid_grant`; layar "Sesi berakhir" dengan **Masuk lagi**; tidak ada kunci `nice-example.*` tersisa |
-| 12 | NICE tidak terjangkau | Panggil `inventaris`, tunggu 11 menit, blokir `localhost:8080/oauth/token` di DevTools (Network request blocking) atau hentikan NICE, tekan **Panggil** | `POST /oauth/token` gagal, `GET /items` tetap dikirim dengan token lama dan dijawab 200, sesi tidak berakhir. Menekan lagi dalam 5 detik tidak mengirim `POST /oauth/token`. Setelah blokir dicabut, panggilan sesudah backoff mendapat token baru |
-| 13 | Muat ulang | Setelah memanggil `inventaris` (langkah 6), tekan F5 | Tetap di halaman utama tanpa redirect ke NICE. Satu `POST /oauth/token` dengan `grant_type=refresh_token` dan `scope=openid profile email offline_access` (tanpa `nice:aud`) dijawab 200, lalu satu `GET /oauth/userinfo`; bagian Identitas tampil lagi dengan email dan `nice_org_id`. Kartu "Access token client" menampilkan token baru dengan `aud` berisi `client_id`. Session Storage tetap hanya berisi `nice-example.refresh_token` dan `nice-example.id_token`. **Panggil** mengambil token service lewat refresh token |
+| 12 | NICE tidak terjangkau | Panggil `nadi`, tunggu 11 menit, blokir `localhost:8080/oauth/token` di DevTools (Network request blocking) atau hentikan NICE, tekan **Panggil** | `POST /oauth/token` gagal, `GET /devices` tetap dikirim dengan token lama dan dijawab 200, sesi tidak berakhir. Menekan lagi dalam 5 detik tidak mengirim `POST /oauth/token`. Setelah blokir dicabut, panggilan sesudah backoff mendapat token baru |
+| 13 | Muat ulang | Setelah memanggil `nadi` (langkah 6), tekan F5 | Tetap di halaman utama tanpa redirect ke NICE. Satu `POST /oauth/token` dengan `grant_type=refresh_token` dan `scope=openid profile email offline_access` (tanpa `nice:aud`) dijawab 200, lalu satu `GET /oauth/userinfo`; bagian Identitas tampil lagi dengan email dan `nice_org_id`. Kartu "Access token client" menampilkan token baru dengan `aud` berisi `client_id`. Session Storage tetap hanya berisi `nice-example.refresh_token` dan `nice-example.id_token`. **Panggil** mengambil token service lewat refresh token |
 | 14 | Tab ditutup | Tutup tab, buka `http://localhost:5180` di tab baru | Halaman **Masuk** (belum login) |
 | 15 | Logout | Tekan **Keluar** | `POST /oauth/revoke` dengan `token_type_hint=refresh_token`, lalu navigasi ke `/oauth/end_session?id_token_hint=...&post_logout_redirect_uri=http://localhost:5180/`; kembali ke halaman **Masuk**; tidak ada kunci `nice-example.*` |
 | 16 | Logout saat revoke gagal | Blokir `localhost:8080/oauth/revoke` di DevTools, login, tekan **Keluar** | Sama seperti langkah 15; revoke gagal tidak menahan logout |
