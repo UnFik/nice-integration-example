@@ -43,11 +43,11 @@ Kolom NICE adalah revisi server terlama yang punya fitur yang dipakai contoh. Ko
 
 | Contoh | Versi NICE minimum | SDK |
 |---|---|---|
-| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); jalur Bearer saja cukup `c7a5086` | `v0.2.2` |
+| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); jalur Bearer saja cukup `5def119` (awal riwayat `nice` sekarang) | `v0.2.2` |
 | `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy); role `pengiriman.operator` di pratinjau impor mulai `b65a3e3` | tidak dipakai |
 | `public-client-pkce` | `5def119` (commit tertua riwayat `nice` sekarang; sudah memuat `add-delegated-nice-api`, jadi `NICE_CORS_ALLOWED_ORIGINS` tidak perlu). Diuji dengan tes unit terhadap `dev` `eb17848` (2026-11-25) | tidak dipakai |
 | `agent-backend` | `5def119` (awal riwayat `nice` sekarang: token exchange, tanpa deklarasi dependensi service); diuji dengan tes unit terhadap `eb17848` | `v0.2.2` |
-| `service-account-client` | `c7a5086` (sama dengan jalur Bearer `sharedservice-oauth`) | `v0.2.2` |
+| `service-account-client` | `5def119` (sama dengan jalur Bearer `sharedservice-oauth`) | `v0.2.2` |
 
 ## Prasyarat
 
@@ -59,7 +59,7 @@ Kolom NICE adalah revisi server terlama yang punya fitur yang dipakai contoh. Ko
   |---|---|---|
   | `NICE_OUTBOUND_ALLOW_HTTP` | `true` | probe health dan proxy ke service `http://127.0.0.1` |
   | `NICE_OUTBOUND_ALLOW_CIDRS` | `127.0.0.0/8` | idem |
-  | `NICE_CORS_ALLOWED_ORIGINS` | tambahkan `http://localhost:5180` | SPA, hanya pada NICE sebelum `60939ed`; sesudahnya NICE mengizinkan origin redirect URI client `public` |
+  | `NICE_CORS_ALLOWED_ORIGINS` | tambahkan `http://localhost:5180` | SPA, hanya pada NICE di luar riwayat sekarang; sejak `5def119` NICE mengizinkan origin redirect URI client `public`, jadi biasanya tidak perlu |
 
 - Go 1.27 (contoh Go), Node 22.18+ dan npm (contoh TypeScript), `bash`, `curl`, dan `jq` (skrip smoke).
 

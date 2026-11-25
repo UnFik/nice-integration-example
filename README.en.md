@@ -43,11 +43,11 @@ The NICE column is the oldest server revision with the features the example uses
 
 | Example | Minimum NICE version | SDK |
 |---|---|---|
-| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); the Bearer path alone needs `c7a5086` | `v0.2.2` |
+| `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); the Bearer path alone needs `5def119` (the start of the current `nice` history) | `v0.2.2` |
 | `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy); the `pengiriman.operator` role in the import preview from `b65a3e3` | not used |
 | `public-client-pkce` | `5def119` (the oldest commit of the current `nice` history; it already has `add-delegated-nice-api`, so `NICE_CORS_ALLOWED_ORIGINS` is not needed). Unit tests against `dev` `eb17848` (2026-11-25) | not used |
 | `agent-backend` | `5def119` (the start of the current `nice` history: token exchange, no service dependency declarations); unit-tested against `eb17848` | `v0.2.2` |
-| `service-account-client` | `c7a5086` (the same as the Bearer path of `sharedservice-oauth`) | `v0.2.2` |
+| `service-account-client` | `5def119` (the same as the Bearer path of `sharedservice-oauth`) | `v0.2.2` |
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ The NICE column is the oldest server revision with the features the example uses
   |---|---|---|
   | `NICE_OUTBOUND_ALLOW_HTTP` | `true` | health probes and the proxy to `http://127.0.0.1` services |
   | `NICE_OUTBOUND_ALLOW_CIDRS` | `127.0.0.0/8` | same |
-  | `NICE_CORS_ALLOWED_ORIGINS` | add `http://localhost:5180` | the SPA, only on a NICE before `60939ed`; from then on NICE allows the redirect URI origin of `public` clients |
+  | `NICE_CORS_ALLOWED_ORIGINS` | add `http://localhost:5180` | the SPA, only on a NICE outside the current history; since `5def119` NICE allows the redirect URI origin of `public` clients, so it is usually not needed |
 
 - Go 1.27 (Go example), Node 22.18+ and npm (TypeScript examples), and `bash`, `curl`, and `jq` (smoke scripts).
 
