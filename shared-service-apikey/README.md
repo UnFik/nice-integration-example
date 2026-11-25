@@ -101,6 +101,23 @@ curl -s http://127.0.0.1:8082/healthz        # {"status":"ok"}
 curl -s http://127.0.0.1:8082/openapi.json | jq '.paths | keys'
 ```
 
+## Menjalankan di container
+
+`Dockerfile` membangun image Node 22 alpine berisi dependensi runtime saja (tanpa build, `.ts` dijalankan lewat type stripping) yang berjalan sebagai pengguna `node`. Bawaan image: `LISTEN_ADDR=0.0.0.0:8082`, `KEYS_FILE=/data/keys.json` di volume `/data`, dan `HEALTHCHECK` ke `/healthz`.
+
+```bash
+cd example/shared-service-apikey
+docker build -t pengiriman .
+docker volume create pengiriman-data
+export SERVICE_CREDENTIAL         # nilainya dari .env; tidak ditulis di argumen perintah
+docker run -d --name pengiriman --restart unless-stopped --network <jaringan-NICE> \
+  -e SERVICE_CREDENTIAL -v pengiriman-data:/data pengiriman
+```
+
+- **Service harus tetap privat.** Hanya proxy NICE yang boleh menjangkaunya (lihat [Peringatan](#peringatan-header-x-nice-)). Jangan memetakan port ke antarmuka publik (`-p 8082:8082`) dan jangan mempublikasikannya lewat Cloudflare Tunnel. Jalankan di jaringan Docker yang sama dengan NICE, daftarkan endpoint dengan nama container (mis. `http://pengiriman:8082`) di langkah 4, impor dari `http://pengiriman:8082/openapi.json` di langkah 5, dan izinkan alamat jaringan itu di `NICE_OUTBOUND_ALLOW_CIDRS` (langkah 1).
+- **Volume data harus bertahan.** `keys.json` menyimpan hash setiap mirrored key. Bila hilang, service menolak semua key yang dipegang NICE dengan 401, sehingga setiap panggilan Service Account lewat proxy gagal. Pakai volume bernama atau bind mount yang dicadangkan, bukan volume anonim dari `docker run --rm`.
+- Jangan memakai `--env-file .env`: `LISTEN_ADDR=127.0.0.1:8082` di `.env` dev membuat service tidak terjangkau dari luar container.
+
 ## Tes
 
 ```bash
@@ -188,7 +205,7 @@ curl -sS -X POST "$NICE/api/v1/shared-services/pengiriman/catalog-imports/$(jq -
   -d "$(jq '{hash}' <<<"$PREVIEW")"
 ```
 
-Pratinjau harus menampilkan tepat tiga operasi: `listShipments` (`pengiriman.shipments.read`), `createShipment` (`pengiriman.shipments.create`), dan `cancelShipment` (`pengiriman.shipments.cancel`), serta role `pengiriman.viewer` dan `pengiriman.admin`.
+Pratinjau harus menampilkan tepat tiga operasi: `listShipments` (`pengiriman.shipments.read`), `createShipment` (`pengiriman.shipments.create`), dan `cancelShipment` (`pengiriman.shipments.cancel`), serta role `pengiriman.viewer`, `pengiriman.admin`, dan `pengiriman.operator`. Role `pengiriman.operator` diturunkan NICE (sejak `nice` `b65a3e3`) untuk setiap service selain `nice`: berscope platform, berisi semua izin aktif service, dan hanya bisa diberikan superadmin lewat `POST /api/v1/admin/role-bindings`. Contoh ini tidak memakainya.
 
 ### 6. Aktifkan service
 
@@ -339,3 +356,4 @@ curl -sS -X POST "$NICE/pengiriman/shipments/<id>/cancel" -H "Authorization: Bea
 | `src/shipments.ts` | rute pengiriman dengan `createRoute` dan `x-nice-permission` |
 | `src/app.ts` | perakitan aplikasi, operasi key, `/healthz`, `/openapi.json` |
 | `scripts/smoke.sh` | uji smoke terhadap NICE |
+| `Dockerfile` | image container (lihat [Menjalankan di container](#menjalankan-di-container)) |
