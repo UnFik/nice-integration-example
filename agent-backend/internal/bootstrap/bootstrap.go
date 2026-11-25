@@ -78,7 +78,7 @@ func NewCallService(cfg config.Config, hc *http.Client, log *slog.Logger) (*call
 	}
 	return &callusecase.Service{
 		Sender:     sender,
-		Bases:      map[domain.Target]string{domain.Inventaris: cfg.InventarisURL},
+		Bases:      map[domain.Target]string{domain.Nadi: cfg.NadiURL},
 		ClientVars: config.EnvClientID + " and " + config.EnvClientSecret,
 		Log:        log,
 	}, nil

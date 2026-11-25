@@ -23,7 +23,7 @@ func Exchange(t domain.Target, err error, clientVars string) *calldto.Failure {
 		case "access_denied":
 			f.Message = fmt.Sprintf("NICE refused a token for %s in that organization: the user is not an active member of it, the organization is not active, or it does not use %s or agen", t, t)
 		case "invalid_scope":
-			f.Message = fmt.Sprintf("NICE refused a token for %s in that context: %s is not a dependency of agen or not active, or the project is not active in that organization or does not use %s", t, t, t)
+			f.Message = fmt.Sprintf("NICE refused a token for %s in that context: %s is not active, or the project is not active in that organization or does not use %s", t, t, t)
 		case "invalid_grant":
 			f.Message = invalidGrant(grant.Description)
 		case "invalid_client", "unauthorized_client":

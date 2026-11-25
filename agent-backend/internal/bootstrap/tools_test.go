@@ -49,7 +49,7 @@ func callTool(t *testing.T, s *mcp.ClientSession, name string, args map[string]a
 	return res, out
 }
 
-func TestToolListHasTheTwoInventarisToolsAndNothingSensitive(t *testing.T) {
+func TestToolListHasTheTwoNadiToolsAndNothingSensitive(t *testing.T) {
 	e := newTestEnv(t)
 	res, err := e.connect(e.userToken(orgA, prjP)).ListTools(context.Background(), nil)
 	if err != nil {
@@ -77,21 +77,21 @@ func TestToolListHasTheTwoInventarisToolsAndNothingSensitive(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := []string{"inventaris_create_item", "inventaris_list_items"}
+	want := []string{"nadi_create_device", "nadi_list_devices"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}
 }
 
-func TestToolListHasNoTargetThatIsNotInventaris(t *testing.T) {
+func TestToolListHasNoTargetThatIsNotNadi(t *testing.T) {
 	e := newTestEnv(t)
 	res, err := e.connect(e.userToken(orgA, prjP)).ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tool := range res.Tools {
-		if !strings.HasPrefix(tool.Name, string(domain.Inventaris)+"_") {
-			t.Errorf("tool %s targets something other than inventaris", tool.Name)
+		if !strings.HasPrefix(tool.Name, string(domain.Nadi)+"_") {
+			t.Errorf("tool %s targets something other than nadi", tool.Name)
 		}
 	}
 }
@@ -100,13 +100,13 @@ func TestEveryToolInTheContextOfTheUserToken(t *testing.T) {
 	e := newTestEnv(t)
 	s := e.connect(e.userToken(orgA, prjP))
 
-	_, item := callTool(t, s, "inventaris_create_item", map[string]any{"name": "Kabel UTP", "quantity": 3})
-	if item == nil || item["name"] != "Kabel UTP" || item["created_by"] != testUser || item["acted_by"] != testClientID {
-		t.Fatalf("created item = %v, want created_by the user and acted_by the agent's client", item)
+	_, device := callTool(t, s, "nadi_create_device", map[string]any{"name": "Sensor Suhu", "serial_number": "SN-1", "status": "active"})
+	if device == nil || device["name"] != "Sensor Suhu" || device["created_by"] != testUser || device["acted_by"] != testClientID {
+		t.Fatalf("created device = %v, want created_by the user and acted_by the agent's client", device)
 	}
-	_, items := callTool(t, s, "inventaris_list_items", nil)
-	if list, _ := items["items"].([]any); len(list) != 1 || items["org"] != orgA || items["project"] != prjP {
-		t.Fatalf("items = %v", items)
+	_, devices := callTool(t, s, "nadi_list_devices", nil)
+	if list, _ := devices["devices"].([]any); len(list) != 1 || devices["org"] != orgA || devices["project"] != prjP {
+		t.Fatalf("devices = %v", devices)
 	}
 	for _, ex := range e.nice.Exchanges() {
 		if strings.Contains(ex.Scope, "nice:org") || strings.Contains(ex.Scope, "nice:prj") {
@@ -114,7 +114,7 @@ func TestEveryToolInTheContextOfTheUserToken(t *testing.T) {
 		}
 	}
 	if n := len(e.nice.Exchanges()); n != 1 {
-		t.Fatalf("exchanges = %d, want 1 (one for inventaris, then reused)", n)
+		t.Fatalf("exchanges = %d, want 1 (one for nadi, then reused)", n)
 	}
 	noPassthrough(t, e)
 }
@@ -122,12 +122,12 @@ func TestEveryToolInTheContextOfTheUserToken(t *testing.T) {
 func TestToolInAnotherOrganizationOfTheUser(t *testing.T) {
 	e := newTestEnv(t)
 	s := e.connect(e.userToken(orgA, prjP))
-	_, items := callTool(t, s, "inventaris_list_items", map[string]any{"organization_id": orgB, "project_id": prjQ})
-	if items == nil || items["org"] != orgB || items["project"] != prjQ {
-		t.Fatalf("items = %v, want the context %s/%s", items, orgB, prjQ)
+	_, devices := callTool(t, s, "nadi_list_devices", map[string]any{"organization_id": orgB, "project_id": prjQ})
+	if devices == nil || devices["org"] != orgB || devices["project"] != prjQ {
+		t.Fatalf("devices = %v, want the context %s/%s", devices, orgB, prjQ)
 	}
 	ex := e.nice.Exchanges()
-	if len(ex) != 1 || ex[0].Scope != "nice:aud:inventaris nice:org:"+orgB+" nice:prj:"+prjQ {
+	if len(ex) != 1 || ex[0].Scope != "nice:aud:nadi nice:org:"+orgB+" nice:prj:"+prjQ {
 		t.Fatalf("exchanges = %+v", ex)
 	}
 	noPassthrough(t, e)
@@ -136,17 +136,17 @@ func TestToolInAnotherOrganizationOfTheUser(t *testing.T) {
 func TestToolInAnOrganizationThatIsNotTheUsers(t *testing.T) {
 	e := newTestEnv(t)
 	s := e.connect(e.userToken(orgA, prjP))
-	res, _ := callTool(t, s, "inventaris_list_items", map[string]any{"organization_id": orgC, "project_id": prjQ})
+	res, _ := callTool(t, s, "nadi_list_devices", map[string]any{"organization_id": orgC, "project_id": prjQ})
 	wantToolError(t, res, nil, "access_denied")
 	if n := len(e.inv.Received()); n != 0 {
-		t.Fatalf("inventaris was called %d times", n)
+		t.Fatalf("nadi was called %d times", n)
 	}
 }
 
 func TestToolNeedsAProjectInAnotherOrganization(t *testing.T) {
 	e := newTestEnv(t)
 	s := e.connect(e.userToken(orgA, prjP))
-	res, _ := callTool(t, s, "inventaris_list_items", map[string]any{"organization_id": orgB})
+	res, _ := callTool(t, s, "nadi_list_devices", map[string]any{"organization_id": orgB})
 	wantToolError(t, res, nil, "project_id")
 	if n := len(e.nice.Exchanges()); n != 0 {
 		t.Fatalf("exchanges = %d, want none", n)
@@ -160,7 +160,7 @@ func TestToolRefusesIDsThatWouldAddScopes(t *testing.T) {
 		{"organization_id": orgB + " nice:aud:nice", "project_id": prjQ},
 		{"project_id": prjQ + " nice:org:" + orgC},
 	} {
-		res, _ := callTool(t, s, "inventaris_list_items", args)
+		res, _ := callTool(t, s, "nadi_list_devices", args)
 		wantToolError(t, res, nil, "invalid_argument")
 	}
 	if n := len(e.nice.Exchanges()); n != 0 {
@@ -170,17 +170,44 @@ func TestToolRefusesIDsThatWouldAddScopes(t *testing.T) {
 
 func TestToolWithoutThePermissionInTheService(t *testing.T) {
 	e := newTestEnv(t)
-	e.nice.perms["inventaris"] = []string{"inventaris.items.read"}
+	e.nice.perms["nadi"] = []string{"nadi.devices.read"}
 	s := e.connect(e.userToken(orgA, prjP))
-	res, _ := callTool(t, s, "inventaris_create_item", map[string]any{"name": "Kabel", "quantity": 1})
+	res, _ := callTool(t, s, "nadi_create_device", map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "active"})
 	wantToolError(t, res, nil, "permission_denied")
+}
+
+func TestCreateDeviceSendsLocationOnlyWhenGiven(t *testing.T) {
+	e := newTestEnv(t)
+	s := e.connect(e.userToken(orgA, prjP))
+	_, without := callTool(t, s, "nadi_create_device", map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "active"})
+	if _, ok := without["location"]; without == nil || ok {
+		t.Fatalf("device = %v, want no location sent", without)
+	}
+	_, with := callTool(t, s, "nadi_create_device",
+		map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "maintenance", "location": "Gudang A"})
+	if with == nil || with["location"] != "Gudang A" || with["status"] != "maintenance" || with["serial_number"] != "SN-2" {
+		t.Fatalf("device = %v", with)
+	}
+}
+
+func TestCreateDeviceRefusesAStatusNadiDoesNotKnow(t *testing.T) {
+	e := newTestEnv(t)
+	s := e.connect(e.userToken(orgA, prjP))
+	res, err := s.CallTool(context.Background(), &mcp.CallToolParams{Name: "nadi_create_device",
+		Arguments: map[string]any{"name": "Sensor", "serial_number": "SN-1", "status": "broken"}})
+	if err == nil && !res.IsError {
+		t.Fatalf("status broken was accepted: %+v", res)
+	}
+	if n := len(e.nice.Exchanges()); n != 0 {
+		t.Fatalf("exchanges = %d, want none", n)
+	}
 }
 
 // The README calls a tool with one curl request: no session, no initialize, a plain JSON answer.
 func TestToolCallInOneHTTPRequest(t *testing.T) {
 	e := newTestEnv(t)
 	resp := e.post(mcpadapter.MCPPath, e.userToken(orgA, prjP),
-		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"inventaris_list_items","arguments":{}}}`)
+		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"nadi_list_devices","arguments":{}}}`)
 	if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		t.Fatalf("status %d, content type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}

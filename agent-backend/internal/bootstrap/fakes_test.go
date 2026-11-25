@@ -17,8 +17,9 @@ import (
 )
 
 // fakeNICE plays the part of NICE the agent talks to: the token endpoint (token exchange only). Its rules follow
-// docs/api.md, "Token exchange: backend atas nama user", in the small: confidential actor, subject for agen, target
-// among the dependencies, organization of the user, project of that organization.
+// docs/api.md, "Token exchange: backend atas nama user", in the small: confidential actor, subject for agen, an active
+// target, organization of the user, project of that organization. The token carries the user's permissions in the
+// target project: NICE sets no ceiling for the actor.
 type fakeNICE struct {
 	t       *testing.T
 	srv     *httptest.Server
@@ -27,7 +28,7 @@ type fakeNICE struct {
 	mu sync.Mutex
 	// projects are the organizations the user belongs to and their projects.
 	projects map[string][]string
-	// perms are the permissions an exchanged token carries per target.
+	// perms are the user's permissions per target; a target without an entry is not an active service.
 	perms map[string][]string
 	// refuse forces an answer of the token endpoint for a target.
 	refuse    map[string]refusal
@@ -50,7 +51,7 @@ func newFakeNICE(t *testing.T) *fakeNICE {
 		t:        t,
 		projects: map[string][]string{orgA: {prjP}, orgB: {prjQ}},
 		perms: map[string][]string{
-			"inventaris": {"inventaris.items.read", "inventaris.items.create"},
+			"nadi": {"nadi.devices.read", "nadi.devices.create"},
 		},
 		refuse: map[string]refusal{},
 	}
@@ -138,7 +139,7 @@ func (f *fakeNICE) token(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.exchanges = append(f.exchanges, call)
 	forced, refused := f.refuse[call.Audience]
-	perms, dependency := f.perms[call.Audience]
+	perms, active := f.perms[call.Audience]
 	projects, member := f.projects[call.Org]
 	hook := f.onExchange
 	f.mu.Unlock()
@@ -150,8 +151,8 @@ func (f *fakeNICE) token(w http.ResponseWriter, r *http.Request) {
 	case refused:
 		tokenError(w, forced.status, forced.code, forced.description)
 		return
-	case !dependency:
-		tokenError(w, 400, "invalid_scope", "the service is not a dependency of agen")
+	case !active:
+		tokenError(w, 400, "invalid_scope", "the service is not active")
 		return
 	case !member:
 		tokenError(w, 400, "access_denied", "the user is not a member of the organization")
@@ -174,7 +175,7 @@ func (f *fakeNICE) token(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// fakeService is a nice_token service with one collection, verified with niceauth/verify as inventaris does.
+// fakeService is a nice_token service with one collection, verified with niceauth/verify as nadi does.
 type fakeService struct {
 	t          *testing.T
 	slug       string
@@ -191,7 +192,7 @@ type fakeService struct {
 }
 
 func newFakeService(t *testing.T, issuer, slug string) *fakeService {
-	s := &fakeService{t: t, slug: slug, collection: "items"}
+	s := &fakeService{t: t, slug: slug, collection: "devices"}
 	v, err := verify.New(verify.Config{Issuer: issuer, Service: slug, StaticJWKS: testJWKS(t), Log: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)

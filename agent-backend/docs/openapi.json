@@ -3,7 +3,7 @@
   "info": {
     "title": "Agen",
     "version": "1.0",
-    "description": "Example MCP server of NICE (auth mode nice_token). Its tools call inventaris on behalf of the user with tokens from token exchange. Every request needs a NICE access token for the audience agen."
+    "description": "Example MCP server of NICE (auth mode nice_token). Its tools call nadi (IoT devices) on behalf of the user with tokens from token exchange. Every request needs a NICE access token for the audience agen."
   },
   "x-nice-roles": [
     {

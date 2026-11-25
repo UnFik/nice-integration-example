@@ -29,10 +29,10 @@ func writeDotEnv(t *testing.T, content string) string {
 
 func fullEnv() map[string]string {
 	return map[string]string{
-		config.EnvIssuer:        "http://localhost:8080",
-		config.EnvClientID:      "agen-backend-id",
-		config.EnvClientSecret:  "secret-from-env",
-		config.EnvInventarisURL: "http://127.0.0.1:8081",
+		config.EnvIssuer:       "http://localhost:8080",
+		config.EnvClientID:     "agen-backend-id",
+		config.EnvClientSecret: "secret-from-env",
+		config.EnvNadiURL:      "http://127.0.0.1:8081",
 	}
 }
 
@@ -47,7 +47,7 @@ func without(m map[string]string, key string) map[string]string {
 }
 
 func TestRunStopsAndNamesEachMissingVariable(t *testing.T) {
-	for _, key := range []string{config.EnvIssuer, config.EnvClientID, config.EnvClientSecret, config.EnvInventarisURL} {
+	for _, key := range []string{config.EnvIssuer, config.EnvClientID, config.EnvClientSecret, config.EnvNadiURL} {
 		missing := filepath.Join(t.TempDir(), ".env")
 		err := Run(context.Background(), env(without(fullEnv(), key)), missing, slog.New(slog.DiscardHandler))
 		if err == nil || !strings.Contains(err.Error(), key) {

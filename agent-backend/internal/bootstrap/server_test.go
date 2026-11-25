@@ -48,7 +48,7 @@ func TestMCPWithoutTokenPointsToTheResourceMetadata(t *testing.T) {
 
 func TestMCPRefusesATokenForAnotherService(t *testing.T) {
 	e := newTestEnv(t)
-	tok := sign(t, userClaims(e.issuer, "inventaris", orgA, prjP, domain.PermUse))
+	tok := sign(t, userClaims(e.issuer, "nadi", orgA, prjP, domain.PermUse))
 	resp := e.post(mcpadapter.MCPPath, tok, initialize)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)

@@ -13,7 +13,7 @@ const PermUse = ServiceSlug + ".mcp.use"
 // Target is a service the tools call. Its slug is the audience of the exchanged token.
 type Target string
 
-const Inventaris Target = "inventaris"
+const Nadi Target = "nadi"
 
 var (
 	orgID     = regexp.MustCompile(`^org_[A-Za-z0-9-]{1,64}$`)

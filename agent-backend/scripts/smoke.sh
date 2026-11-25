@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test of the agen example against a NICE set up with the README checklist: the agent answers, /mcp without a
 # token points to the resource metadata, the metadata names NICE, and, with AGENT_USER_TOKEN in the environment
-# (checklist step 11), the two tools are listed and inventaris_list_items succeeds through a token exchange.
+# (checklist step 10), the two tools are listed and nadi_list_devices succeeds through a token exchange.
 # It reads .env and AGENT_USER_TOKEN only and never prints a token or the secret; neither reaches the argv of curl.
 set -euo pipefail
 
@@ -20,7 +20,7 @@ for cmd in curl jq; do
 done
 
 user_token=${AGENT_USER_TOKEN:-}
-[[ -f .env ]] || fail ".env tidak ditemukan di $(pwd)." "Salin .env.example ke .env lalu isi client agen-backend (checklist langkah 8)."
+[[ -f .env ]] || fail ".env tidak ditemukan di $(pwd)." "Salin .env.example ke .env lalu isi client agen-backend (checklist langkah 7)."
 set -a
 # shellcheck source=/dev/null
 source ./.env
@@ -53,7 +53,7 @@ status=$(req "$nice/.well-known/openid-configuration")
 ok "NICE menjawab di $nice"
 
 status=$(req "$agent/healthz")
-[[ $status == 200 ]] || fail "agen tidak terjangkau di $agent (HTTP $status)." "Jalankan agen dengan 'make run' (checklist langkah 10)."
+[[ $status == 200 ]] || fail "agen tidak terjangkau di $agent (HTTP $status)." "Jalankan agen dengan 'make run' (checklist langkah 9)."
 ok "agen menjawab /healthz di $agent"
 
 status=$(req "$agent/mcp" -X POST -H 'Content-Type: application/json' -d '{}')
@@ -68,7 +68,7 @@ status=$(req "$agent/.well-known/oauth-protected-resource")
 ok "metadata resource menunjuk $nice"
 
 if [[ -z $user_token ]]; then
-  printf 'lewat  uji tool: AGENT_USER_TOKEN kosong (checklist langkah 11)\n'
+  printf 'lewat  uji tool: AGENT_USER_TOKEN kosong (checklist langkah 10)\n'
   exit 0
 fi
 
@@ -76,26 +76,26 @@ status=$(mcp '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 if [[ $status != 200 ]]; then
   reason=$(jq -r '.error_description // empty' "$body" 2>/dev/null || true)
   case $status:$reason in
-    401:wrong_audience) fail "token user bukan untuk agen (401 wrong_audience)." "Minta token lewat client agen-user dengan scope nice:aud:agen (checklist langkah 7 dan 11)." ;;
-    401:*) fail "token user ditolak: 401 $reason." "Ambil token baru (checklist langkah 11)." ;;
-    403:*) fail "token user tanpa agen.mcp.use: 403 $reason." "Beri user role agen.user di project token (checklist langkah 9)." ;;
+    401:wrong_audience) fail "token user bukan untuk agen (401 wrong_audience)." "Minta token lewat client agen-user dengan scope nice:aud:agen (checklist langkah 6 dan 10)." ;;
+    401:*) fail "token user ditolak: 401 $reason." "Ambil token baru (checklist langkah 10)." ;;
+    403:*) fail "token user tanpa agen.mcp.use: 403 $reason." "Beri user role agen.user di project token (checklist langkah 8)." ;;
     *) fail "tools/list dijawab HTTP $status." ;;
   esac
 fi
 tools=$(jq -r '[.result.tools[].name] | sort | join(",")' "$body")
-[[ $tools == inventaris_create_item,inventaris_list_items ]] ||
+[[ $tools == nadi_create_device,nadi_list_devices ]] ||
   fail "tools/list memuat $tools, seharusnya dua tool contoh."
 ok "tools/list: dua tool"
 
-status=$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"inventaris_list_items","arguments":{}}}')
+status=$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nadi_list_devices","arguments":{}}}')
 [[ $status == 200 ]] || fail "tools/call dijawab HTTP $status."
 if [[ $(jq -r '.result.isError // false' "$body") == true ]]; then
   text=$(jq -r '.result.content[0].text' "$body")
   case $text in
-    invalid_client*) fail "$text" "Periksa NICE_CLIENT_ID dan NICE_CLIENT_SECRET (checklist langkah 8)." ;;
-    invalid_scope*) fail "$text" "Periksa dependensi agen (langkah 4) dan aktivasi inventaris di project token." ;;
-    invalid_grant*) fail "$text" "Token user hampir habis, basi, atau sesinya berakhir: ambil token baru (checklist langkah 11)." ;;
+    invalid_client*) fail "$text" "Periksa NICE_CLIENT_ID dan NICE_CLIENT_SECRET (checklist langkah 7)." ;;
+    invalid_scope*) fail "$text" "Periksa bahwa nadi aktif di project token (langkah 7 README sharedservice-oauth/backend)." ;;
+    invalid_grant*) fail "$text" "Token user hampir habis, basi, atau sesinya berakhir: ambil token baru (checklist langkah 10)." ;;
     *) fail "$text" ;;
   esac
 fi
-ok "inventaris_list_items lewat token exchange: $(jq -r '.result.structuredContent.items | length' "$body") barang"
+ok "nadi_list_devices lewat token exchange: $(jq -r '.result.structuredContent.devices | length' "$body") perangkat"

@@ -15,7 +15,7 @@ const (
 	EnvIssuer        = "NICE_ISSUER"
 	EnvClientID      = "NICE_CLIENT_ID"
 	EnvClientSecret  = "NICE_CLIENT_SECRET"
-	EnvInventarisURL = "INVENTARIS_URL"
+	EnvNadiURL       = "NADI_URL"
 	EnvListen        = "LISTEN_ADDR"
 	EnvPublicURL     = "PUBLIC_URL"
 	EnvJWKSFile      = "JWKS_FILE"
@@ -36,9 +36,9 @@ type Config struct {
 	// token exchange. The secret goes to the token endpoint of NICE only.
 	ClientID     string
 	ClientSecret string
-	// InventarisURL is called directly with the exchanged token.
-	InventarisURL string
-	Listen        string
+	// NadiURL is called directly with the exchanged token. The SDK refuses http unless the host is a loopback.
+	NadiURL string
+	Listen  string
 	// PublicURL is the address MCP clients use; the resource of the metadata is PublicURL + /mcp.
 	PublicURL string
 	JWKSFile  string
@@ -51,7 +51,7 @@ type Config struct {
 func (c Config) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("issuer", c.Issuer), slog.String("client_id", c.ClientID),
-		slog.String("inventaris_url", c.InventarisURL),
+		slog.String("nadi_url", c.NadiURL),
 		slog.String("listen", c.Listen), slog.String("public_url", c.PublicURL))
 }
 
@@ -77,7 +77,7 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		Issuer:        strings.TrimRight(get(EnvIssuer, ""), "/"),
 		ClientID:      get(EnvClientID, ""),
 		ClientSecret:  get(EnvClientSecret, ""),
-		InventarisURL: strings.TrimRight(get(EnvInventarisURL, ""), "/"),
+		NadiURL:       strings.TrimRight(get(EnvNadiURL, ""), "/"),
 		Listen:        get(EnvListen, defaultListen),
 		PublicURL:     strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
 		JWKSFile:      get(EnvJWKSFile, defaultJWKSFile),
@@ -87,7 +87,7 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		{EnvIssuer, cfg.Issuer, "the issuer of NICE, e.g. http://localhost:8080"},
 		{EnvClientID, cfg.ClientID, "the client_id of the confidential service client agen-backend"},
 		{EnvClientSecret, cfg.ClientSecret, "the secret of the confidential service client agen-backend"},
-		{EnvInventarisURL, cfg.InventarisURL, "the address of inventaris, e.g. http://127.0.0.1:8081"},
+		{EnvNadiURL, cfg.NadiURL, "the address of nadi, e.g. http://127.0.0.1:8081"},
 	}
 	for _, r := range required {
 		if r.value == "" {
@@ -95,7 +95,7 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		}
 	}
 	for _, u := range []struct{ key, value string }{
-		{EnvIssuer, cfg.Issuer}, {EnvInventarisURL, cfg.InventarisURL}, {EnvPublicURL, cfg.PublicURL},
+		{EnvIssuer, cfg.Issuer}, {EnvNadiURL, cfg.NadiURL}, {EnvPublicURL, cfg.PublicURL},
 	} {
 		if p, err := url.Parse(u.value); err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" {
 			return Config{}, fmt.Errorf("config: %s must be an http or https URL, got %q", u.key, u.value)

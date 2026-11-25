@@ -102,51 +102,51 @@ func wantOK(t *testing.T, res *mcp.CallToolResult, out any) map[string]any {
 func TestCallExchangesTheUserTokenAndSendsOnlyTheExchangedOne(t *testing.T) {
 	e := newCallEnv(t)
 	c := e.caller(orgA, prjP)
-	res, out := e.call(context.Background(), c, domain.Inventaris, calldto.Where{}, http.MethodGet, "/items", nil)
+	res, out := e.call(context.Background(), c, domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
 	got := wantOK(t, res, out)
 	if got["org"] != orgA || got["project"] != prjP {
-		t.Fatalf("inventaris saw context %v/%v, want the token's %s/%s", got["org"], got["project"], orgA, prjP)
+		t.Fatalf("nadi saw context %v/%v, want the token's %s/%s", got["org"], got["project"], orgA, prjP)
 	}
 	ex := e.nice.Exchanges()
-	if len(ex) != 1 || ex[0].Scope != "nice:aud:inventaris" {
-		t.Fatalf("exchanges = %+v, want one for nice:aud:inventaris with the token's context", ex)
+	if len(ex) != 1 || ex[0].Scope != "nice:aud:nadi" {
+		t.Fatalf("exchanges = %+v, want one for nice:aud:nadi with the token's context", ex)
 	}
 	rec := e.inv.Received()
 	if len(rec) != 1 {
-		t.Fatalf("inventaris received %d requests", len(rec))
+		t.Fatalf("nadi received %d requests", len(rec))
 	}
-	if rec[0]["aud"].([]any)[0] != "inventaris" || rec[0]["sub"] != testUser || rec[0]["act"].(map[string]any)["sub"] != testClientID {
-		t.Fatalf("inventaris received claims %v", rec[0])
+	if rec[0]["aud"].([]any)[0] != "nadi" || rec[0]["sub"] != testUser || rec[0]["act"].(map[string]any)["sub"] != testClientID {
+		t.Fatalf("nadi received claims %v", rec[0])
 	}
 }
 
 func TestCallRefusedWithAccessDeniedCallsNoService(t *testing.T) {
 	e := newCallEnv(t)
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{Org: orgC, Project: prjQ},
-		http.MethodGet, "/items", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{Org: orgC, Project: prjQ},
+		http.MethodGet, "/devices", nil)
 	text := wantToolError(t, res, out, "access_denied")
 	if !strings.Contains(text, "organization") {
 		t.Fatalf("text %q does not explain the reason", text)
 	}
 	if n := len(e.inv.Received()); n != 0 {
-		t.Fatalf("inventaris was called %d times", n)
+		t.Fatalf("nadi was called %d times", n)
 	}
 }
 
 func TestCallRefusedWithInvalidScope(t *testing.T) {
 	e := newCallEnv(t)
-	e.nice.Refuse("inventaris", 400, "invalid_scope", "inventaris is not active in the project")
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodGet, "/items", nil)
+	e.nice.Refuse("nadi", 400, "invalid_scope", "nadi is not active in the project")
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
 	wantToolError(t, res, out, "invalid_scope")
 	if n := len(e.inv.Received()); n != 0 {
-		t.Fatalf("inventaris was called %d times", n)
+		t.Fatalf("nadi was called %d times", n)
 	}
 }
 
 func TestCallExplainsAnExpiringUserToken(t *testing.T) {
 	e := newCallEnv(t)
-	e.nice.Refuse("inventaris", 400, "invalid_grant", "subject_token_expiring: the subject token expires within 60 seconds")
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodGet, "/items", nil)
+	e.nice.Refuse("nadi", 400, "invalid_grant", "subject_token_expiring: the subject token expires within 60 seconds")
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
 	text := wantToolError(t, res, out, "subject_token_expiring")
 	if !strings.Contains(text, "refresh") {
 		t.Fatalf("text %q does not say to refresh the token", text)
@@ -155,8 +155,8 @@ func TestCallExplainsAnExpiringUserToken(t *testing.T) {
 
 func TestCallExplainsARefusedAgentClient(t *testing.T) {
 	e := newCallEnv(t)
-	e.nice.Refuse("inventaris", 401, "invalid_client", "client authentication failed")
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodGet, "/items", nil)
+	e.nice.Refuse("nadi", 401, "invalid_client", "client authentication failed")
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
 	text := wantToolError(t, res, out, "invalid_client")
 	if !strings.Contains(text, config.EnvClientSecret) {
 		t.Fatalf("text %q does not point the operator to the client", text)
@@ -165,11 +165,11 @@ func TestCallExplainsARefusedAgentClient(t *testing.T) {
 
 func TestCallNamesPermissionDeniedOfTheService(t *testing.T) {
 	e := newCallEnv(t)
-	e.nice.perms["inventaris"] = []string{"inventaris.items.read"}
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodPost, "/items",
-		map[string]any{"name": "Kabel", "quantity": 1})
+	e.nice.perms["nadi"] = []string{"nadi.devices.read"}
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodPost, "/devices",
+		map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "active"})
 	text := wantToolError(t, res, out, "permission_denied")
-	if !strings.Contains(text, "inventaris") {
+	if !strings.Contains(text, "nadi") {
 		t.Fatalf("text %q does not name the service", text)
 	}
 }
@@ -177,17 +177,17 @@ func TestCallNamesPermissionDeniedOfTheService(t *testing.T) {
 func TestCallRetriesOnceWhenTheServiceSaysTokenStale(t *testing.T) {
 	e := newCallEnv(t)
 	e.inv.StaleOnce()
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodPost, "/items",
-		map[string]any{"name": "Kabel", "quantity": 2})
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodPost, "/devices",
+		map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "active"})
 	got := wantOK(t, res, out)
-	if got["name"] != "Kabel" {
-		t.Fatalf("item = %v", got)
+	if got["name"] != "Sensor" {
+		t.Fatalf("device = %v", got)
 	}
 	if n := len(e.nice.Exchanges()); n != 2 {
 		t.Fatalf("exchanges = %d, want 2 (one fresh exchange after token_stale)", n)
 	}
 	if n := len(e.inv.Received()); n != 2 {
-		t.Fatalf("inventaris received %d requests, want 2", n)
+		t.Fatalf("nadi received %d requests, want 2", n)
 	}
 }
 
@@ -196,16 +196,16 @@ func TestCallReportsTokenStaleWhenItPersists(t *testing.T) {
 	e.inv.StaleOnce()
 	// The second answer is stale too: DoAs returns it, and the tool says so.
 	e.nice.onExchange = func(string) { e.inv.StaleOnce() }
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodGet, "/items", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
 	wantToolError(t, res, out, "token_stale")
 	if n := len(e.inv.Received()); n != 2 {
-		t.Fatalf("inventaris received %d requests, want 2 (one retry only)", n)
+		t.Fatalf("nadi received %d requests, want 2 (one retry only)", n)
 	}
 }
 
 func TestCallWhenNICEDoesNotAnswer(t *testing.T) {
 	e := newCallEnv(t)
 	e.nice.srv.Close()
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Inventaris, calldto.Where{}, http.MethodGet, "/items", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
 	wantToolError(t, res, out, "nice_unavailable")
 }

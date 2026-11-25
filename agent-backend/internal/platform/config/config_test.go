@@ -27,10 +27,10 @@ func writeDotEnv(t *testing.T, content string) string {
 // fullEnv is every required variable with a valid value.
 func fullEnv() map[string]string {
 	return map[string]string{
-		EnvIssuer:        "http://localhost:8080",
-		EnvClientID:      "agen-backend-id",
-		EnvClientSecret:  "secret-from-env",
-		EnvInventarisURL: "http://127.0.0.1:8081",
+		EnvIssuer:       "http://localhost:8080",
+		EnvClientID:     "agen-backend-id",
+		EnvClientSecret: "secret-from-env",
+		EnvNadiURL:      "http://127.0.0.1:8081",
 	}
 }
 
@@ -50,7 +50,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Listen != "127.0.0.1:8083" || cfg.PublicURL != "http://127.0.0.1:8083" || cfg.JWKSFile != "data/jwks.json" ||
-		cfg.InventarisURL != "http://127.0.0.1:8081" {
+		cfg.NadiURL != "http://127.0.0.1:8081" {
 		t.Fatalf("defaults = %+v", cfg)
 	}
 }
@@ -60,7 +60,7 @@ func TestLoadConfigReadsDotEnvAndTheEnvironmentWins(t *testing.T) {
 NICE_ISSUER="http://localhost:8080/"
 export NICE_CLIENT_ID=from-file
 NICE_CLIENT_SECRET='secret-from-file'
-INVENTARIS_URL=http://127.0.0.1:9081/
+NADI_URL=http://127.0.0.1:9081/
 LISTEN_ADDR=127.0.0.1:9083
 `)
 	cfg, err := Load(env(map[string]string{EnvClientSecret: "secret-from-env", EnvPublicURL: "http://agent.test/"}), dotenv)
@@ -68,14 +68,14 @@ LISTEN_ADDR=127.0.0.1:9083
 		t.Fatal(err)
 	}
 	if cfg.Issuer != "http://localhost:8080" || cfg.ClientID != "from-file" || cfg.ClientSecret != "secret-from-env" ||
-		cfg.InventarisURL != "http://127.0.0.1:9081" ||
+		cfg.NadiURL != "http://127.0.0.1:9081" ||
 		cfg.Listen != "127.0.0.1:9083" || cfg.PublicURL != "http://agent.test" {
 		t.Fatalf("config = %+v", cfg)
 	}
 }
 
 func TestLoadConfigRefusesURLsThatAreNotURLs(t *testing.T) {
-	for _, key := range []string{EnvIssuer, EnvInventarisURL, EnvPublicURL} {
+	for _, key := range []string{EnvIssuer, EnvNadiURL, EnvPublicURL} {
 		for _, bad := range []string{"localhost:8080", "ftp://nice", "http://"} {
 			vars := fullEnv()
 			vars[key] = bad
@@ -110,7 +110,7 @@ func TestEnvExampleListsEveryVariableWithoutSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{EnvIssuer, EnvClientID, EnvClientSecret, EnvInventarisURL, EnvListen, EnvPublicURL, EnvJWKSFile} {
+	for _, k := range []string{EnvIssuer, EnvClientID, EnvClientSecret, EnvNadiURL, EnvListen, EnvPublicURL, EnvJWKSFile} {
 		if _, ok := file[k]; !ok {
 			t.Errorf(".env.example does not list %s", k)
 		}
@@ -122,7 +122,7 @@ func TestEnvExampleListsEveryVariableWithoutSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf(".env.example as .env with the client filled: %v", err)
 	}
-	if cfg.Listen != defaultListen || cfg.InventarisURL != "http://127.0.0.1:8081" {
+	if cfg.Listen != defaultListen || cfg.NadiURL != "http://127.0.0.1:8081" {
 		t.Fatalf(".env.example gives %+v", cfg)
 	}
 }

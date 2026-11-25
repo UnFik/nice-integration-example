@@ -13,14 +13,14 @@ func TestTenCallsInOneContextShareOneExchange(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 5 {
 		wg.Go(func() {
-			if res, _ := callTool(t, s, "inventaris_list_items", nil); res.IsError {
+			if res, _ := callTool(t, s, "nadi_list_devices", nil); res.IsError {
 				t.Errorf("parallel call failed: %s", resultText(t, res))
 			}
 		})
 	}
 	wg.Wait()
 	for range 5 {
-		if res, _ := callTool(t, s, "inventaris_list_items", nil); res.IsError {
+		if res, _ := callTool(t, s, "nadi_list_devices", nil); res.IsError {
 			t.Fatalf("call failed: %s", resultText(t, res))
 		}
 	}
@@ -28,7 +28,7 @@ func TestTenCallsInOneContextShareOneExchange(t *testing.T) {
 		t.Fatalf("exchanges = %d for ten calls in one context, want 1", n)
 	}
 	if n := len(e.inv.Received()); n != 10 {
-		t.Fatalf("inventaris received %d calls, want 10", n)
+		t.Fatalf("nadi received %d calls, want 10", n)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestTwoContextsExchangeAtTheSameTime(t *testing.T) {
 	var wg sync.WaitGroup
 	for _, where := range []map[string]any{nil, {"organization_id": orgB, "project_id": prjQ}} {
 		wg.Go(func() {
-			if res, _ := callTool(t, s, "inventaris_list_items", where); res.IsError {
+			if res, _ := callTool(t, s, "nadi_list_devices", where); res.IsError {
 				t.Errorf("call for %v failed: %s", where, resultText(t, res))
 			}
 		})

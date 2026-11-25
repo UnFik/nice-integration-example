@@ -5,19 +5,19 @@
 Contoh backend agen AI: MCP server (transport Streamable HTTP) untuk service NICE `agen`, ditulis dalam Go dengan [SDK MCP Go resmi](https://github.com/modelcontextprotocol/go-sdk). Setiap tool memanggil service lain **atas nama user** yang sedang memakai agen, dengan token hasil token exchange (RFC 8693):
 
 - token user hanya dikirim ke endpoint token NICE, tidak pernah ke service lain (tanpa *token passthrough*);
-- tidak ada Service Account lintas organisasi: izin token tujuan adalah izin user, dipotong deklarasi dependensi `agen`;
+- tidak ada Service Account lintas organisasi: izin token tujuan adalah izin user di project tujuan, tanpa batas tambahan dari NICE (lihat "Batas izin");
 - agen tidak menyimpan refresh token user;
-- service tujuan melihat agen sebagai aktor (`act.sub`), dan `inventaris` mencatatnya sebagai `acted_by`.
+- service tujuan melihat agen sebagai aktor (`act.sub`), dan `nadi` mencatatnya sebagai `acted_by`.
 
 ```text
 MCP client --Bearer token user (aud=agen)--> agen /mcp
 agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
-agen --Bearer token hasil exchange (aud=inventaris, act.sub=agen-backend)--> inventaris /items
+agen --Bearer token hasil exchange (aud=nadi, act.sub=agen-backend)--> nadi /devices
 ```
 
-Versi NICE minimum: revisi yang memuat `add-service-clients`, `add-delegated-nice-api`, `add-seamless-org-switch`, dan `add-token-exchange` (`nice` `6cc9986` atau sesudahnya). SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
+Versi NICE minimum: `nice` `5def119` (2026-11-17, awal riwayat `nice` sekarang) atau sesudahnya. Revisi itu sudah memuat service client, API NICE terdelegasi, pindah organisasi, dan token exchange, dan sudah tanpa deklarasi dependensi service. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
 
-Diuji terhadap nice revisi: `6cc9986` (2026-11-13). SDK `v0.1.0` (2026-11-19) hanya diuji dengan tes unit, karena `agen` dan `inventaris` tidak terdaftar di stack lokal; `make smoke` belum dijalankan ulang. SDK `v0.2.0`, `v0.2.1`, dan `v0.2.2` (2026-11-24) juga hanya diuji dengan tes unit.
+Diuji terhadap nice revisi: SDK `v0.2.2` dan `nice` `eb17848`, 2026-11-25, hanya dengan tes unit (NICE dan `nadi` palsu). `make smoke` belum dijalankan ulang terhadap NICE yang berjalan.
 
 ## Struktur folder
 
@@ -54,14 +54,18 @@ Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/htt
 
 Tanpa token, `/mcp` dijawab `401` dengan `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource"`. Token untuk service lain dijawab `401` `wrong_audience`, token tanpa `agen.mcp.use` dijawab `403` `permission_denied`.
 
-| Tool | Tujuan | Izin dependensi |
+| Tool | Tujuan | Izin di `nadi` |
 |---|---|---|
-| `inventaris_list_items` | `GET <INVENTARIS_URL>/items` | `inventaris.items.read` |
-| `inventaris_create_item` (`name`, `quantity`) | `POST <INVENTARIS_URL>/items` | `inventaris.items.create` |
+| `nadi_list_devices` | `GET <NADI_URL>/devices` | `nadi.devices.read` |
+| `nadi_create_device` (`name`, `serial_number`, `status`, `location` opsional) | `POST <NADI_URL>/devices` | `nadi.devices.create` |
 
 Setiap tool menerima `organization_id` (`org_...`) dan `project_id` (`prj_...`) opsional. Tanpa keduanya, exchange hanya meminta `nice:aud:<service>`, dan NICE memakai organisasi dan project token user. Organisasi lain wajib disertai project-nya. Agen tidak memilih konteks yang tidak disebut user, dan ID yang tidak berbentuk `org_...` atau `prj_...` ditolak sebelum menjadi scope.
 
-Operasi sensitif sengaja tidak punya tool: menghapus barang (`DELETE /items/{id}`, sensitif di katalog `inventaris`). Persetujuan manusia untuk operasi tulis adalah kebijakan aplikasi agen, di luar contoh ini.
+`status` salah satu dari `active`, `inactive`, `maintenance`; skema tool membatasinya, jadi nilai lain ditolak sebelum exchange. Panjang `name` (1 sampai 120), `serial_number` (1 sampai 64), dan `location` (paling banyak 120) diperiksa `nadi`, yang menjawab `invalid_argument`. `location` hanya dikirim bila diisi.
+
+### Batas izin
+
+Token hasil exchange membawa izin user di project tujuan, sama seperti token service client milik user itu sendiri (`nice/docs/api.md`, "Token exchange: backend atas nama user"). NICE tidak memotongnya untuk aktor: bila user memegang `nadi.devices.delete`, token yang dipegang agen juga memegangnya. Satu-satunya batas di contoh ini adalah daftar tool: operasi sensitif sengaja tidak punya tool, yaitu menghapus perangkat (`DELETE /devices/{id}`, sensitif di katalog `nadi`), dan agen tidak pernah memanggil jalur yang tidak dimiliki tool-nya. Untuk uji, beri user `nadi.editor` (tanpa izin hapus). Persetujuan manusia untuk operasi tulis adalah kebijakan aplikasi agen, di luar contoh ini.
 
 ### Mengapa hanya service `nice_token`
 
@@ -84,18 +88,18 @@ Kegagalan dikembalikan sebagai hasil tool bertanda galat (`isError: true`) beris
 | Kode | Sumber | Arti |
 |---|---|---|
 | `access_denied` | exchange | user bukan anggota aktif organisasi itu, organisasi tidak aktif, atau tidak meng-entitle service tujuan atau `agen` |
-| `invalid_scope` | exchange | service bukan dependensi `agen` atau tidak aktif, atau project tidak aktif di organisasi itu atau tidak mengaktifkan service tujuan |
+| `invalid_scope` | exchange | service tujuan tidak aktif, atau project tidak aktif di organisasi itu atau tidak mengaktifkan service tujuan |
 | `invalid_grant` (`subject_token_expiring`) | exchange | token user tinggal kurang dari 60 detik: perbarui token di MCP client |
 | `invalid_grant` (`token_stale`, `subject_invalid`) | exchange | akses user berubah, token bukan token user untuk `agen`, atau sesi berakhir: login lagi |
 | `invalid_client`, `unauthorized_client` | exchange | client agen ditolak: periksa `NICE_CLIENT_ID` dan `NICE_CLIENT_SECRET` |
 | `nice_unavailable` | exchange | NICE tidak menjawab |
 | `insufficient_scope` (`permission_denied`), `permission_denied` | service | user tidak memegang izin operasi itu di project tersebut |
-| `invalid_argument` | agen | `organization_id` atau `project_id` salah bentuk, atau organisasi lain tanpa `project_id` |
+| `invalid_argument` | agen, service | `organization_id` atau `project_id` salah bentuk, atau organisasi lain tanpa `project_id` (agen); field perangkat tidak sah (`nadi`) |
 
 Contoh teks hasil tool untuk organisasi yang bukan milik user:
 
 ```text
-access_denied (organization is not usable): NICE refused a token for inventaris in that organization: the user is not an active member of it, the organization is not active, or it does not use inventaris or agen
+access_denied (organization is not usable): NICE refused a token for nadi in that organization: the user is not an active member of it, the organization is not active, or it does not use nadi or agen
 ```
 
 ## Prasyarat
@@ -103,8 +107,8 @@ access_denied (organization is not usable): NICE refused a token for inventaris 
 - SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dengan versi minimum di atas, bawaannya di `http://localhost:8080`.
-- `inventaris` berjalan dan sudah diatur sampai langkah 8 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md). User uji memegang role `inventaris.operator` di project yang sama.
-- Untuk uji organisasi lain: user uji juga anggota organisasi kedua, dengan project yang mengaktifkan `inventaris` dan binding `inventaris.operator` di sana.
+- `nadi` berjalan dan sudah diatur sampai langkah 8 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md) (daftar, impor, aktifkan, entitlement, aktivasi di project, binding). User uji memegang role `nadi.editor` di project yang sama. Jangan memakai `nadi.operator`: itu role operator platform service, bukan role project.
+- Untuk uji organisasi lain: user uji juga anggota organisasi kedua, dengan entitlement `nadi`, project yang mengaktifkan `nadi`, dan binding `nadi.editor` di sana (langkah 6 sampai 8 README `nadi` untuk organisasi itu).
 
 ## Konfigurasi
 
@@ -113,9 +117,9 @@ Salin `.env.example` ke `.env`. Agen membaca `.env` di direktori tempat ia dijal
 | Variabel | Bawaan | Arti |
 |---|---|---|
 | `NICE_ISSUER` | wajib | issuer NICE, sama persis dengan klaim `iss` token |
-| `NICE_CLIENT_ID` | wajib | `client_id` client confidential `agen-backend` (langkah 8) |
+| `NICE_CLIENT_ID` | wajib | `client_id` client confidential `agen-backend` (langkah 7) |
 | `NICE_CLIENT_SECRET` | wajib | secret client itu. Hanya dikirim ke endpoint token NICE |
-| `INVENTARIS_URL` | wajib | alamat `inventaris`, mis. `http://127.0.0.1:8081` |
+| `NADI_URL` | wajib | alamat `nadi`, mis. `http://127.0.0.1:8081`. Wajib `https` kecuali host loopback, karena SDK menolak mengirim token lewat `http` ke host lain |
 | `LISTEN_ADDR` | `127.0.0.1:8083` | alamat listen |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | alamat yang dipakai MCP client; `resource` metadata adalah `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
@@ -127,13 +131,28 @@ Variabel wajib yang kosong menghentikan start dengan pesan yang menyebut namanya
 
 ```bash
 make run          # go run ./cmd/agent-backend di 127.0.0.1:8083
-make test         # go test -race; tidak butuh NICE (NICE dan inventaris palsu)
+make test         # go test -race; tidak butuh NICE (NICE dan nadi palsu)
 make smoke        # scripts/smoke.sh, butuh NICE yang sudah diatur dengan checklist di bawah
 ```
 
 Bila `go` di `PATH` tidak cocok dengan `GOROOT`, panggil `make GO=/path/ke/go test`.
 
 Tes menjalankan agen lewat HTTP di dalam proses dengan client MCP dari SDK, di depan NICE palsu yang meniru aturan token exchange. Tes yang menjaga pola: service palsu gagal bila pernah menerima token `aud=agen` (tanpa passthrough), sepuluh panggilan dalam satu konteks menghasilkan satu exchange, dan exchange untuk dua konteks (organisasi atau project) yang berbeda berjalan bersamaan.
+
+### Menjalankan di container
+
+`Dockerfile` membangun binary statis dengan Go 1.27 dan menjalankannya di image distroless `nonroot`. Image mengisi `LISTEN_ADDR=0.0.0.0:8083` dan `JWKS_FILE=/data/jwks.json`; `.env` tidak ikut masuk image, jadi konfigurasi diberikan lewat environment.
+
+```bash
+docker build -t agen .
+docker run --rm -p 8083:8083 -v agen-data:/data \
+  -e NICE_ISSUER=https://nice.example.com -e NADI_URL=https://nadi.example.com \
+  -e PUBLIC_URL=https://agen.example.com -e NICE_CLIENT_ID -e NICE_CLIENT_SECRET agen
+```
+
+- `PUBLIC_URL` harus alamat `https` publik yang dipakai MCP client: metadata resource menyebut `<PUBLIC_URL>/mcp`, dan endpoint `agen` di NICE harus menunjuk alamat yang sama.
+- `NICE_ISSUER` dan `NADI_URL` harus `https` kecuali host loopback: `DoAs` milik SDK menolak `http` ke host lain, dan di dalam container `127.0.0.1` adalah container itu sendiri.
+- Secret diteruskan dari environment shell (`-e NICE_CLIENT_SECRET` tanpa nilai), tidak ditulis di baris perintah.
 
 ## Checklist setup NICE
 
@@ -148,7 +167,7 @@ read -rp 'Email owner organisasi tenant: ' OWNER_EMAIL; read -rsp 'Password: ' O
 OWNER_TOKEN=$(../../nice/scripts/dev-token.sh "$OWNER_EMAIL" "$OWNER_PASSWORD"); unset OWNER_PASSWORD
 
 ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $OWNER_TOKEN" | jq -r .organization.id)
-PROJECT_ID=prj_...   # project tenant tempat inventaris aktif
+PROJECT_ID=prj_...   # project tenant tempat nadi aktif
 USER_ID=usr_...      # user uji yang memakai agen
 PLATFORM_ORG_ID=$(curl -sS "$NICE/api/v1/me/organization" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r .organization.id)
 ```
@@ -171,7 +190,7 @@ curl -sS "$NICE/api/v1/shared-services" -X POST \
 
 ### 3. Impor `docs/openapi.json`
 
-Console: detail service `agen`, impor katalog. Dokumen diambil dari berkas, karena agen baru bisa berjalan setelah client-nya ada (langkah 8).
+Console: detail service `agen`, impor katalog. Dokumen diambil dari berkas, karena agen baru bisa berjalan setelah client-nya ada (langkah 7).
 
 ```bash
 PREVIEW=$(jq -n --rawfile doc docs/openapi.json '{document: $doc}' | curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports" -X POST \
@@ -183,24 +202,13 @@ curl -sS "$NICE/api/v1/shared-services/agen/catalog-imports/$(jq -r .import_id <
 
 Pratinjau menunjukkan satu operasi `mcp` (`agen.mcp.use`) dan role `agen.admin` serta `agen.user` (dari `x-nice-roles`). Tidak ada `agen.viewer`, karena dokumen tidak punya operasi baca.
 
-### 4. Dependensi `agen` ke `inventaris`
-
-Butuh `nice.platform.catalog.manage`. Izin token hasil exchange dipotong daftar ini, jadi agen tidak pernah bisa menghapus barang walau user bisa. Daftar diganti utuh.
-
-```bash
-curl -sS "$NICE/api/v1/shared-services/agen/dependencies" -X PUT \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"dependencies":[
-        {"service":"inventaris","permissions":["inventaris.items.read","inventaris.items.create"]}]}'
-```
-
-### 5. Aktifkan service
+### 4. Aktifkan service
 
 ```bash
 curl -sS "$NICE/api/v1/shared-services/agen/activate" -X POST -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.shared_service | {slug, status}'
 ```
 
-### 6. Project di organisasi platform
+### 5. Project di organisasi platform
 
 Service client harus milik project organisasi platform. Pakai project yang ada, atau buat satu (console: Platform Admin, organisasi platform, **Project**).
 
@@ -210,7 +218,7 @@ AGENT_PROJECT_ID=$(curl -sS "$NICE/api/v1/organizations/$PLATFORM_ORG_ID/project
   -d '{"name":"Agen","slug":"agen"}' | jq -r .project.id)
 ```
 
-### 7. Client `agen-user` (public)
+### 6. Client `agen-user` (public)
 
 Client untuk user dan MCP client memperoleh token `aud=agen`. Console: project itu, **OAuth client**, lalu ikat ke `agen` (butuh `nice.platform.catalog.manage`). Redirect URI di bawah milik MCP Inspector; `dev-token.sh` memakai yang pertama.
 
@@ -227,7 +235,7 @@ curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients/$(jq -r .oauth_client.
 # {"client_class":"service","service":"agen"}
 ```
 
-### 8. Client `agen-backend` (confidential)
+### 7. Client `agen-backend` (confidential)
 
 Aktor token exchange. Exchange menolak client `public`, dan memisahkan dua client menunjukkan bahwa secret hanya ada di server agen. NICE mewajibkan redirect URI dan grant `authorization_code` untuk setiap OAuth client, walau backend ini tidak pernah login.
 
@@ -247,7 +255,7 @@ unset CLIENT
 
 Secret hanya tampil sekali dan langsung masuk `.env` tanpa dicetak. Bila hilang, putar secret client itu di console lalu ganti `NICE_CLIENT_SECRET`.
 
-### 9. Organisasi user: entitlement, aktivasi, binding
+### 8. Organisasi user: entitlement, aktivasi, binding
 
 Login lewat service client hanya selesai di organisasi yang meng-entitle `agen`. Exchange ke organisasi lain memeriksa hal yang sama ditambah entitlement service tujuan, tetapi tidak meminta `agen` aktif di project organisasi itu. Console: Platform Admin, **Organisasi** (entitlement), lalu project tenant, **Product & Activation** dan **IAM**.
 
@@ -262,7 +270,7 @@ curl -sS "$NICE/api/v1/projects/$PROJECT_ID/role-bindings" -X POST \
 
 IAM menyalin katalog dan aktivasi secara asinkron: bila binding dijawab `unknown_role` atau `service_not_active`, tunggu beberapa detik lalu ulangi. Untuk uji organisasi lain, beri organisasi kedua entitlement `agen` juga.
 
-### 10. Jalankan agen
+### 9. Jalankan agen
 
 ```bash
 make run
@@ -271,7 +279,7 @@ curl -sS http://127.0.0.1:8083/healthz
 
 Biarkan berjalan di terminal lain.
 
-### 11. Token user
+### 10. Token user
 
 Token user untuk agen diminta lewat client `agen-user` dengan `nice:aud:agen` dan project tempat user memegang `agen.user`. `nice:org` memastikan login masuk ke organisasi itu.
 
@@ -283,26 +291,26 @@ unset USER_PASSWORD
 export AGENT_USER_TOKEN=$USER_TOKEN   # dibaca scripts/smoke.sh
 ```
 
-### 12. Smoke
+### 11. Smoke
 
 ```bash
 make smoke
 ```
 
-Skrip membaca `.env` dan `AGENT_USER_TOKEN` dari environment, tidak pernah mencetak token atau secret, dan memeriksa: NICE menjawab, `/healthz` menjawab, `/mcp` tanpa token dijawab `401` dengan `resource_metadata`, metadata menyebut `NICE_ISSUER`, lalu dengan token user `tools/list` memuat dua tool dan `inventaris_list_items` sukses. Kegagalan dipetakan ke langkah:
+Skrip membaca `.env` dan `AGENT_USER_TOKEN` dari environment, tidak pernah mencetak token atau secret, dan memeriksa: NICE menjawab, `/healthz` menjawab, `/mcp` tanpa token dijawab `401` dengan `resource_metadata`, metadata menyebut `NICE_ISSUER`, lalu dengan token user `tools/list` memuat dua tool dan `nadi_list_devices` sukses. Kegagalan dipetakan ke langkah:
 
 | Jawaban | Langkah yang kemungkinan terlewat |
 |---|---|
-| `.env` tidak ada, agen tidak terjangkau | 8, 10 |
-| `/mcp` dengan token dijawab `401` `wrong_audience` | 11: token harus diminta dengan `nice:aud:agen` lewat `agen-user` |
-| `/mcp` dijawab `403` `permission_denied` | 9: binding `agen.user` |
-| tool dijawab `invalid_client` | 8: `NICE_CLIENT_ID` atau `NICE_CLIENT_SECRET` |
-| tool dijawab `invalid_scope` | 4 (dependensi), atau `inventaris` belum aktif di project token |
-| tool dijawab `invalid_grant` | 11: token user hampir habis, basi, atau sesinya berakhir; ambil token baru |
+| `.env` tidak ada, agen tidak terjangkau | 7, 9 |
+| `/mcp` dengan token dijawab `401` `wrong_audience` | 10: token harus diminta dengan `nice:aud:agen` lewat `agen-user` |
+| `/mcp` dijawab `403` `permission_denied` | 8: binding `agen.user` |
+| tool dijawab `invalid_client` | 7: `NICE_CLIENT_ID` atau `NICE_CLIENT_SECRET` |
+| tool dijawab `invalid_scope` | `nadi` belum aktif di project token (langkah 7 README `nadi`) |
+| tool dijawab `invalid_grant` | 10: token user hampir habis, basi, atau sesinya berakhir; ambil token baru |
 
 ## Checklist uji
 
-Dengan `USER_TOKEN` dari langkah 11. Fungsi `tool` memanggil satu tool dalam satu request:
+Dengan `USER_TOKEN` dari langkah 10. Fungsi `tool` memanggil satu tool dalam satu request:
 
 ```bash
 tool() {   # tool <nama> [argumen JSON]
@@ -314,32 +322,32 @@ tool() {   # tool <nama> [argumen JSON]
 }
 ```
 
-1. **Daftar tool.** Dua tool `inventaris`, tanpa operasi hapus:
+1. **Daftar tool.** Dua tool `nadi`, tanpa operasi hapus:
 
    ```bash
    curl -sS http://127.0.0.1:8083/mcp -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
      -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq '[.result.tools[].name]'
    ```
 
-2. **Barang dibuat agen.** `created_by` adalah user dan `acted_by` adalah `client_id` `agen-backend` (`NICE_CLIENT_ID`):
+2. **Perangkat dibuat agen.** `created_by` adalah user dan `acted_by` adalah `client_id` `agen-backend` (`NICE_CLIENT_ID`):
 
    ```bash
-   tool inventaris_create_item '{"name":"Kabel UTP","quantity":3}'
-   tool inventaris_list_items
+   tool nadi_create_device '{"name":"Sensor Suhu","serial_number":"SN-2026-0001","status":"active","location":"Gudang A"}'
+   tool nadi_list_devices
    ```
 
 3. **Organisasi lain milik user.** Dengan organisasi kedua (`ORG_B_ID`, project `PROJECT_B_ID`) yang memenuhi prasyarat dan meng-entitle `agen`:
 
    ```bash
-   tool inventaris_list_items "{\"organization_id\":\"$ORG_B_ID\",\"project_id\":\"$PROJECT_B_ID\"}"
+   tool nadi_list_devices "{\"organization_id\":\"$ORG_B_ID\",\"project_id\":\"$PROJECT_B_ID\"}"
    ```
 
-   Sukses, dengan barang organisasi itu.
+   Sukses, dengan perangkat organisasi itu.
 
-4. **Organisasi bukan milik user.** Hasilnya galat `access_denied`, dan `inventaris` tidak dipanggil:
+4. **Organisasi bukan milik user.** Hasilnya galat `access_denied`, dan `nadi` tidak dipanggil:
 
    ```bash
-   tool inventaris_list_items "{\"organization_id\":\"$OTHER_ORG_ID\",\"project_id\":\"$OTHER_PROJECT_ID\"}"
+   tool nadi_list_devices "{\"organization_id\":\"$OTHER_ORG_ID\",\"project_id\":\"$OTHER_PROJECT_ID\"}"
    ```
 
 5. **Audit NICE.** Setiap exchange tercatat `token.exchange` dengan pelaku user dan `details` `client_id`, `service`, dan `project_id`. Exchange yang sukses tercatat di organisasi tujuan. Penolakan tercatat di organisasi token user, dengan `details.reason` (mis. `not_member`, `invalid_scope`) dan `details.target_organization_id`:
@@ -355,7 +363,7 @@ tool() {   # tool <nama> [argumen JSON]
 
 ## Batas
 
-- **Tanpa DCR.** Client MCP didaftarkan manual (langkah 7).
+- **Tanpa DCR.** Client MCP didaftarkan manual (langkah 6).
 - **Tanpa tool service `api_key`.** Service itu hanya melayani Service Account (lihat "Mengapa hanya service `nice_token`"), jadi contoh ini tidak menunjukkan pemanggilan service `api_key`.
 - **Tanpa tool sensitif**, tanpa UI chat atau LLM, dan tanpa pekerjaan agen saat user tidak hadir.
 - **Tanpa feed perubahan akses di agen.** Token user yang basi tetap ditolak di exchange (`invalid_grant` `token_stale`), karena NICE memeriksa feed sendiri.
