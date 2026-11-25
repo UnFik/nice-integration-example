@@ -2,40 +2,44 @@
 
 [Bahasa Indonesia](README.md)
 
-An example AI agent backend: an MCP server (Streamable HTTP transport) for the NICE service `agen`, written in Go with the [official MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). Every tool calls another service **on behalf of the user** of the agent, with a token from token exchange (RFC 8693):
+An example AI agent backend: an MCP server (Streamable HTTP transport) for the NICE service `agen`, written in Go with the [official MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). The agent writes no tool list per service: it asks NICE which services the user may call in which project, and their operations (*caller service discovery*), then calls an operation **on behalf of the user** of the agent, with a token from token exchange (RFC 8693):
 
 - the user's token goes only to the NICE token endpoint, never to another service (no *token passthrough*);
 - no Service Account across organizations: the permissions of the target token are the user's in the target project, with no further limit from NICE (see "Permission limit");
 - the agent keeps no refresh token of the user;
-- the target service sees the agent as actor (`act.sub`), and `nadi` records it as `acted_by`.
+- the target service sees the agent as actor (`act.sub`), and `nadi` records it as `acted_by`;
+- an operation the catalog marks sensitive is sent only after the user approves it in the MCP client.
 
 ```text
 MCP client --Bearer user token (aud=agen)--> agen /mcp
-agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
-agen --Bearer exchanged token (aud=nadi, act.sub=agen-backend)--> nadi /devices
+agen --token exchange (aud=nice)--> NICE /oauth/token, then GET /api/v1/me/services and /me/services/nadi/operations
+agen --token exchange: subject_token + client agen-backend (aud=nadi)--> NICE /oauth/token
+agen --Bearer exchanged token (act.sub=agen-backend)--> <catalog endpoint of nadi>/devices
 ```
 
-Minimum NICE version: `b361d25` (`service-calls-without-service-account`), because the resolution of `perms_ref` forwards the token of the request, not an API key. Before it, `5def119` (2026-11-17, the start of the current `nice` history), which already has service clients, the delegated NICE API, organization switching, and token exchange, and no longer has service dependency declarations. SDK: `github.com/ABA-Developer/nice-auth-sdk`, `v0.2.3`. The MCP SDK is pinned in `go.mod` at `v1.8.0`.
+Minimum NICE version: `235445c` (`add-caller-service-discovery`), because the tools use `GET /api/v1/me/services` and `GET /api/v1/me/services/{slug}/operations`; an older NICE answers `404` and the tools answer `discovery_unavailable`. Before it, `b361d25` (`service-calls-without-service-account`), because the resolution of `perms_ref` forwards the token of the request, not an API key. SDK: `github.com/ABA-Developer/nice-auth-sdk`, `v0.2.4` (`Services`, `ServiceOperations`, `CallOperation`). The MCP SDK is pinned in `go.mod` at `v1.8.0`, which has MCP protocol `2026-07-28` for approvals without a session.
 
-Tested against nice revision: SDK `v0.2.2` and `nice` `eb17848`, 2026-11-25, with the unit tests only (fake NICE and `nadi`). `make smoke` has not been run again against a running NICE. The version without an extra NICE credential (SDK `v0.2.3`) was tested with the unit tests only, 2026-11-25.
+Tested against nice revision: SDK `v0.2.4` and `nice` `235445c`, 2026-11-25, with the unit tests (fake NICE and `nadi`), then `scripts/smoke.sh` and the delete with an approval (two rounds of protocol `2026-07-28`) against NICE `dev-235445c` on a VPS, with an `https` endpoint of `nadi`.
 
 ## Folder structure
 
-The layout follows `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one small service: one resource (`call`: calling another service on behalf of the user), no facade and no repository.
+The layout follows `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one small service: one resource (`call`: discovery and calls to other services on behalf of the user), no facade and no repository.
 
 ```text
 cmd/agent-backend/main.go            thin: calls bootstrap.Run
 docs/                                openapi.json (hand-written) + a small package that embeds it; OpenAPI and README tests
 internal/
-  domain/                            pure rules: slug, permission, targets, ID format (*_domain.go)
+  domain/                            pure rules: slug, permission, targets, ID format, safe endpoints (*_domain.go)
   app/call/
-    usecase/                         ExecuteCall (execute_call_usecase.go), Service, the Sender contract (call_contract.go)
-    dto/                             Caller, Where, Key, Request, Response, Failure (*_dto.go)
-    internal/{key,failure}/          ID checks and mapping of errors to Failure (*_helper.go)
+    usecase/                         ListServices, ListOperations, CallOperation (one *_usecase.go per function), Service,
+                                     the Discoverer and Operator contracts (call_contract.go)
+    dto/                             Caller, service map, operations, approval, Failure (*_dto.go)
+    internal/{key,failure,approval}/ ID checks, mapping of errors to Failure, signed approval state (*_helper.go)
   adapter/
     mcp/                             HTTP routes and the niceauth/verify chain (routes.go), MCP server and tool schemas (tools_routes.go),
-                                     one handler per tool (*_handler.go); internal/ holds caller, challenge, mapper
-    niceexchange/                    wraps niceauth: token exchange and DoAs (sender_client.go)
+                                     one handler per tool (*_handler.go); internal/ holds caller, challenge, mapper, approval
+    niceexchange/                    wraps niceauth: Services, ServiceOperations (discovery_client.go), CallOperation
+                                     (operation_client.go)
   platform/config/                   env and .env
   bootstrap/                         assembly; integration tests with a fake NICE
   arch_test.go                       architecture test: file name endings and import direction
@@ -54,30 +58,50 @@ Why: `main.go` only assembles; the rules and the use case do not import `net/htt
 
 Without a token, `/mcp` answers `401` with `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource"`. A token for another service gets `401` `wrong_audience`, a token without `agen.mcp.use` gets `403` `permission_denied`.
 
-| Tool | Target | Permission in `nadi` |
+| Tool | Arguments | Answer |
 |---|---|---|
-| `nadi_list_devices` | `GET <NADI_URL>/devices` | `nadi.devices.read` |
-| `nadi_create_device` (`name`, `serial_number`, `status`, optional `location`) | `POST <NADI_URL>/devices` | `nadi.devices.create` |
+| `list_services` | none | the organizations of the user, their projects, and the slugs of the services the user may call in each project, with the name and description of each service. An organization whose projects NICE lists only in part is marked `projects_truncated` |
+| `list_operations` | `service` | the operations of that service whose permission the user holds: `key`, `method`, `path`, `summary`, `permission`, `request_fields` (name, location `path`/`query`/`body`, required or not), and `sensitive` |
+| `call_operation` | `service`, `operation` (key), `organization_id`, `project_id`, `path_params`, `query`, `body` | the `status` and JSON `body` of the answer of the service |
 
-Every tool takes optional `organization_id` (`org_...`) and `project_id` (`prj_...`). Without them, the exchange asks only for `nice:aud:<service>`, and NICE uses the organization and project of the user's token. Another organization needs its project. The agent never picks a context the user did not name, and an ID not shaped like `org_...` or `prj_...` is refused before it becomes a scope.
+The tool list is the same for every user; what a user may call is read from NICE when a tool runs, from the roles of the user at that moment, not from a claim of the token. The agent keeps neither the map nor the operations.
 
-`status` is one of `active`, `inactive`, `maintenance`; the tool schema limits it, so another value is refused before the exchange. The lengths of `name` (1 to 120), `serial_number` (1 to 64), and `location` (at most 120) are checked by `nadi`, which answers `invalid_argument`. `location` is sent only when given.
+`call_operation` matches `service` with the map and `operation` with the list of operations on every call. The address (endpoint and base path of the catalog), the method, and the headers of the operation never come from the arguments of the model. Before any exchange for the target service, the agent refuses with `invalid_argument`:
 
-### Permission limit
+- a `service` that is not a slug, or an `organization_id`/`project_id` not shaped like `org_...`/`prj_...` (those values become scopes);
+- another organization without `project_id`, or a project the map does not list for that service in that organization (unless NICE marks the projects of that organization `projects_truncated`);
+- an operation key that does not exist, a `query` name that is not a `query` field of the operation;
+- a path parameter that is missing, unknown, empty, `.`, `..`, or holds `/`, `\`, or a control character (checked by the SDK).
 
-The exchanged token carries the user's permissions in the target project, the same as a service client token of that user (`nice/docs/api.md`, "Token exchange: backend atas nama user"). NICE does not cut them down for the actor: when the user holds `nadi.devices.delete`, the token the agent holds does too. The only limit in this example is the tool list: sensitive operations have no tool on purpose, namely deleting a device (`DELETE /devices/{id}`, sensitive in the `nadi` catalog), and the agent never calls a path that none of its tools has. For testing, give the user `nadi.editor` (no delete permission). Human approval of write operations is a policy of the agent application, outside this example.
+Without `organization_id` and `project_id`, the exchange asks only for `nice:aud:<service>`, and NICE uses the organization and project of the user's token. `body` is sent as it is, as JSON; the target service checks it, and `nadi` refuses unknown fields.
+
+### Approval of sensitive operations
+
+The exchanged token carries the user's permissions in the target project, the same as a service client token of that user (`nice/docs/api.md`, "Token exchange: backend atas nama user"). NICE does not cut them down for the actor: when the user holds `nadi.devices.delete`, the token the agent holds does too. Since the tool list no longer limits the operations, the limit the agent adds is an approval: an operation the catalog marks `sensitive` (in `nadi`: `DELETE /devices/{id}`) is sent only after the user approves it.
+
+The MCP server runs without sessions, so the agent cannot send an elicitation request of its own to the client. It uses the multi round-trip pattern of MCP protocol `2026-07-28` (SEP-2322):
+
+1. The first `call_operation` for a sensitive operation answers `resultType: input_required` with `inputRequests.approve` (a form elicitation: a message that names the service, the summary of the operation, the method and filled path, the organization, and the project; schema `{approve: boolean}`) and a `requestState`.
+2. The MCP client shows the form to the user, then calls the same tool again with the same arguments, `inputResponses.approve` (`action: accept`, `approve: true`), and the `requestState`.
+3. The agent sends the operation once. `decline`, `cancel`, or `approve: false` answers `not_approved`, with no exchange for the target service and no call.
+
+`requestState` is an opaque state signed with HMAC and bound to the user and the exact call (service, operation, context, parameters, query, body), good for 5 minutes and for one use. A state for another user, another call, one that was altered, expired, or already used makes the agent ask for a new approval. The key is made at random when the process starts, so a restart drops pending approvals.
+
+An MCP client on an older protocol, or one that declares no form elicitation, cannot be asked: a sensitive operation answers `approval_unavailable` and is not sent. Other operations still run. A write that is not sensitive (e.g. `POST /devices`) asks for no approval; the catalog administrator decides which operations are sensitive. For testing, give the user `nadi.editor` (no delete permission), or `nadi.admin` to try the approval.
 
 ### Why only `nice_token` services
 
-An `api_key` service uses a key per Service Account and refuses user tokens (`403` `service_account_required`), so an agent that acts on behalf of the user offers tools for `nice_token` services only. The `api_key` example service in this repo, `pengiriman`, therefore has no tool here. Calling an `api_key` service through a Service Account that belongs to the agent would drop the identity of the user (the target service would no longer see the user as `created_by`) and is not the pattern of this example.
+An `api_key` service uses a key per Service Account and refuses user tokens (`403` `service_account_required`), so an agent that acts on behalf of the user calls `nice_token` services only. NICE leaves `api_key` services out of the map and answers `404` for their operations, so the `api_key` example service in this repo, `pengiriman`, answers `service_not_allowed`. Calling an `api_key` service through a Service Account that belongs to the agent would drop the identity of the user (the target service would no longer see the user as `created_by`) and is not the pattern of this example.
 
 ### How a call works
 
-`callAs` calls `credentials.ExchangeClient.DoAs` with the user's token from the MCP request and the key `{Org, Project, Audience}`. `DoAs`:
+`list_services` and `list_operations` call `credentials.ExchangeClient.Services` and `ServiceOperations` with the user's token from the MCP request. Both share one delegated token of the NICE API (`aud=nice`) per user token, so discovery adds one exchange per user token, not per service or project. `call_operation` reads the map and the operations again (two `GET`s to NICE), then calls `CallOperation`, which sends through `DoAs` with the key `{Org, Project, Audience}`. `DoAs`:
 
 - keeps a token per `(user, organization, project, service)` until 60 seconds before it expires, and never uses a token that outlives the user's token;
 - runs one exchange per key for parallel calls, with no queue across keys, so different contexts (organization or project) are exchanged at the same time;
 - exchanges again and resends the request once when the service answers `401` `token_stale` or `expired`.
+
+A catalog endpoint must be `https` unless its host is a loopback: the agent refuses another endpoint with `insecure_endpoint` before any token is sent to it, the same rule as the SDK.
 
 The MCP transport is *stateless* with JSON answers: every `POST /mcp` stands alone, so `curl` can call a tool in one request and parallel calls of one client do not wait for each other.
 
@@ -87,6 +111,12 @@ Failures come back as tool results marked as errors (`isError: true`) with the c
 
 | Code | Source | Meaning |
 |---|---|---|
+| `discovery_unavailable` | NICE | NICE has no caller service discovery yet: upgrade NICE |
+| `service_not_allowed` | NICE, agent | the user may not call that service in any project, or it is not a `nice_token` service |
+| `token_stale_after_upgrade` | NICE | the delegated token was issued before NICE was upgraded (`403 delegation_not_allowed`): get a new user token |
+| `insecure_endpoint` | agent | the catalog endpoint of that service is `http` to a host that is not a loopback |
+| `approval_unavailable` | agent | a sensitive operation in an MCP client that cannot ask for an approval |
+| `not_approved` | agent | the user declined or dismissed the approval |
 | `access_denied` | exchange | the user is not an active member of that organization, the organization is not active, or it does not entitle the target service or `agen` |
 | `invalid_scope` | exchange | the target service is not active, or the project is not active in that organization or does not use the target service |
 | `invalid_grant` (`subject_token_expiring`) | exchange | the user's token has less than 60 seconds left: refresh it in the MCP client |
@@ -94,7 +124,7 @@ Failures come back as tool results marked as errors (`isError: true`) with the c
 | `invalid_client`, `unauthorized_client` | exchange | the agent's client is refused: check `NICE_CLIENT_ID` and `NICE_CLIENT_SECRET` |
 | `nice_unavailable` | exchange | NICE did not answer |
 | `insufficient_scope` (`permission_denied`), `permission_denied` | service | the user does not hold the permission for that operation in that project |
-| `invalid_argument` | agent, service | `organization_id` or `project_id` is malformed, or another organization comes without `project_id` (agent); a device field is not valid (`nadi`) |
+| `invalid_argument` | agent, service | the arguments do not fit the map or the operation (see "Endpoints and tools"); a device field is not valid (`nadi`) |
 
 Example text of a tool result for an organization the user does not belong to:
 
@@ -104,10 +134,10 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk`, so this example builds without the `nice` repo. The code needs SDK `v0.2.3` or later. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk`, so this example builds without the `nice` repo. The code needs SDK `v0.2.4` or later. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
-- `nadi` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md) (register, import, activate, entitlement, project activation, binding). The test user holds the role `nadi.editor` in the same project. Do not use `nadi.operator`: that is the platform operator role of the service, not a project role.
+- `nadi` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md) (register, import, activate, entitlement, project activation, binding). The catalog endpoint of `nadi` is the address the agent calls, so it must be `https` or a loopback (locally: `http://127.0.0.1:8081`). The test user holds the role `nadi.editor` in the same project, or `nadi.admin` to try the approval of a delete. Do not use `nadi.operator`: that is the platform operator role of the service, not a project role.
 - For the other-organization test: the test user is also a member of a second organization, with a `nadi` entitlement, a project that has `nadi` active, and a `nadi.editor` binding there (steps 6 to 8 of the `nadi` README for that organization).
 
 ## Configuration
@@ -119,12 +149,11 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `NICE_ISSUER` | required | the NICE issuer, exactly as the `iss` claim of its tokens |
 | `NICE_CLIENT_ID` | required | `client_id` of the confidential client `agen-backend` (step 7) |
 | `NICE_CLIENT_SECRET` | required | the secret of that client. Sent to the NICE token endpoint only |
-| `NADI_URL` | required | address of `nadi`, e.g. `http://127.0.0.1:8081`. Must be `https` unless the host is a loopback, because the SDK refuses to send a token over `http` to another host |
 | `LISTEN_ADDR` | `127.0.0.1:8083` | listen address |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients use; the metadata `resource` is `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
 
-An empty required variable stops the start with a message that names it.
+An empty required variable stops the start with a message that names it. No service address is configured: the agent calls each service at the endpoint of the NICE catalog.
 
 The resolution of `perms_ref` (a caller whose `agen` permissions do not fit a token) is always on, with no configuration: the agent forwards the token of the request itself to NICE (`POST /api/v1/permission-resolutions` with `Authorization: Bearer`). The agent holds no NICE credential besides the service client `agen-backend`. When NICE is unreachable or refuses that token, the call answers `503`.
 
@@ -138,7 +167,7 @@ make smoke        # scripts/smoke.sh, needs a NICE set up with the checklist bel
 
 When `go` on `PATH` does not match `GOROOT`, call `make GO=/path/to/go test`.
 
-The tests run the agent over in-process HTTP with the MCP client of the SDK, in front of a fake NICE that follows the token exchange rules. The tests that keep the pattern: the fake services fail when they ever receive a token with `aud=agen` (no passthrough), ten calls in one context give one exchange, and the exchanges for two different contexts (organization or project) run at the same time.
+The tests run the agent over in-process HTTP with the MCP client of the SDK, in front of a fake NICE that follows the token exchange and discovery rules. The tests that keep the pattern: the fake services fail when they ever receive a token with `aud=agen` (no passthrough), ten calls in one context give one exchange for `nadi` and one for the NICE API, the exchanges for two different contexts (organization or project) run at the same time, and a sensitive operation is sent exactly once after an approval and never without one.
 
 ### Running in a container
 
@@ -147,12 +176,12 @@ The `Dockerfile` builds a static binary with Go 1.27 and runs it on the distrole
 ```bash
 docker build -t agen .
 docker run --rm -p 8083:8083 -v agen-data:/data \
-  -e NICE_ISSUER=https://nice.example.com -e NADI_URL=https://nadi.example.com \
+  -e NICE_ISSUER=https://nice.example.com \
   -e PUBLIC_URL=https://agen.example.com -e NICE_CLIENT_ID -e NICE_CLIENT_SECRET agen
 ```
 
 - `PUBLIC_URL` must be the public `https` address MCP clients use: the resource metadata names `<PUBLIC_URL>/mcp`, and the endpoint of `agen` in NICE must point to the same address.
-- `NICE_ISSUER` and `NADI_URL` must be `https` unless the host is a loopback: `DoAs` of the SDK refuses `http` to another host, and inside a container `127.0.0.1` is the container itself.
+- `NICE_ISSUER` and the catalog endpoint of every service must be `https` unless the host is a loopback: the SDK refuses `http` to another host, and inside a container `127.0.0.1` is the container itself. A catalog endpoint that only works inside a Docker network (e.g. `http://nadi:8081`) answers `insecure_endpoint`.
 - The secret is passed from the shell environment (`-e NICE_CLIENT_SECRET` without a value), not written on the command line.
 
 ## NICE setup checklist
@@ -298,13 +327,16 @@ export AGENT_USER_TOKEN=$USER_TOKEN   # read by scripts/smoke.sh
 make smoke
 ```
 
-The script reads `.env` and `AGENT_USER_TOKEN` from the environment, never prints a token or the secret, and checks: NICE answers, `/healthz` answers, `/mcp` without a token answers `401` with `resource_metadata`, the metadata names `NICE_ISSUER`, then, with the user token, `tools/list` holds the two tools and `nadi_list_devices` succeeds. Failures map to steps:
+The script reads `.env` and `AGENT_USER_TOKEN` from the environment, never prints a token or the secret, and checks: NICE answers, `/healthz` answers, `/mcp` without a token answers `401` with `resource_metadata`, the metadata names `NICE_ISSUER`, then, with the user token, `tools/list` holds the three tools, `list_services` lists `nadi`, `list_operations` for `nadi` lists `GET /devices`, and `call_operation` of that operation succeeds. `AGENT_URL` points the script at an agent elsewhere (e.g. `AGENT_URL=https://agen.example.com make smoke`). Failures map to steps:
 
 | Answer | Step likely missed |
 |---|---|
 | no `.env`, agent unreachable | 7, 9 |
 | `/mcp` with the token answers `401` `wrong_audience` | 10: the token must be requested with `nice:aud:agen` through `agen-user` |
 | `/mcp` answers `403` `permission_denied` | 8: the `agen.user` binding |
+| a tool answers `discovery_unavailable` | NICE is older than the minimum version |
+| a tool answers `service_not_allowed`, or `list_services` has no `nadi` | steps 6 to 8 of the `nadi` README for that user and project |
+| a tool answers `insecure_endpoint` | the catalog endpoint of `nadi` is not `https` or a loopback |
 | a tool answers `invalid_client` | 7: `NICE_CLIENT_ID` or `NICE_CLIENT_SECRET` |
 | a tool answers `invalid_scope` | `nadi` is not active in the project of the token (step 7 of the `nadi` README) |
 | a tool answers `invalid_grant` | 10: the user token is about to expire, stale, or its session ended; get a new one |
@@ -323,48 +355,90 @@ tool() {   # tool <name> [arguments JSON]
 }
 ```
 
-1. **Tool list.** Two `nadi` tools, no delete operation:
+1. **Tool list.** Three tools: `list_services`, `list_operations`, `call_operation`:
 
    ```bash
    curl -sS http://127.0.0.1:8083/mcp -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
      -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq '[.result.tools[].name]'
    ```
 
-2. **Device created by the agent.** `created_by` is the user and `acted_by` is the `client_id` of `agen-backend` (`NICE_CLIENT_ID`):
+2. **Discovery.** The map lists `nadi` in the project of the user; the operations of `nadi` list `GET /devices` and `DELETE /devices/{id}` with `sensitive: true` (when the user holds the delete permission):
 
    ```bash
-   tool nadi_create_device '{"name":"Sensor Suhu","serial_number":"SN-2026-0001","status":"active","location":"Gudang A"}'
-   tool nadi_list_devices
+   tool list_services
+   tool list_operations '{"service":"nadi"}' | jq '.structuredContent.operations[] | {key, method, path, sensitive}'
    ```
 
-3. **Another organization of the user.** With a second organization (`ORG_B_ID`, project `PROJECT_B_ID`) that meets the prerequisites and entitles `agen`:
+   Note the keys of `POST /devices`, `GET /devices`, and `DELETE /devices/{id}` as `CREATE`, `LIST`, and `DELETE`.
+
+3. **Device created by the agent.** `created_by` is the user and `acted_by` is the `client_id` of `agen-backend` (`NICE_CLIENT_ID`):
 
    ```bash
-   tool nadi_list_devices "{\"organization_id\":\"$ORG_B_ID\",\"project_id\":\"$PROJECT_B_ID\"}"
+   tool call_operation "{\"service\":\"nadi\",\"operation\":\"$CREATE\",
+     \"body\":{\"name\":\"Sensor Suhu\",\"serial_number\":\"SN-2026-0001\",\"status\":\"active\",\"location\":\"Gudang A\"}}"
+   tool call_operation "{\"service\":\"nadi\",\"operation\":\"$LIST\"}"
    ```
 
-   It succeeds, with the devices of that organization.
-
-4. **An organization that is not the user's.** The result is an `access_denied` error, and `nadi` is not called:
+4. **Another organization of the user.** With a second organization (`ORG_B_ID`, project `PROJECT_B_ID`) that meets the prerequisites and entitles `agen`:
 
    ```bash
-   tool nadi_list_devices "{\"organization_id\":\"$OTHER_ORG_ID\",\"project_id\":\"$OTHER_PROJECT_ID\"}"
+   tool call_operation "{\"service\":\"nadi\",\"operation\":\"$LIST\",\"organization_id\":\"$ORG_B_ID\",\"project_id\":\"$PROJECT_B_ID\"}"
    ```
 
-5. **NICE audit.** Every exchange is recorded as `token.exchange` with the user as actor and `details` `client_id`, `service`, and `project_id`. A successful exchange is recorded in the target organization. A refusal is recorded in the organization of the user's token, with `details.reason` (e.g. `not_member`, `invalid_scope`) and `details.target_organization_id`:
+   It succeeds, with the devices of that organization. A project that `list_services` does not list for `nadi` answers `invalid_argument` with no exchange.
+
+5. **Delete with an approval.** With a user who holds `nadi.devices.delete` and `DEVICE_ID` from step 3. A first call without the headers of protocol `2026-07-28` answers `approval_unavailable` and deletes nothing:
+
+   ```bash
+   tool call_operation "{\"service\":\"nadi\",\"operation\":\"$DELETE\",\"path_params\":{\"id\":\"$DEVICE_ID\"}}"
+   ```
+
+   A client of protocol `2026-07-28` sends the headers `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, and a `_meta` with the elicitation capability in every request. The first round returns the approval message and a `requestState`; the second sends the answer of the user with that state:
+
+   ```bash
+   approve() {   # approve <arguments JSON> [state] [true|false]
+     jq -nc --argjson args "$1" --arg state "${2:-}" --argjson ok "${3:-true}" '
+       {jsonrpc: "2.0", id: 1, method: "tools/call", params: ({name: "call_operation", arguments: $args,
+         _meta: {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                 "io.modelcontextprotocol/clientInfo": {name: "curl", version: "1"},
+                 "io.modelcontextprotocol/clientCapabilities": {elicitation: {form: {}}}}}
+         + (if $state == "" then {} else {requestState: $state,
+             inputResponses: {approve: {action: "accept", content: {approve: $ok}}}} end))}' |
+     curl -sS http://127.0.0.1:8083/mcp -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
+       -H 'Accept: application/json, text/event-stream' -H 'MCP-Protocol-Version: 2026-07-28' \
+       -H 'Mcp-Method: tools/call' -H 'Mcp-Name: call_operation' -d @-
+   }
+   ARGS="{\"service\":\"nadi\",\"operation\":\"$DELETE\",\"path_params\":{\"id\":\"$DEVICE_ID\"}}"
+   FIRST=$(approve "$ARGS"); jq '.result | {resultType, message: .inputRequests.approve.params.message}' <<<"$FIRST"
+   approve "$ARGS" "$(jq -r .result.requestState <<<"$FIRST")" true | jq '.result | {isError, structuredContent}'
+   ```
+
+   The second round answers `status: 204` and the device is gone from `$LIST`. Sending the same state again, or that state with another `DEVICE_ID`, answers with a new approval request; `false` answers `not_approved`.
+
+6. **An organization that is not the user's.** The result is an error, and `nadi` is not called: `invalid_argument` when the organization is not in the map, or `access_denied` from the exchange:
+
+   ```bash
+   tool call_operation "{\"service\":\"nadi\",\"operation\":\"$LIST\",\"organization_id\":\"$OTHER_ORG_ID\",\"project_id\":\"$OTHER_PROJECT_ID\"}"
+   ```
+
+7. **NICE audit.** Every exchange is recorded as `token.exchange` with the user as actor and `details` `client_id`, `service`, and `project_id`, including the exchange for the NICE API (`service` `nice`). A successful exchange is recorded in the target organization. A refusal is recorded in the organization of the user's token, with `details.reason` (e.g. `not_member`, `invalid_scope`) and `details.target_organization_id`:
 
    ```bash
    curl -sS "$NICE/api/v1/audit/records?action=token.exchange&page_size=10" -H "Authorization: Bearer $OWNER_TOKEN" \
      | jq '.records[] | {actor_id, outcome, project_id, details}'
    ```
 
-   The agent keeps exchanged tokens, so many tool calls in one context give only one record per context.
+   The agent keeps exchanged tokens, so many tool calls in one context give only one record per context, plus one for the NICE API.
 
-6. **MCP Inspector (optional).** `npx @modelcontextprotocol/inspector`, Streamable HTTP transport to `http://127.0.0.1:8083/mcp`. NICE offers no Dynamic Client Registration, so enter the `client_id` of `agen-user` by hand and add `nice:prj:<project>` to the scope; the scopes of the metadata alone are not enough for a service client token. This step is not part of the integration run of this example.
+8. **MCP Inspector (optional).** `npx @modelcontextprotocol/inspector`, Streamable HTTP transport to `http://127.0.0.1:8083/mcp`. NICE offers no Dynamic Client Registration, so enter the `client_id` of `agen-user` by hand and add `nice:prj:<project>` to the scope; the scopes of the metadata alone are not enough for a service client token. NICE without dev mode refuses `http` redirects of a public client, so the Inspector can sign in only to a local NICE running in dev mode. This step is not part of the integration run of this example.
 
 ## Limits
 
 - **No DCR.** MCP clients are registered by hand (step 6).
-- **No tools for `api_key` services.** Those services serve Service Accounts only (see "Why only `nice_token` services"), so this example does not show a call to an `api_key` service.
-- **No sensitive tools**, no chat UI or LLM, and no agent work while the user is away.
+- **No `api_key` services.** Those services serve Service Accounts only (see "Why only `nice_token` services"), so this example does not show a call to an `api_key` service.
+- **Approvals only in clients of protocol `2026-07-28`.** An older client cannot run a sensitive operation (`approval_unavailable`).
+- **Approvals per process.** The set of used nonces lives in memory: with several replicas, one approval can be used again within 5 minutes on another replica for the exact same call. A restart drops pending approvals.
+- **No input schema per operation.** `request_fields` hold the name, location, and basic type only; the agent does not validate `body`, the target service checks it.
+- **One project per call.** A question over many projects means one `call_operation` per project, each with one exchange; `/oauth/token` is rate limited per client (30 a minute by default).
+- No chat UI or LLM, and no agent work while the user is away.
 - **No access change feed in the agent.** A stale user token is still refused at the exchange (`invalid_grant` `token_stale`), because NICE checks the feed itself.

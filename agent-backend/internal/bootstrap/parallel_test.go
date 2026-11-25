@@ -13,19 +13,20 @@ func TestTenCallsInOneContextShareOneExchange(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 5 {
 		wg.Go(func() {
-			if res, _ := callTool(t, s, "nadi_list_devices", nil); res.IsError {
+			if res, _ := callTool(t, s, "call_operation", op("listDevices", nil)); res.IsError {
 				t.Errorf("parallel call failed: %s", resultText(t, res))
 			}
 		})
 	}
 	wg.Wait()
 	for range 5 {
-		if res, _ := callTool(t, s, "nadi_list_devices", nil); res.IsError {
+		if res, _ := callTool(t, s, "call_operation", op("listDevices", nil)); res.IsError {
 			t.Fatalf("call failed: %s", resultText(t, res))
 		}
 	}
-	if n := len(e.nice.Exchanges()); n != 1 {
-		t.Fatalf("exchanges = %d for ten calls in one context, want 1", n)
+	// One exchange for nadi and one for the NICE API (the map and the operations), whatever the number of calls.
+	if n, m := len(e.nice.ExchangesFor("nadi")), len(e.nice.ExchangesFor("nice")); n != 1 || m != 1 {
+		t.Fatalf("exchanges = %d for nadi and %d for the NICE API for ten calls in one context, want 1 and 1", n, m)
 	}
 	if n := len(e.inv.Received()); n != 10 {
 		t.Fatalf("nadi received %d calls, want 10", n)
@@ -38,7 +39,10 @@ func TestTwoContextsExchangeAtTheSameTime(t *testing.T) {
 	both := make(chan struct{})
 	var once sync.Once
 	// Each exchange waits until the other one has started: run one after the other, they would time out.
-	e.nice.onExchange = func(string) {
+	e.nice.onExchange = func(aud string) {
+		if aud != "nadi" {
+			return
+		}
 		n := inFlight.Add(1)
 		defer inFlight.Add(-1)
 		for {
@@ -57,9 +61,11 @@ func TestTwoContextsExchangeAtTheSameTime(t *testing.T) {
 	}
 	s := e.connect(e.userToken(orgA, prjP))
 	var wg sync.WaitGroup
+	// The map and the operations first, so the two calls only race for their exchanges of nadi.
+	callTool(t, s, "list_operations", map[string]any{"service": "nadi"})
 	for _, where := range []map[string]any{nil, {"organization_id": orgB, "project_id": prjQ}} {
 		wg.Go(func() {
-			if res, _ := callTool(t, s, "nadi_list_devices", where); res.IsError {
+			if res, _ := callTool(t, s, "call_operation", op("listDevices", where)); res.IsError {
 				t.Errorf("call for %v failed: %s", where, resultText(t, res))
 			}
 		})
@@ -68,7 +74,7 @@ func TestTwoContextsExchangeAtTheSameTime(t *testing.T) {
 	if most.Load() != 2 {
 		t.Fatalf("at most %d exchange in flight, want 2: calls for different contexts must not wait for each other", most.Load())
 	}
-	if n := len(e.nice.Exchanges()); n != 2 {
-		t.Fatalf("exchanges = %d, want one per context", n)
+	if n := len(e.nice.ExchangesFor("nadi")); n != 2 {
+		t.Fatalf("exchanges for nadi = %d, want one per context", n)
 	}
 }

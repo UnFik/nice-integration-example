@@ -28,7 +28,7 @@ func TokenInfo(ctx context.Context, token string, _ *http.Request) (*auth.TokenI
 	return &auth.TokenInfo{
 		UserID:     c.Subject,
 		Expiration: time.Unix(c.ExpiresAt, 0),
-		Extra:      map[string]any{key: calldto.Caller{Token: token, Subject: c.Subject, OrgID: c.OrgID}},
+		Extra:      map[string]any{key: calldto.Caller{Token: token, Subject: c.Subject, OrgID: c.OrgID, ProjectID: c.ProjectID}},
 	}, nil
 }
 

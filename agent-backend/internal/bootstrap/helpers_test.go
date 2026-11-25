@@ -112,16 +112,17 @@ type testEnv struct {
 }
 
 // newTestEnv runs the agent with the production wiring of NewCallService and NewHandler, in front of a fake NICE (token
-// endpoint and JWKS) and a fake nadi.
+// endpoint, discovery, and JWKS) and a fake nadi.
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 	e := &testEnv{t: t}
 	e.nice = newFakeNICE(t)
 	e.issuer = e.nice.URL()
 	e.inv = newFakeService(t, e.issuer, "nadi")
+	// The catalog endpoint of nadi: a loopback http address, which the SDK accepts.
+	e.nice.endpoint = e.inv.srv.URL
 	e.cfg = config.Config{
-		Issuer: e.issuer, ClientID: testClientID, ClientSecret: testSecret,
-		NadiURL: e.inv.srv.URL, PublicURL: "http://agent.test",
+		Issuer: e.issuer, ClientID: testClientID, ClientSecret: testSecret, PublicURL: "http://agent.test",
 	}
 	log := slog.New(slog.DiscardHandler)
 	vc := VerifierConfig(e.cfg, log)
@@ -146,9 +147,18 @@ func (e *testEnv) userToken(org, prj string) string {
 
 func (e *testEnv) post(path, token, body string) *http.Response {
 	e.t.Helper()
+	return e.postHeaders(path, token, body, nil)
+}
+
+// postHeaders is post with more headers, e.g. those a client of the sessionless protocol sends with every request.
+func (e *testEnv) postHeaders(path, token, body string, headers map[string]string) *http.Response {
+	e.t.Helper()
 	req, err := http.NewRequest(http.MethodPost, e.agent.URL+path, strings.NewReader(body))
 	if err != nil {
 		e.t.Fatal(err)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
@@ -174,7 +184,13 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // connect opens an MCP session to the agent with token, the way an MCP client does over Streamable HTTP.
 func (e *testEnv) connect(token string) *mcp.ClientSession {
 	e.t.Helper()
-	c := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0"}, nil)
+	return e.connectWith(token, nil)
+}
+
+// connectWith is connect with client options, e.g. an elicitation handler that plays the user.
+func (e *testEnv) connectWith(token string, opts *mcp.ClientOptions) *mcp.ClientSession {
+	e.t.Helper()
+	c := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0"}, opts)
 	s, err := c.Connect(context.Background(), &mcp.StreamableClientTransport{
 		Endpoint: e.agent.URL + mcpadapter.MCPPath, HTTPClient: &http.Client{Transport: bearerTransport{token}},
 	}, nil)

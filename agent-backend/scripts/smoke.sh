@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Smoke test of the agen example against a NICE set up with the README checklist: the agent answers, /mcp without a
 # token points to the resource metadata, the metadata names NICE, and, with AGENT_USER_TOKEN in the environment
-# (checklist step 10), the two tools are listed and nadi_list_devices succeeds through a token exchange.
-# It reads .env and AGENT_USER_TOKEN only and never prints a token or the secret; neither reaches the argv of curl.
+# (checklist step 10), the three tools are listed, list_services lists nadi, list_operations lists GET /devices of
+# nadi, and call_operation runs it through a token exchange. AGENT_URL points it at an agent elsewhere.
+# It reads .env, AGENT_URL, and AGENT_USER_TOKEN only and never prints a token or the secret; neither reaches the
+# argv of curl.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -34,7 +36,8 @@ case $listen in
   :*) listen="127.0.0.1$listen" ;;
   0.0.0.0:*) listen="127.0.0.1:${listen#0.0.0.0:}" ;;
 esac
-agent="http://$listen"
+agent=${AGENT_URL:-http://$listen}
+agent=${agent%/}
 
 body=$(mktemp)
 headers=$(mktemp)
@@ -83,19 +86,37 @@ if [[ $status != 200 ]]; then
   esac
 fi
 tools=$(jq -r '[.result.tools[].name] | sort | join(",")' "$body")
-[[ $tools == nadi_create_device,nadi_list_devices ]] ||
-  fail "tools/list memuat $tools, seharusnya dua tool contoh."
-ok "tools/list: dua tool"
+[[ $tools == call_operation,list_operations,list_services ]] ||
+  fail "tools/list memuat $tools, seharusnya list_services, list_operations, dan call_operation."
+ok "tools/list: tiga tool"
 
-status=$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nadi_list_devices","arguments":{}}}')
-[[ $status == 200 ]] || fail "tools/call dijawab HTTP $status."
-if [[ $(jq -r '.result.isError // false' "$body") == true ]]; then
+# tool <id> <name> <arguments JSON> calls one tool and stops with a hint for the step a refusal points to.
+tool() {
+  status=$(mcp "$(jq -nc --argjson id "$1" --arg name "$2" --argjson args "$3" \
+    '{jsonrpc: "2.0", id: $id, method: "tools/call", params: {name: $name, arguments: $args}}')")
+  [[ $status == 200 ]] || fail "$2 dijawab HTTP $status."
+  [[ $(jq -r '.result.isError // false' "$body") == true ]] || return 0
   text=$(jq -r '.result.content[0].text' "$body")
   case $text in
+    discovery_unavailable*) fail "$text" "NICE terlalu lama: naikkan ke revisi yang disebut README (Versi NICE minimum)." ;;
+    service_not_allowed*) fail "$text" "User belum boleh memanggil nadi: langkah 6 sampai 8 README sharedservice-oauth/backend." ;;
+    insecure_endpoint*) fail "$text" "Daftarkan endpoint nadi di katalog sebagai https, atau loopback untuk uji lokal." ;;
     invalid_client*) fail "$text" "Periksa NICE_CLIENT_ID dan NICE_CLIENT_SECRET (checklist langkah 7)." ;;
     invalid_scope*) fail "$text" "Periksa bahwa nadi aktif di project token (langkah 7 README sharedservice-oauth/backend)." ;;
     invalid_grant*) fail "$text" "Token user hampir habis, basi, atau sesinya berakhir: ambil token baru (checklist langkah 10)." ;;
     *) fail "$text" ;;
   esac
-fi
-ok "nadi_list_devices lewat token exchange: $(jq -r '.result.structuredContent.devices | length' "$body") perangkat"
+}
+
+tool 2 list_services '{}'
+jq -e '.result.structuredContent.services | map(.slug) | index("nadi")' "$body" >/dev/null ||
+  fail "list_services tidak memuat nadi." "User belum memegang izin nadi di project mana pun: langkah 8 README sharedservice-oauth/backend."
+ok "list_services: nadi di $(jq '[.result.structuredContent.organizations[].projects[] | select(.services | index("nadi"))] | length' "$body") project"
+
+tool 3 list_operations '{"service":"nadi"}'
+key=$(jq -r '.result.structuredContent.operations[] | select(.method == "GET" and .path == "/devices") | .key' "$body" | head -1)
+[[ -n $key ]] || fail "list_operations nadi tidak memuat GET /devices." "Impor ulang katalog nadi dan pastikan user memegang nadi.devices.read."
+ok "list_operations nadi: $(jq '.result.structuredContent.operations | length' "$body") operasi, GET /devices = $key"
+
+tool 4 call_operation "$(jq -nc --arg key "$key" '{service: "nadi", operation: $key}')"
+ok "call_operation $key lewat token exchange: HTTP $(jq -r '.result.structuredContent.status' "$body"), $(jq -r '.result.structuredContent.body.devices | length' "$body") perangkat"

@@ -17,3 +17,22 @@ func safe(s string) string {
 	}
 	return s
 }
+
+// Plain makes text from NICE or the model fit a message the user reads: printable ASCII only, at most 120
+// characters, and nothing shaped like a token.
+func Plain(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.Contains(s, "eyJ") {
+		return ""
+	}
+	b := []byte(s)
+	for i, c := range b {
+		if c < 0x20 || c > 0x7E {
+			b[i] = '?'
+		}
+	}
+	if len(b) > 120 {
+		b = append(b[:117], "..."...)
+	}
+	return string(b)
+}
