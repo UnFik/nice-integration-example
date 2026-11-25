@@ -67,17 +67,18 @@ func VerifierConfig(cfg config.Config, log *slog.Logger) verify.Config {
 	}
 }
 
-// NewCallService wires the call use case to the exchange client of the agent's own service client.
+// NewCallService wires the call use case to the exchange client of the agent's own service client: the service map,
+// the operations, and the calls all go through it. No service address is configured: each comes from the catalog.
 func NewCallService(cfg config.Config, hc *http.Client, log *slog.Logger) (*callusecase.Service, error) {
-	sender, err := niceexchange.New(credentials.ExchangeConfig{
+	x, err := niceexchange.New(credentials.ExchangeConfig{
 		Issuer: cfg.Issuer, ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, HTTP: hc, Log: log,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &callusecase.Service{
-		Sender:     sender,
-		Bases:      map[domain.Target]string{domain.Nadi: cfg.NadiURL},
+		Discoverer: x,
+		Operator:   x,
 		ClientVars: config.EnvClientID + " and " + config.EnvClientSecret,
 		Log:        log,
 	}, nil

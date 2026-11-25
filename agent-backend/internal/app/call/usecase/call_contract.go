@@ -6,9 +6,16 @@ import (
 	calldto "github.com/nice-platform/example/agent-backend/internal/app/call/dto"
 )
 
-// Sender sends one request to a service with a token exchanged for key on behalf of the user who holds token. It is
-// the only way the use case touches OAuth. Its errors are domain.GrantError, domain.ErrTemporary,
-// domain.ErrUnreachable, domain.ErrBuildRequest, or domain.ErrIncompleteAnswer; any other error is a failed exchange.
-type Sender interface {
-	Send(ctx context.Context, token string, key calldto.Key, req calldto.Request) (calldto.Response, error)
+// Discoverer reads what NICE says the user of token may call: the service map, and the operations of one service.
+// Its errors are domain.APIError, domain.GrantError, domain.ErrTemporary, or domain.ErrUnreachable.
+type Discoverer interface {
+	Services(ctx context.Context, token string) (calldto.ServiceMap, error)
+	Operations(ctx context.Context, token, slug string) (calldto.ServiceOperations, error)
+}
+
+// Operator sends one call of an operation with a token exchanged on behalf of the user who holds token. It is the
+// only way the use case reaches a service. Its errors are domain.InvalidCallError (nothing was exchanged),
+// domain.GrantError, domain.ErrTemporary, domain.ErrUnreachable, or domain.ErrIncompleteAnswer.
+type Operator interface {
+	CallOperation(ctx context.Context, token string, call calldto.OperationCall) (calldto.OperationResult, error)
 }

@@ -3,9 +3,10 @@ package calldto
 
 // Caller is the user of one MCP request: the token as it came, for the exchange, and the claims the call needs.
 type Caller struct {
-	Token   string
-	Subject string
-	OrgID   string
+	Token     string
+	Subject   string
+	OrgID     string
+	ProjectID string
 }
 
 // Where is the organization and project a tool call names; empty keeps those of the user's token.

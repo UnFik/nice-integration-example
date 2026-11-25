@@ -33,9 +33,13 @@ func newCallEnv(t *testing.T) *callEnv {
 	return &callEnv{testEnv: e, calls: calls}
 }
 
-// call runs the use case and shows a failure the way the MCP adapter does, so the tests read what the model reads.
-func (e *callEnv) call(ctx context.Context, c calldto.Caller, t domain.Target, where calldto.Where, method, path string, body any) (*mcp.CallToolResult, any) {
-	out, f := e.calls.ExecuteCall(ctx, c, t, where, method, path, body)
+// call runs call_operation's use case for an operation of nadi and shows a failure the way the MCP adapter does, so
+// the tests read what the model reads.
+func (e *callEnv) call(ctx context.Context, c calldto.Caller, key string, where calldto.Where, body any) (*mcp.CallToolResult, any) {
+	out, ask, f := e.calls.CallOperation(ctx, c, calldto.OperationInput{Service: "nadi", Operation: key, Where: where, Body: body}, calldto.Approval{})
+	if ask != nil {
+		e.t.Fatalf("%s asked for an approval", key)
+	}
 	if f != nil {
 		text := f.Code
 		if f.Description != "" && f.Description != f.Code {
@@ -43,7 +47,7 @@ func (e *callEnv) call(ctx context.Context, c calldto.Caller, t domain.Target, w
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text + ": " + f.Message}}, IsError: true}, nil
 	}
-	return nil, out
+	return nil, out.Body
 }
 
 func (e *callEnv) caller(org, prj string) calldto.Caller {
@@ -56,7 +60,7 @@ func (e *callEnv) caller(org, prj string) calldto.Caller {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return calldto.Caller{Token: tok, Subject: c.Subject, OrgID: c.OrgID}
+	return calldto.Caller{Token: tok, Subject: c.Subject, OrgID: c.OrgID, ProjectID: c.ProjectID}
 }
 
 // resultText is the text of a tool result, and fails when it shows a token or the agent's secret.
@@ -99,17 +103,21 @@ func wantOK(t *testing.T, res *mcp.CallToolResult, out any) map[string]any {
 	return m
 }
 
+var newDevice = map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "active"}
+
 func TestCallExchangesTheUserTokenAndSendsOnlyTheExchangedOne(t *testing.T) {
 	e := newCallEnv(t)
-	c := e.caller(orgA, prjP)
-	res, out := e.call(context.Background(), c, domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	got := wantOK(t, res, out)
 	if got["org"] != orgA || got["project"] != prjP {
 		t.Fatalf("nadi saw context %v/%v, want the token's %s/%s", got["org"], got["project"], orgA, prjP)
 	}
-	ex := e.nice.Exchanges()
+	ex := e.nice.ExchangesFor("nadi")
 	if len(ex) != 1 || ex[0].Scope != "nice:aud:nadi" {
 		t.Fatalf("exchanges = %+v, want one for nice:aud:nadi with the token's context", ex)
+	}
+	if n := len(e.nice.ExchangesFor("nice")); n != 1 {
+		t.Fatalf("exchanges for the NICE API = %d, want 1 for the map and the operations", n)
 	}
 	rec := e.inv.Received()
 	if len(rec) != 1 {
@@ -122,8 +130,8 @@ func TestCallExchangesTheUserTokenAndSendsOnlyTheExchangedOne(t *testing.T) {
 
 func TestCallRefusedWithAccessDeniedCallsNoService(t *testing.T) {
 	e := newCallEnv(t)
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{Org: orgC, Project: prjQ},
-		http.MethodGet, "/devices", nil)
+	e.nice.Refuse("nadi", 400, "access_denied", "the user is not a member of the organization")
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	text := wantToolError(t, res, out, "access_denied")
 	if !strings.Contains(text, "organization") {
 		t.Fatalf("text %q does not explain the reason", text)
@@ -136,7 +144,7 @@ func TestCallRefusedWithAccessDeniedCallsNoService(t *testing.T) {
 func TestCallRefusedWithInvalidScope(t *testing.T) {
 	e := newCallEnv(t)
 	e.nice.Refuse("nadi", 400, "invalid_scope", "nadi is not active in the project")
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	wantToolError(t, res, out, "invalid_scope")
 	if n := len(e.inv.Received()); n != 0 {
 		t.Fatalf("nadi was called %d times", n)
@@ -146,7 +154,7 @@ func TestCallRefusedWithInvalidScope(t *testing.T) {
 func TestCallExplainsAnExpiringUserToken(t *testing.T) {
 	e := newCallEnv(t)
 	e.nice.Refuse("nadi", 400, "invalid_grant", "subject_token_expiring: the subject token expires within 60 seconds")
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	text := wantToolError(t, res, out, "subject_token_expiring")
 	if !strings.Contains(text, "refresh") {
 		t.Fatalf("text %q does not say to refresh the token", text)
@@ -155,8 +163,8 @@ func TestCallExplainsAnExpiringUserToken(t *testing.T) {
 
 func TestCallExplainsARefusedAgentClient(t *testing.T) {
 	e := newCallEnv(t)
-	e.nice.Refuse("nadi", 401, "invalid_client", "client authentication failed")
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
+	e.nice.Refuse("nice", 401, "invalid_client", "client authentication failed")
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	text := wantToolError(t, res, out, "invalid_client")
 	if !strings.Contains(text, config.EnvClientSecret) {
 		t.Fatalf("text %q does not point the operator to the client", text)
@@ -166,8 +174,7 @@ func TestCallExplainsARefusedAgentClient(t *testing.T) {
 func TestCallNamesPermissionDeniedOfTheService(t *testing.T) {
 	e := newCallEnv(t)
 	e.nice.perms["nadi"] = []string{"nadi.devices.read"}
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodPost, "/devices",
-		map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "active"})
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "createDevice", calldto.Where{}, newDevice)
 	text := wantToolError(t, res, out, "permission_denied")
 	if !strings.Contains(text, "nadi") {
 		t.Fatalf("text %q does not name the service", text)
@@ -177,14 +184,13 @@ func TestCallNamesPermissionDeniedOfTheService(t *testing.T) {
 func TestCallRetriesOnceWhenTheServiceSaysTokenStale(t *testing.T) {
 	e := newCallEnv(t)
 	e.inv.StaleOnce()
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodPost, "/devices",
-		map[string]any{"name": "Sensor", "serial_number": "SN-2", "status": "active"})
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "createDevice", calldto.Where{}, newDevice)
 	got := wantOK(t, res, out)
 	if got["name"] != "Sensor" {
 		t.Fatalf("device = %v", got)
 	}
-	if n := len(e.nice.Exchanges()); n != 2 {
-		t.Fatalf("exchanges = %d, want 2 (one fresh exchange after token_stale)", n)
+	if n := len(e.nice.ExchangesFor("nadi")); n != 2 {
+		t.Fatalf("exchanges for nadi = %d, want 2 (one fresh exchange after token_stale)", n)
 	}
 	if n := len(e.inv.Received()); n != 2 {
 		t.Fatalf("nadi received %d requests, want 2", n)
@@ -195,8 +201,12 @@ func TestCallReportsTokenStaleWhenItPersists(t *testing.T) {
 	e := newCallEnv(t)
 	e.inv.StaleOnce()
 	// The second answer is stale too: DoAs returns it, and the tool says so.
-	e.nice.onExchange = func(string) { e.inv.StaleOnce() }
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
+	e.nice.onExchange = func(aud string) {
+		if aud == "nadi" {
+			e.inv.StaleOnce()
+		}
+	}
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	wantToolError(t, res, out, "token_stale")
 	if n := len(e.inv.Received()); n != 2 {
 		t.Fatalf("nadi received %d requests, want 2 (one retry only)", n)
@@ -206,6 +216,6 @@ func TestCallReportsTokenStaleWhenItPersists(t *testing.T) {
 func TestCallWhenNICEDoesNotAnswer(t *testing.T) {
 	e := newCallEnv(t)
 	e.nice.srv.Close()
-	res, out := e.call(context.Background(), e.caller(orgA, prjP), domain.Nadi, calldto.Where{}, http.MethodGet, "/devices", nil)
+	res, out := e.call(context.Background(), e.caller(orgA, prjP), "listDevices", calldto.Where{}, nil)
 	wantToolError(t, res, out, "nice_unavailable")
 }

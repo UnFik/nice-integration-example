@@ -32,7 +32,6 @@ func fullEnv() map[string]string {
 		config.EnvIssuer:       "http://localhost:8080",
 		config.EnvClientID:     "agen-backend-id",
 		config.EnvClientSecret: "secret-from-env",
-		config.EnvNadiURL:      "http://127.0.0.1:8081",
 	}
 }
 
@@ -47,7 +46,7 @@ func without(m map[string]string, key string) map[string]string {
 }
 
 func TestRunStopsAndNamesEachMissingVariable(t *testing.T) {
-	for _, key := range []string{config.EnvIssuer, config.EnvClientID, config.EnvClientSecret, config.EnvNadiURL} {
+	for _, key := range []string{config.EnvIssuer, config.EnvClientID, config.EnvClientSecret} {
 		missing := filepath.Join(t.TempDir(), ".env")
 		err := Run(context.Background(), env(without(fullEnv(), key)), missing, slog.New(slog.DiscardHandler))
 		if err == nil || !strings.Contains(err.Error(), key) {
