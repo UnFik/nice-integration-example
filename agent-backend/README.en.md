@@ -15,7 +15,7 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer exchanged token (aud=nadi, act.sub=agen-backend)--> nadi /devices
 ```
 
-Minimum NICE version: NICE with the change `service-calls-without-service-account` (not merged yet), because the resolution of `perms_ref` forwards the token of the request, not an API key. Before it, `5def119` (2026-11-17, the start of the current `nice` history), which already has service clients, the delegated NICE API, organization switching, and token exchange, and no longer has service dependency declarations. SDK: `github.com/ABA-Developer/nice-auth-sdk`, `v0.2.3`. The MCP SDK is pinned in `go.mod` at `v1.8.0`.
+Minimum NICE version: `b361d25` (`service-calls-without-service-account`), because the resolution of `perms_ref` forwards the token of the request, not an API key. Before it, `5def119` (2026-11-17, the start of the current `nice` history), which already has service clients, the delegated NICE API, organization switching, and token exchange, and no longer has service dependency declarations. SDK: `github.com/ABA-Developer/nice-auth-sdk`, `v0.2.3`. The MCP SDK is pinned in `go.mod` at `v1.8.0`.
 
 Tested against nice revision: SDK `v0.2.2` and `nice` `eb17848`, 2026-11-25, with the unit tests only (fake NICE and `nadi`). `make smoke` has not been run again against a running NICE. The version without an extra NICE credential (SDK `v0.2.3`) was tested with the unit tests only, 2026-11-25.
 

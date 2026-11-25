@@ -67,26 +67,30 @@ Service SHALL memakai `nice_org_id` dari token terverifikasi sebagai kunci tenan
 - **THEN** service menjawab 403 `project_required`
 
 ### Requirement: Hapus barang adalah operasi sensitif
-`DELETE /items/{id}` SHALL diperiksa online ke NICE (`POST /api/v1/access-checks`) pada setiap request, selain pemeriksaan `perms`. Bila NICE menolak, service SHALL menjawab 403 `access_denied`. Bila pemeriksaan tidak dapat dilakukan, termasuk saat API key pemeriksa tidak dikonfigurasi, service SHALL menjawab 503 dan tidak menghapus barang.
+`DELETE /items/{id}` SHALL diperiksa online ke NICE (`POST /api/v1/access-checks`) pada setiap request, selain pemeriksaan `perms`. Pemeriksaan SHALL meneruskan token request itu sendiri sebagai `Authorization: Bearer` dengan body yang hanya memuat `permission`, dan service SHALL NOT memegang API key NICE untuk itu. Bila NICE menolak, service SHALL menjawab 403 `access_denied`. Bila pemeriksaan tidak dapat dilakukan, termasuk saat NICE tidak terjangkau atau menolak token yang diteruskan dengan 401, service SHALL menjawab 503 dan tidak menghapus barang.
 
 #### Scenario: Akses sudah dicabut
 - **WHEN** token masih memuat `inventaris.items.delete` tetapi binding principal sudah dicabut di NICE
 - **THEN** service menjawab 403 `access_denied` dan barang tetap ada
 
 #### Scenario: Pemeriksa tidak dikonfigurasi
-- **WHEN** service berjalan tanpa API key `nice.service` dan klien yang berizin memanggil `DELETE /items/{id}`
+- **WHEN** service berjalan tanpa API key NICE, klien yang berizin memanggil `DELETE /items/{id}`, dan NICE mengizinkan
+- **THEN** NICE menerima `POST /api/v1/access-checks` dengan `Authorization: Bearer` berisi token klien itu dan body `{"permission":"inventaris.items.delete"}`, lalu barang dihapus
+
+#### Scenario: NICE menolak token yang diteruskan
+- **WHEN** NICE menjawab pemeriksaan dengan 401
 - **THEN** service menjawab 503 dan barang tetap ada
 
 ### Requirement: Pencabutan cepat lewat feed perubahan akses
-Bila API key Service Account `nice.service` dikonfigurasi, service SHALL membaca feed perubahan akses NICE terus-menerus (dengan putar ulang saat start) dan SHALL menolak token yang terbit sebelum perubahan akses principal, project, atau org-nya dengan 401 `token_stale`. Tanpa key, service SHALL tetap melayani operasi tidak sensitif dan mencatat peringatan saat start bahwa pencabutan hanya berlaku saat token kedaluwarsa.
+Service SHALL selalu membaca feed perubahan akses NICE terus-menerus (dengan putar ulang saat start), tanpa kredensial dan tanpa konfigurasi, dan SHALL menolak token yang terbit sebelum perubahan akses principal, project, atau org-nya dengan 401 `token_stale`. Perubahan dicocokkan lewat kunci tersamar `key` dan `org_key` yang dihitung dari klaim token.
 
 #### Scenario: Binding dicabut
 - **WHEN** feed berjalan, binding user dicabut di NICE, lalu user memanggil `GET /items` dengan token yang terbit sebelum pencabutan
 - **THEN** service menjawab 401 `token_stale`
 
 #### Scenario: Tanpa key feed
-- **WHEN** service dijalankan tanpa API key `nice.service`
-- **THEN** service mulai, mencatat peringatan, dan tetap melayani `GET /items` untuk token sah
+- **WHEN** service dijalankan tanpa API key NICE apa pun
+- **THEN** service membaca `GET /api/v1/access-changes` tanpa header `Authorization` dan tidak mencatat peringatan tentang feed yang mati
 
 ### Requirement: JWKS bertahan saat NICE mati
 Service SHALL menyimpan salinan JWKS terakhir yang valid ke disk dan membacanya saat start, sehingga service yang restart ketika NICE tidak terjangkau tetap memverifikasi token yang masih berlaku.
@@ -125,7 +129,7 @@ Service SHALL menjawab preflight CORS dan menambahkan `Access-Control-Allow-Orig
 - **THEN** respons tidak memuat `Access-Control-Allow-Origin`
 
 ### Requirement: Konfigurasi lewat env
-Service SHALL membaca konfigurasi dari variabel lingkungan atau berkas `.env` (issuer NICE, alamat listen, berkas JWKS, origin CORS, API key `nice.service` yang opsional, `client_id` dan `client_secret` OAuth client confidential, origin publik UI (`PUBLIC_URL`) yang menurunkan redirect URI callback, umur sesi, dan direktori hasil build UI; slug `inventaris` tetap karena nama izin bergantung padanya; `DATABASE_URL` PostgreSQL yang opsional, bila kosong data barang disimpan di memori), dan SHALL menyediakan `.env.example` berisi semua variabel dengan placeholder. Bila variabel wajib tidak ada, service SHALL berhenti saat start dengan pesan yang menyebut variabel itu, tanpa menampilkan nilai rahasia.
+Service SHALL membaca konfigurasi dari variabel lingkungan atau berkas `.env` (issuer NICE, alamat listen, berkas JWKS, origin CORS, `client_id` dan `client_secret` OAuth client confidential, origin publik UI (`PUBLIC_URL`) yang menurunkan redirect URI callback, umur sesi, dan direktori hasil build UI; slug `inventaris` tetap karena nama izin bergantung padanya; `DATABASE_URL` PostgreSQL yang opsional, bila kosong data barang disimpan di memori), dan SHALL menyediakan `.env.example` berisi semua variabel dengan placeholder. Service SHALL NOT membaca API key NICE untuk feed, pemeriksaan online, atau penyelesaian `perms_ref`, dan `.env.example` SHALL NOT memuat `NICE_SERVICE_API_KEY`. Bila variabel wajib tidak ada, service SHALL berhenti saat start dengan pesan yang menyebut variabel itu, tanpa menampilkan nilai rahasia.
 
 #### Scenario: Issuer tidak diisi
 - **WHEN** service dijalankan tanpa issuer NICE
@@ -134,6 +138,10 @@ Service SHALL membaca konfigurasi dari variabel lingkungan atau berkas `.env` (i
 #### Scenario: Secret client tidak diisi
 - **WHEN** service dijalankan tanpa `client_secret`
 - **THEN** proses berhenti dengan pesan yang menyebut nama variabelnya dan tidak mencetak nilai rahasia apa pun
+
+#### Scenario: Tanpa API key service
+- **WHEN** `.env.example` dibaca tes konfigurasi
+- **THEN** berkas itu tidak memuat `NICE_SERVICE_API_KEY`
 
 ### Requirement: Panduan setup manual dan uji smoke
 Contoh SHALL memuat README berbahasa Indonesia dan `README.en.md` yang berisi env NICE yang dibutuhkan dan checklist langkah manual di NICE beserta potongan `curl`-nya. Contoh SHALL memuat skrip smoke yang hanya membaca `.env`, mengambil token Service Account (`client_credentials`, `nice:aud:inventaris`), memeriksa jawaban service pada jalur Bearer, dan memeriksa bahwa `GET /auth/session` tanpa cookie dijawab 401 serta `GET /auth/login` mengarahkan ke NICE.
@@ -182,3 +190,14 @@ Service SHALL menyimpan hanya ID org dan project dan SHALL NOT menyimpan nama at
 #### Scenario: Nama berubah di NICE
 - **WHEN** nama project diubah di NICE lalu pemilih konteks dimuat ulang
 - **THEN** UI menampilkan nama baru tanpa perubahan data di service
+
+### Requirement: Penyelesaian `perms_ref` dengan token yang diteruskan
+Service SHALL menerima token yang membawa `perms_ref` sebagai pengganti `perms` dengan meminta daftar izinnya ke NICE (`POST /api/v1/permission-resolutions`) sekali per referensi, meneruskan token itu sebagai `Authorization: Bearer` dengan body `{}`, tanpa API key dan tanpa konfigurasi. Bila NICE menjawab tidak cocok, service SHALL menjawab 401 `token_stale`. Bila daftar tidak dapat diambil, termasuk saat NICE menolak token dengan 401, service SHALL menjawab 503.
+
+#### Scenario: Referensi diselesaikan sekali
+- **WHEN** klien memanggil `GET /items` dua kali dengan token ber-`perms_ref` yang sama
+- **THEN** NICE menerima satu penyelesaian dengan body `{}` dan token pertama sebagai Bearer, dan kedua panggilan dijawab 200
+
+#### Scenario: NICE menolak token
+- **WHEN** NICE menjawab penyelesaian dengan 401
+- **THEN** service menjawab 503

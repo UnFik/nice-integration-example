@@ -43,10 +43,10 @@ The NICE column is the oldest server revision with the features the example uses
 
 | Example | Minimum NICE version | SDK |
 |---|---|---|
-| `sharedservice-oauth` | NICE with the change `service-calls-without-service-account` (not merged yet): the feed, the online check, and the resolution of `perms_ref` without a `nice.service` Service Account. Before it, `4282316` (`add-client-org-switch`, `add-signin-token-exchange`) | `v0.2.3` |
+| `sharedservice-oauth` | `b361d25` (`service-calls-without-service-account`): the feed, the online check, and the resolution of `perms_ref` without a `nice.service` Service Account. Before it, `4282316` (`add-client-org-switch`, `add-signin-token-exchange`) | `v0.2.3` |
 | `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy); the `pengiriman.operator` role in the import preview from `b65a3e3` | not used |
 | `public-client-pkce` | `5def119` (the oldest commit of the current `nice` history; it already has `add-delegated-nice-api`, so `NICE_CORS_ALLOWED_ORIGINS` is not needed). Unit tests against `dev` `eb17848` (2026-11-25) | not used |
-| `agent-backend` | NICE with the change `service-calls-without-service-account` (not merged yet): the resolution of `perms_ref` forwards the token of the request. Before it, `5def119` (token exchange, no service dependency declarations) | `v0.2.3` |
+| `agent-backend` | `b361d25` (`service-calls-without-service-account`): the resolution of `perms_ref` forwards the token of the request. Before it, `5def119` (token exchange, no service dependency declarations) | `v0.2.3` |
 | `service-account-client` | `5def119` for this client itself; the `nadi` it calls needs NICE with the change `service-calls-without-service-account` | `v0.2.3` (`credentials` only, not affected) |
 
 ## Prerequisites

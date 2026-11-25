@@ -28,4 +28,8 @@ Worktree: `.worktrees/example-drop-service-api-key`, branch `feat/drop-service-a
 ## 4. Setelah SDK di-tag
 
 - [x] 4.1 Naikkan nice-auth-sdk ke `v0.2.3` di `sharedservice-oauth/backend`, `agent-backend`, dan `service-account-client` (`go get` + `go mod tidy`), lalu `heavy go test -race ./... -count=1` dan `heavy go vet ./...` dengan `GOWORK=off` di ketiganya. Ganti teks "rilis sesudah `v0.2.2` (belum di-tag)" dengan `v0.2.3` di README contoh, tabel versi README akar, dan `AGENTS.md`.
-- [ ] 4.2 Setelah change NICE `service-calls-without-service-account` di-merge ke `dev`: isi revisi NICE itu di baris versi minimum (README contoh dan tabel README akar), jalankan smoke `nadi` dan `agen` terhadap NICE itu, lalu perbarui "Diuji terhadap".
+- [x] 4.2 Isi revisi NICE `b361d25` (merge `service-calls-without-service-account` ke `dev`) di baris versi minimum README contoh dan tabel README akar. Jalankan `scripts/smoke.sh` `nadi` terhadap NICE dev `14c7119` di Docker (lulus; feed tanpa kredensial dijawab 200) dan perbarui "Diuji terhadap". Smoke `agen` dipindah ke follow-up deploy, karena `agen` belum disiapkan di NICE lokal.
+
+## Follow-up (di luar change ini)
+
+- Saat deploy ke VPS (NICE `b361d25` atau sesudahnya): jalankan smoke `agen` dengan token user `agen-user`, uji manual `DELETE /devices/{id}` dan `perms_ref` di `nadi`, hapus `NADI_SERVICE_API_KEY`/`AGEN_SERVICE_API_KEY` dan Service Account `nadi-feed`/`agen-perms`.

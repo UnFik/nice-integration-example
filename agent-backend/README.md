@@ -15,7 +15,7 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer token hasil exchange (aud=nadi, act.sub=agen-backend)--> nadi /devices
 ```
 
-Versi NICE minimum: NICE dengan change `service-calls-without-service-account` (belum di-merge), karena penyelesaian `perms_ref` meneruskan token request, bukan API key. Sebelumnya `5def119` (2026-11-17, awal riwayat `nice` sekarang), yang sudah memuat service client, API NICE terdelegasi, pindah organisasi, dan token exchange, dan sudah tanpa deklarasi dependensi service. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.3`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
+Versi NICE minimum: `b361d25` (`service-calls-without-service-account`), karena penyelesaian `perms_ref` meneruskan token request, bukan API key. Sebelumnya `5def119` (2026-11-17, awal riwayat `nice` sekarang), yang sudah memuat service client, API NICE terdelegasi, pindah organisasi, dan token exchange, dan sudah tanpa deklarasi dependensi service. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.3`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
 
 Diuji terhadap nice revisi: SDK `v0.2.2` dan `nice` `eb17848`, 2026-11-25, hanya dengan tes unit (NICE dan `nadi` palsu). `make smoke` belum dijalankan ulang terhadap NICE yang berjalan. Versi tanpa kredensial NICE tambahan (SDK `v0.2.3`) hanya diuji dengan tes unit, 2026-11-25.
 

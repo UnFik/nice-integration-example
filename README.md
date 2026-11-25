@@ -43,10 +43,10 @@ Kolom NICE adalah revisi server terlama yang punya fitur yang dipakai contoh. Ko
 
 | Contoh | Versi NICE minimum | SDK |
 |---|---|---|
-| `sharedservice-oauth` | NICE dengan change `service-calls-without-service-account` (belum di-merge): feed, pemeriksaan online, dan penyelesaian `perms_ref` tanpa Service Account `nice.service`. Sebelumnya `4282316` (`add-client-org-switch`, `add-signin-token-exchange`) | `v0.2.3` |
+| `sharedservice-oauth` | `b361d25` (`service-calls-without-service-account`): feed, pemeriksaan online, dan penyelesaian `perms_ref` tanpa Service Account `nice.service`. Sebelumnya `4282316` (`add-client-org-switch`, `add-signin-token-exchange`) | `v0.2.3` |
 | `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy); role `pengiriman.operator` di pratinjau impor mulai `b65a3e3` | tidak dipakai |
 | `public-client-pkce` | `5def119` (commit tertua riwayat `nice` sekarang; sudah memuat `add-delegated-nice-api`, jadi `NICE_CORS_ALLOWED_ORIGINS` tidak perlu). Diuji dengan tes unit terhadap `dev` `eb17848` (2026-11-25) | tidak dipakai |
-| `agent-backend` | NICE dengan change `service-calls-without-service-account` (belum di-merge): penyelesaian `perms_ref` meneruskan token request. Sebelumnya `5def119` (token exchange, tanpa deklarasi dependensi service) | `v0.2.3` |
+| `agent-backend` | `b361d25` (`service-calls-without-service-account`): penyelesaian `perms_ref` meneruskan token request. Sebelumnya `5def119` (token exchange, tanpa deklarasi dependensi service) | `v0.2.3` |
 | `service-account-client` | `5def119` untuk klien ini sendiri; `nadi` yang dipanggilnya butuh NICE dengan change `service-calls-without-service-account` | `v0.2.3` (hanya `credentials`, tidak terdampak) |
 
 ## Prasyarat
