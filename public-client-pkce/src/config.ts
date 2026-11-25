@@ -100,7 +100,7 @@ function readUrl(name: string, raw: string, fail: Fail): string | undefined {
 function readServices(raw: string, fail: Fail): ServiceConfig[] | undefined {
   const name = "VITE_SERVICES";
   if (!raw) {
-    fail(name, 'wajib diisi dengan array JSON, mis. [{"slug":"inventaris","endpoint":"http://127.0.0.1:8081","path":"/items"}].');
+    fail(name, 'wajib diisi dengan array JSON, mis. [{"slug":"nadi","endpoint":"http://127.0.0.1:8081","path":"/devices"}].');
     return undefined;
   }
   let parsed: unknown;
