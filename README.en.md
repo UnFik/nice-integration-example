@@ -44,8 +44,8 @@ The NICE column is the oldest server revision with the features the example uses
 | Example | Minimum NICE version | SDK |
 |---|---|---|
 | `sharedservice-oauth` | `4282316` (`add-client-org-switch`, `add-signin-token-exchange`); the Bearer path alone needs `c7a5086` | `v0.2.2` |
-| `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy) | not used |
-| `public-client-pkce` | `c7a5086`; without `NICE_CORS_ALLOWED_ORIGINS` from `60939ed` (`add-delegated-nice-api`) | not used |
+| `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy); the `pengiriman.operator` role in the import preview from `b65a3e3` | not used |
+| `public-client-pkce` | `5def119` (the oldest commit of the current `nice` history; it already has `add-delegated-nice-api`, so `NICE_CORS_ALLOWED_ORIGINS` is not needed). Unit tests against `dev` `eb17848` (2026-11-25) | not used |
 | `agent-backend` | `6cc9986` (`add-token-exchange`); `acted_by` in `sharedservice-oauth` needs this revision too | `v0.2.2` |
 | `service-account-client` | `c7a5086` (the same as the Bearer path of `sharedservice-oauth`) | `v0.2.2` |
 
