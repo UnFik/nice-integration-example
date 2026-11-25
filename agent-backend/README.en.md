@@ -15,9 +15,9 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer exchanged token (aud=nadi, act.sub=agen-backend)--> nadi /devices
 ```
 
-Minimum NICE version: `nice` `5def119` (2026-11-17, the start of the current `nice` history) or later. That revision already has service clients, the delegated NICE API, organization switching, and token exchange, and no longer has service dependency declarations. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`. The MCP SDK is pinned in `go.mod` at `v1.8.0`.
+Minimum NICE version: NICE with the change `service-calls-without-service-account` (not merged yet), because the resolution of `perms_ref` forwards the token of the request, not an API key. Before it, `5def119` (2026-11-17, the start of the current `nice` history), which already has service clients, the delegated NICE API, organization switching, and token exchange, and no longer has service dependency declarations. SDK: `github.com/ABA-Developer/nice-auth-sdk`, the release after `v0.2.2` (not tagged yet; `go.mod` still says `v0.2.2`). The MCP SDK is pinned in `go.mod` at `v1.8.0`.
 
-Tested against nice revision: SDK `v0.2.2` and `nice` `eb17848`, 2026-11-25, with the unit tests only (fake NICE and `nadi`). `make smoke` has not been run again against a running NICE.
+Tested against nice revision: SDK `v0.2.2` and `nice` `eb17848`, 2026-11-25, with the unit tests only (fake NICE and `nadi`). `make smoke` has not been run again against a running NICE. The version without an extra NICE credential (the SDK release after `v0.2.2`, not tagged yet) was tested with the unit tests only, 2026-11-25.
 
 ## Folder structure
 
@@ -104,7 +104,7 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` in `go.mod`), so this example builds without the `nice` repo. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk`, so this example builds without the `nice` repo. The code needs the SDK release after `v0.2.2` (not tagged yet; `go.mod` still says `v0.2.2` and is raised once that tag exists). The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
 - `nadi` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md) (register, import, activate, entitlement, project activation, binding). The test user holds the role `nadi.editor` in the same project. Do not use `nadi.operator`: that is the platform operator role of the service, not a project role.
@@ -123,9 +123,10 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `LISTEN_ADDR` | `127.0.0.1:8083` | listen address |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients use; the metadata `resource` is `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
-| `NICE_SERVICE_API_KEY` | empty | API key of a platform Service Account with the `nice.service` role; turns on the resolution of `perms_ref`. Empty: a token with `perms_ref` (a caller whose `agen` permissions do not fit a token) answers `503` |
 
 An empty required variable stops the start with a message that names it.
+
+The resolution of `perms_ref` (a caller whose `agen` permissions do not fit a token) is always on, with no configuration: the agent forwards the token of the request itself to NICE (`POST /api/v1/permission-resolutions` with `Authorization: Bearer`). The agent holds no NICE credential besides the service client `agen-backend`. When NICE is unreachable or refuses that token, the call answers `503`.
 
 ## Run and test
 

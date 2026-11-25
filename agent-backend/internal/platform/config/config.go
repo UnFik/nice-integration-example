@@ -12,14 +12,13 @@ import (
 )
 
 const (
-	EnvIssuer        = "NICE_ISSUER"
-	EnvClientID      = "NICE_CLIENT_ID"
-	EnvClientSecret  = "NICE_CLIENT_SECRET"
-	EnvNadiURL       = "NADI_URL"
-	EnvListen        = "LISTEN_ADDR"
-	EnvPublicURL     = "PUBLIC_URL"
-	EnvJWKSFile      = "JWKS_FILE"
-	EnvServiceAPIKey = "NICE_SERVICE_API_KEY"
+	EnvIssuer       = "NICE_ISSUER"
+	EnvClientID     = "NICE_CLIENT_ID"
+	EnvClientSecret = "NICE_CLIENT_SECRET"
+	EnvNadiURL      = "NADI_URL"
+	EnvListen       = "LISTEN_ADDR"
+	EnvPublicURL    = "PUBLIC_URL"
+	EnvJWKSFile     = "JWKS_FILE"
 )
 
 const (
@@ -42,9 +41,6 @@ type Config struct {
 	// PublicURL is the address MCP clients use; the resource of the metadata is PublicURL + /mcp.
 	PublicURL string
 	JWKSFile  string
-	// ServiceAPIKey is the API key of a platform Service Account with the nice.service role. It is optional: with
-	// it the agent resolves the perms_ref of a caller whose permissions do not fit a token. It goes to NICE only.
-	ServiceAPIKey string
 }
 
 // LogValue keeps the secret out of every log line that prints the config.
@@ -74,14 +70,13 @@ func Load(lookup LookupFunc, dotenv string) (Config, error) {
 		return def
 	}
 	cfg := Config{
-		Issuer:        strings.TrimRight(get(EnvIssuer, ""), "/"),
-		ClientID:      get(EnvClientID, ""),
-		ClientSecret:  get(EnvClientSecret, ""),
-		NadiURL:       strings.TrimRight(get(EnvNadiURL, ""), "/"),
-		Listen:        get(EnvListen, defaultListen),
-		PublicURL:     strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
-		JWKSFile:      get(EnvJWKSFile, defaultJWKSFile),
-		ServiceAPIKey: get(EnvServiceAPIKey, ""),
+		Issuer:       strings.TrimRight(get(EnvIssuer, ""), "/"),
+		ClientID:     get(EnvClientID, ""),
+		ClientSecret: get(EnvClientSecret, ""),
+		NadiURL:      strings.TrimRight(get(EnvNadiURL, ""), "/"),
+		Listen:       get(EnvListen, defaultListen),
+		PublicURL:    strings.TrimRight(get(EnvPublicURL, defaultPublicURL), "/"),
+		JWKSFile:     get(EnvJWKSFile, defaultJWKSFile),
 	}
 	required := []struct{ key, value, hint string }{
 		{EnvIssuer, cfg.Issuer, "the issuer of NICE, e.g. http://localhost:8080"},

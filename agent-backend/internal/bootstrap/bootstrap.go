@@ -59,13 +59,12 @@ func Run(ctx context.Context, lookup config.LookupFunc, dotenv string, log *slog
 
 // VerifierConfig wires niceauth/verify for the agent. Tests reuse it and only swap the key source.
 func VerifierConfig(cfg config.Config, log *slog.Logger) verify.Config {
-	c := verify.Config{Issuer: cfg.Issuer, Service: domain.ServiceSlug, JWKSFile: cfg.JWKSFile, Log: log}
-	if cfg.ServiceAPIKey != "" {
+	return verify.Config{
+		Issuer: cfg.Issuer, Service: domain.ServiceSlug, JWKSFile: cfg.JWKSFile, Log: log,
 		// A caller with more permissions than a token carries gets perms_ref in place of perms. The resolver asks NICE
-		// once for the list it names; without one, niceauth/verify refuses such a token with 503.
-		c.Resolver = verify.NewHTTPResolver(cfg.Issuer, cfg.ServiceAPIKey)
+		// once for the list it names with the token of the request itself, so it needs no credential of NICE.
+		Resolver: verify.NewHTTPResolver(cfg.Issuer),
 	}
-	return c
 }
 
 // NewCallService wires the call use case to the exchange client of the agent's own service client.

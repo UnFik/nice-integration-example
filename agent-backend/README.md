@@ -15,9 +15,9 @@ agen --token exchange: subject_token + client agen-backend--> NICE /oauth/token
 agen --Bearer token hasil exchange (aud=nadi, act.sub=agen-backend)--> nadi /devices
 ```
 
-Versi NICE minimum: `nice` `5def119` (2026-11-17, awal riwayat `nice` sekarang) atau sesudahnya. Revisi itu sudah memuat service client, API NICE terdelegasi, pindah organisasi, dan token exchange, dan sudah tanpa deklarasi dependensi service. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.2`. SDK MCP dipin di `go.mod` pada `v1.8.0`.
+Versi NICE minimum: NICE dengan change `service-calls-without-service-account` (belum di-merge), karena penyelesaian `perms_ref` meneruskan token request, bukan API key. Sebelumnya `5def119` (2026-11-17, awal riwayat `nice` sekarang), yang sudah memuat service client, API NICE terdelegasi, pindah organisasi, dan token exchange, dan sudah tanpa deklarasi dependensi service. SDK: `github.com/ABA-Developer/nice-auth-sdk` rilis sesudah `v0.2.2` (belum di-tag; `go.mod` masih `v0.2.2`). SDK MCP dipin di `go.mod` pada `v1.8.0`.
 
-Diuji terhadap nice revisi: SDK `v0.2.2` dan `nice` `eb17848`, 2026-11-25, hanya dengan tes unit (NICE dan `nadi` palsu). `make smoke` belum dijalankan ulang terhadap NICE yang berjalan.
+Diuji terhadap nice revisi: SDK `v0.2.2` dan `nice` `eb17848`, 2026-11-25, hanya dengan tes unit (NICE dan `nadi` palsu). `make smoke` belum dijalankan ulang terhadap NICE yang berjalan. Versi tanpa kredensial NICE tambahan (rilis SDK sesudah `v0.2.2`, belum di-tag) hanya diuji dengan tes unit, 2026-11-25.
 
 ## Struktur folder
 
@@ -104,7 +104,7 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 ## Prasyarat
 
-- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk` (`v0.2.2` di `go.mod`), jadi contoh ini bisa dibangun tanpa repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk`, jadi contoh ini bisa dibangun tanpa repo `nice`. Kodenya butuh rilis SDK sesudah `v0.2.2` (belum di-tag; `go.mod` masih `v0.2.2` dan dinaikkan begitu tag itu ada). Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dengan versi minimum di atas, bawaannya di `http://localhost:8080`.
 - `nadi` berjalan dan sudah diatur sampai langkah 8 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md) (daftar, impor, aktifkan, entitlement, aktivasi di project, binding). User uji memegang role `nadi.editor` di project yang sama. Jangan memakai `nadi.operator`: itu role operator platform service, bukan role project.
@@ -123,9 +123,10 @@ Salin `.env.example` ke `.env`. Agen membaca `.env` di direktori tempat ia dijal
 | `LISTEN_ADDR` | `127.0.0.1:8083` | alamat listen |
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | alamat yang dipakai MCP client; `resource` metadata adalah `<PUBLIC_URL>/mcp` |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
-| `NICE_SERVICE_API_KEY` | kosong | API key Service Account platform berperan `nice.service`; menyalakan penyelesaian `perms_ref`. Kosong: token ber-`perms_ref` (pemanggil yang izin `agen`-nya tidak muat di token) dijawab `503` |
 
 Variabel wajib yang kosong menghentikan start dengan pesan yang menyebut namanya.
+
+Penyelesaian `perms_ref` (pemanggil yang izin `agen`-nya tidak muat di token) selalu menyala tanpa konfigurasi: agen meneruskan token request itu sendiri ke NICE (`POST /api/v1/permission-resolutions` dengan `Authorization: Bearer`). Agen tidak memegang kredensial NICE selain service client `agen-backend`. Bila NICE tidak terjangkau atau menolak token itu, panggilan dijawab `503`.
 
 ## Menjalankan dan tes
 
