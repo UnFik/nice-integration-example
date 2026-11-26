@@ -35,6 +35,8 @@ func suffixesFor(rel string) []string {
 		return []string{"_gateway.go"}
 	case parts[0] == "adapter" && (parts[1] == "memory" || parts[1] == "postgres"):
 		return []string{"_repository.go"}
+	case parts[0] == "adapter" && parts[1] == "chattest":
+		return []string{"_suite.go"}
 	case parts[0] == "adapter" && parts[1] == "llm":
 		return []string{"_client.go"}
 	case parts[0] == "adapter" && parts[1] == "rest" && len(parts) > 3 && parts[2] != "internal" && parts[3] == "dto":
@@ -127,6 +129,8 @@ var forbidden = []struct {
 	{"adapter/llm/", []string{"/internal/adapter/", "net/http/httptest"}},
 	{"adapter/memory/", []string{"/internal/adapter/"}},
 	{"adapter/postgres/", []string{"/internal/adapter/"}},
+	// The contract suite tests stores through app/ only, so it fits every adapter.
+	{"adapter/chattest/", []string{"/internal/adapter/", "/internal/platform"}},
 	{"platform/", []string{"/internal/app", "/internal/adapter", "/internal/domain", "/internal/bootstrap"}},
 }
 

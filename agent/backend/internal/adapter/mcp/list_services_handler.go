@@ -10,7 +10,7 @@ import (
 )
 
 // ListServices is the tool list_services.
-func (h *Handlers) ListServices(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+func (h *Handlers) ListServices(ctx context.Context, req *mcp.CallToolRequest, _ listServicesInput) (*mcp.CallToolResult, any, error) {
 	c, err := caller.From(req)
 	if err != nil {
 		return mapper.Unauthenticated(err), nil, nil

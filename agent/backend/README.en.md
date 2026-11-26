@@ -23,30 +23,42 @@ Tested against nice revision: SDK `v0.2.4` and `nice` `235445c`, 2026-11-25, wit
 
 ## Folder structure
 
-The layout follows `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one small service: one resource (`call`: discovery and calls to other services on behalf of the user), no facade and no repository.
+The layout follows `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one small service: the resources `call` (discovery and calls to other services on behalf of the user), `chat` (the dashboard), and `session` (the dashboard sign-in), no facade.
 
 ```text
-cmd/agent/main.go            thin: calls bootstrap.Run
+cmd/agent/main.go                    thin: calls bootstrap.Run
 docs/                                openapi.json (hand-written) + a small package that embeds it; OpenAPI and README tests
+migrations/                          SQL of the conversation history (embedded, applied on start when DATABASE_URL is set)
 internal/
-  domain/                            pure rules: slug, permission, targets, ID format, safe endpoints (*_domain.go)
+  domain/                            pure rules: slug, permission, target, safe endpoint, chat message and title, session (*_domain.go)
   app/call/
     usecase/                         ListServices, ListOperations, CallOperation (one *_usecase.go per function), Service,
-                                     the Discoverer and Operator contracts (call_contract.go)
+                                     contracts Discoverer and Operator (call_contract.go)
     dto/                             Caller, service map, operations, approval, Failure (*_dto.go)
-    internal/{key,failure,approval}/ ID checks, mapping of errors to Failure, signed approval state (*_helper.go)
+    internal/{key,failure,approval}/ ID checks, error mapping to Failure, signed approval state (*_helper.go)
+  app/chat/
+    usecase/                         RunTurn, AnswerApproval, conversations (list, get, create, rename, delete); contracts
+                                     Conversations, Model, Tools (chat_contract.go)
+    dto/                             conversation, messages in a neutral form, ToolCall, ToolResult, Event
+    internal/turn/                   one-turn-per-conversation lock, system prompt, history shape for the model
+  app/session/                       dashboard session (sign-in, context, sign-out), copied from sharedservice-oauth
   adapter/
-    mcp/                             HTTP routes and the niceauth/verify chain (routes.go), MCP server and tool schemas (tools_routes.go),
-                                     one handler per tool (*_handler.go); internal/ holds caller, challenge, mapper, approval
-    niceexchange/                    wraps niceauth: Services, ServiceOperations (discovery_client.go), CallOperation
-                                     (operation_client.go)
-  platform/config/                   env and .env
+    mcp/                             HTTP routes and the niceauth/verify chain (routes.go), MCP server and the tool table the
+                                     chat reads too (tools_routes.go), one handler per tool (*_handler.go)
+    niceexchange/                    niceauth wrapper: Services, ServiceOperations, CallOperation (*_client.go)
+    nice/                            dashboard sign-in, contexts, and userinfo through niceauth/credentials (*_gateway.go)
+    rest/auth/                       /auth/* and the /chat/ session middleware (cookie, CSRF, context token, agen.mcp.use)
+    rest/chat/                       chat API /chat/*, turns answered as server-sent events
+    rest/web/                        serves web/dist with an SPA fallback
+    llm/{anthropic,openaicompat}/    chat models: the Messages API and OpenAI-compatible Chat Completions (*_client.go)
+    memory/, postgres/               session and conversation stores (*_repository.go); chattest/ shared contract tests
+  platform/{config,postgres}/        env and .env; PostgreSQL pool and migrations
   bootstrap/                         assembly; integration tests with a fake NICE
-  arch_test.go                       architecture test: file name endings and import direction
-scripts/smoke.sh                     smoke test against a NICE that is set up
+  arch_test.go                       architecture test: file name suffixes and import direction
+scripts/smoke.sh                     smoke test against a configured NICE
 ```
 
-Why: `main.go` only assembles; the rules and the use case do not import `net/http`, the MCP SDK, `niceauth/credentials`, or `niceauth/verify` (the adapters do, enforced by `internal/arch_test.go`); every file carries its layer in the name ending (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named like its file. `openapi.json` stays hand-written and is embedded from `docs/`; `docs/openapi_test.go` keeps the permission in the document equal to the one the code enforces.
+Why: `main.go` only assembles; the rules and the use case do not import `net/http`, the MCP SDK, `niceauth/credentials`, or `niceauth/verify` (the adapters do, enforced by `internal/arch_test.go`); every file carries its layer in the name ending (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_gateway`, `_repository`, `_middleware`, `_helper`, `_mapper`); one `*_usecase.go` holds one function named like its file. `openapi.json` stays hand-written and is embedded from `docs/`; `docs/openapi_test.go` keeps the permission in the document equal to the one the code enforces.
 
 ## Endpoints and tools
 
@@ -55,8 +67,11 @@ Why: `main.go` only assembles; the rules and the use case do not import `net/htt
 | `POST /mcp` | NICE token with `aud=agen` and the permission `agen.mcp.use` |
 | `GET /.well-known/oauth-protected-resource` (also `.../mcp`) | public: `resource` `<PUBLIC_URL>/mcp`, `authorization_servers` the NICE issuer, `scopes_supported` the base scopes and `nice:aud:agen` |
 | `GET /healthz`, `GET /openapi.json` | public, not in the OpenAPI document |
+| `GET /auth/login`, `GET /auth/callback`, `GET /auth/session`, `GET /auth/contexts`, `POST /auth/context`, `POST /auth/logout` | dashboard sign-in (cookie `agen_session`, `HttpOnly`, `SameSite=Lax`): sign in through NICE, the session and its CSRF token, the organizations and projects, context switch with one refresh, sign out with the refresh token revoked. Writes need the `X-CSRF-Token` header and an `Origin` equal to `PUBLIC_URL`. Not in the OpenAPI document |
+| `/chat/*` | dashboard chat API: the session cookie only, an `Authorization` header gets `401`. The token of the active context is checked as on `/mcp` and must hold `agen.mcp.use` (`403` otherwise); writes need CSRF as on `/auth/*`. Not in the OpenAPI document |
+| `GET /` | the dashboard (`WEB_DIR`) when its build exists; other routes without an extension get `index.html` |
 
-Without a token, `/mcp` answers `401` with `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource"`. A token for another service gets `401` `wrong_audience`, a token without `agen.mcp.use` gets `403` `permission_denied`.
+`/mcp` takes a Bearer token only and ignores the dashboard session cookie. Without a token, `/mcp` answers `401` with `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource"`. A token for another service gets `401` `wrong_audience`, a token without `agen.mcp.use` gets `403` `permission_denied`.
 
 | Tool | Arguments | Answer |
 |---|---|---|
@@ -131,6 +146,32 @@ Example text of a tool result for an organization the user does not belong to:
 ```text
 access_denied (organization is not usable): NICE refused a token for nadi in that organization: the user is not an active member of it, the organization is not active, or it does not use nadi or agen
 ```
+
+## Chat dashboard
+
+Besides `/mcp`, the agent serves a chat dashboard ([`../web`](../web/README.en.md)) at `/`. Users sign in through `/auth/login` with the client `agen-backend` (step 7). The refresh token is kept on the server, and the browser holds only the cookie `agen_session`. `/chat/*` accepts only that cookie: a request with `Authorization` is refused with `401`, while `/mcp` ignores the cookie.
+
+**One turn.** `POST /chat/conversations/{id}/messages` with `{"text"}` (at most 8000 characters) stores the user's message, then calls the model with a system prompt, the conversation history, and the same three tools as the MCP server (name, description, and input schema read from one table in `adapter/mcp/tools_routes.go`). The tools run through the same use cases as MCP, on behalf of the user, with the active context token as the token exchange subject token. The model never sees a token. Every step is stored first, then sent as a server-sent event:
+
+| Event | Data |
+|---|---|
+| `assistant` | the model's message (text and tool calls) |
+| `tool_call` | `call_id`, `name`: a tool started |
+| `tool_result` | a message with the result of one tool (the same JSON as the MCP `structuredContent`, or `{"error","message"}`) |
+| `approval` | `call_id`, `message`: a call waits for approval |
+| `done` | `reason`: `answered`, `awaiting_approval`, or `step_limit` |
+| `error` | `error`, `message`: e.g. `model_unavailable`, `model_refused` |
+
+A turn keeps running when the browser drops the connection; the dashboard reads the conversation again afterwards. One conversation runs one turn at a time (a second turn is answered `409 turn_in_progress`), and a turn stops after `CHAT_MAX_STEPS` model calls. Without `LLM_PROVIDER`, history can still be read, but sending a message is answered `503 chat_not_configured`.
+
+**Approval.** When `call_operation` hits a sensitive operation, the call is stored with status `awaiting_approval`, with the approval state and the message from the catalog (not from the model's text), and the turn stops. The dashboard shows that message with Setujui and Tolak, which send `POST /chat/conversations/{id}/approvals/{call_id}` with `{"approve": true|false}`. The call runs again with the stored state, so the rules are those of MCP: same user only, single use, valid for 5 minutes. Tolak sends nothing and exchanges no token for the target service. A state that expired, or was lost because the agent restarted (its key is per process), asks for a new approval. A new message sent while a call waits declines that call.
+
+**History.** A conversation belongs to one user (the `sub` of the session token). Other users get `404`. With `DATABASE_URL`, history is stored in PostgreSQL in two tables: `conversations` (`id`, `user_sub`, `title`, `created_at`, `updated_at`) and `messages` (`conversation_id`, `seq`, `role` `user`/`assistant`/`tool`, `parts` jsonb in a neutral form, so changing provider does not change the data). Deleting a conversation deletes its messages. Tool results are stored as they are, since they are the user's data from services the user called. Tokens, refresh tokens, and the approval key are never stored.
+
+**Risks.**
+- Tool results come from services and may hold text that tries to steer the model (prompt injection). Sensitive operations still wait for approval with the catalog message, other operations are limited by the user's permissions in NICE, and the step limit bounds a turn.
+- There is no LLM quota or cost limit per user. Set limits at the provider when the dashboard is open to many users.
+- Sessions are kept in memory, as in `nadi`: a restart means signing in again, but history in PostgreSQL stays.
 
 ## Prerequisites
 
@@ -276,13 +317,21 @@ curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients/$(jq -r .oauth_client.
 
 ### 7. Client `agen-backend` (confidential)
 
-The actor of the token exchange. The exchange refuses `public` clients, and keeping two clients shows that the secret lives on the agent server only. NICE requires a redirect URI and the `authorization_code` grant on every OAuth client, even though this backend never signs in.
+The actor of the token exchange, and the client of the dashboard sign-in (backend-for-frontend). The exchange refuses `public` clients, and keeping two clients shows that the secret lives on the agent server only. For the dashboard the client needs:
+
+- the redirect URI `<PUBLIC_URL>/auth/callback` (default `http://127.0.0.1:8083/auth/callback`; dev with Vite: `http://localhost:5182/auth/callback`);
+- the post-logout redirect URI `<PUBLIC_URL>/` (or the value of `POST_LOGOUT_URL`);
+- the grants `authorization_code` and `refresh_token`: the refresh token stays on the agent server, and a context switch is one refresh.
+
+For an existing `agen-backend` client (created with only the `.../unused` redirect), add the URIs and grants above in the console (client details) or with a `PUT` on the same client.
 
 ```bash
 CLIENT=$(curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"agen-backend","client_type":"CLIENT_TYPE_CONFIDENTIAL","redirect_uris":["http://127.0.0.1:8083/unused"],
-       "grant_types":["authorization_code"]}')
+  -d '{"name":"agen-backend","client_type":"CLIENT_TYPE_CONFIDENTIAL",
+       "redirect_uris":["http://127.0.0.1:8083/auth/callback","http://localhost:5182/auth/callback"],
+       "post_logout_redirect_uris":["http://127.0.0.1:8083/","http://localhost:5182/"],
+       "grant_types":["authorization_code","refresh_token"]}')
 curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients/$(jq -r .oauth_client.id <<<"$CLIENT")/service" -X PUT \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{"service":"agen"}' \
   | jq '.oauth_client | {client_class, service}'

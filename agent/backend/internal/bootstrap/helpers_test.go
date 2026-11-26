@@ -123,6 +123,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	e.nice.endpoint = e.inv.srv.URL
 	e.cfg = config.Config{
 		Issuer: e.issuer, ClientID: testClientID, ClientSecret: testSecret, PublicURL: "http://agent.test",
+		RedirectURI: "http://agent.test" + config.CallbackPath, PostLogoutURL: "http://agent.test/", SessionIdle: 8 * time.Hour,
 	}
 	log := slog.New(slog.DiscardHandler)
 	vc := VerifierConfig(e.cfg, log)
@@ -135,7 +136,12 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.agent = httptest.NewServer(NewHandler(v, calls, e.cfg))
+	a, err := NewAuth(e.cfg, v, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The dashboard routes are wired too, so every MCP test also shows that they leave /mcp unchanged.
+	e.agent = httptest.NewServer(NewHandler(Deps{Verifier: v, Calls: calls, Config: e.cfg, Auth: a.Handler}))
 	t.Cleanup(e.agent.Close)
 	return e
 }

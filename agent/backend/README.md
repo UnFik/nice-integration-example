@@ -23,30 +23,42 @@ Diuji terhadap nice revisi: SDK `v0.2.4` dan `nice` `235445c`, 2026-11-25, denga
 
 ## Struktur folder
 
-Polanya meniru `nice/internal/modules` (lihat `nice/AGENTS.md`), dipangkas untuk satu service kecil: satu resource (`call`: discovery dan pemanggilan service lain atas nama user), tanpa facade dan repository.
+Polanya meniru `nice/internal/modules` (lihat `nice/AGENTS.md`), dipangkas untuk satu service kecil: resource `call` (discovery dan pemanggilan service lain atas nama user), `chat` (dashboard), dan `session` (login dashboard), tanpa facade.
 
 ```text
-cmd/agent/main.go            tipis: memanggil bootstrap.Run
+cmd/agent/main.go                    tipis: memanggil bootstrap.Run
 docs/                                openapi.json (ditulis tangan) + paket kecil yang meng-embed-nya; tes OpenAPI dan README
+migrations/                          SQL riwayat percakapan (di-embed, diterapkan saat start bila DATABASE_URL diisi)
 internal/
-  domain/                            aturan murni: slug, izin, target, format ID, endpoint yang aman (*_domain.go)
+  domain/                            aturan murni: slug, izin, target, endpoint yang aman, pesan dan judul chat, sesi (*_domain.go)
   app/call/
     usecase/                         ListServices, ListOperations, CallOperation (satu *_usecase.go per fungsi), Service,
                                      kontrak Discoverer dan Operator (call_contract.go)
     dto/                             Caller, peta service, operasi, persetujuan, Failure (*_dto.go)
     internal/{key,failure,approval}/ validasi ID, pemetaan galat ke Failure, state persetujuan bertanda tangan (*_helper.go)
+  app/chat/
+    usecase/                         RunTurn, AnswerApproval, percakapan (list, get, create, rename, delete); kontrak
+                                     Conversations, Model, Tools (chat_contract.go)
+    dto/                             percakapan, pesan dalam bentuk netral, ToolCall, ToolResult, Event
+    internal/turn/                   kunci satu giliran per percakapan, system prompt, bentuk riwayat untuk model
+  app/session/                       sesi dashboard (login, konteks, keluar), disalin dari sharedservice-oauth
   adapter/
-    mcp/                             rute HTTP dan rantai niceauth/verify (routes.go), server MCP dan skema tool (tools_routes.go),
-                                     satu handler per tool (*_handler.go); internal/ untuk caller, challenge, mapper, approval
-    niceexchange/                    pembungkus niceauth: Services, ServiceOperations (discovery_client.go), CallOperation
-                                     (operation_client.go)
-  platform/config/                   env dan .env
+    mcp/                             rute HTTP dan rantai niceauth/verify (routes.go), server MCP dan tabel tool yang juga
+                                     dibaca chat (tools_routes.go), satu handler per tool (*_handler.go)
+    niceexchange/                    pembungkus niceauth: Services, ServiceOperations, CallOperation (*_client.go)
+    nice/                            login, konteks, dan userinfo dashboard lewat niceauth/credentials (*_gateway.go)
+    rest/auth/                       /auth/* dan middleware sesi /chat/ (cookie, CSRF, token konteks, agen.mcp.use)
+    rest/chat/                       API chat /chat/*, respons giliran sebagai server-sent events
+    rest/web/                        penyaji web/dist dengan fallback SPA
+    llm/{anthropic,openaicompat}/    model chat: Messages API dan Chat Completions yang kompatibel OpenAI (*_client.go)
+    memory/, postgres/               penyimpanan sesi dan percakapan (*_repository.go); chattest/ tes kontrak bersama
+  platform/{config,postgres}/        env dan .env; pool PostgreSQL dan migrasi
   bootstrap/                         perakitan; tes integrasi dengan NICE palsu
   arch_test.go                       tes arsitektur: akhiran nama berkas dan arah impor
 scripts/smoke.sh                     uji smoke terhadap NICE yang sudah diatur
 ```
 
-Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http`, SDK MCP, `niceauth/credentials`, atau `niceauth/verify` (adapter yang mengimpor, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya. `openapi.json` tetap ditulis tangan dan di-embed dari `docs/`; `docs/openapi_test.go` menjaga bahwa izin di dokumen sama dengan yang ditegakkan kode.
+Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/http`, SDK MCP, `niceauth/credentials`, atau `niceauth/verify` (adapter yang mengimpor, ditegakkan `internal/arch_test.go`); setiap berkas membawa lapisannya di akhiran nama (`_domain`, `_usecase`, `_contract`, `_dto`, `_handler`, `_routes`, `_client`, `_gateway`, `_repository`, `_middleware`, `_helper`, `_mapper`); satu `*_usecase.go` berisi satu fungsi bernama sama dengan berkasnya. `openapi.json` tetap ditulis tangan dan di-embed dari `docs/`; `docs/openapi_test.go` menjaga bahwa izin di dokumen sama dengan yang ditegakkan kode.
 
 ## Endpoint dan tool
 
@@ -55,8 +67,11 @@ Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/htt
 | `POST /mcp` | token NICE `aud=agen` dengan izin `agen.mcp.use` |
 | `GET /.well-known/oauth-protected-resource` (juga `.../mcp`) | terbuka: `resource` `<PUBLIC_URL>/mcp`, `authorization_servers` issuer NICE, `scopes_supported` scope dasar dan `nice:aud:agen` |
 | `GET /healthz`, `GET /openapi.json` | terbuka, tidak ada di dokumen OpenAPI |
+| `GET /auth/login`, `GET /auth/callback`, `GET /auth/session`, `GET /auth/contexts`, `POST /auth/context`, `POST /auth/logout` | login dashboard (cookie `agen_session`, `HttpOnly`, `SameSite=Lax`): masuk lewat NICE, sesi dan token CSRF, daftar organisasi dan project, pindah konteks lewat satu refresh, keluar dengan revoke refresh token. Tulis butuh header `X-CSRF-Token` dan `Origin` sama dengan `PUBLIC_URL`. Tidak ada di dokumen OpenAPI |
+| `/chat/*` | API chat dashboard: hanya cookie sesi, header `Authorization` dijawab `401`. Token konteks aktif diperiksa seperti `/mcp` dan harus memegang `agen.mcp.use` (`403` bila tidak); tulis butuh CSRF seperti `/auth/*`. Tidak ada di dokumen OpenAPI |
+| `GET /` | dashboard (`WEB_DIR`) bila hasil build-nya ada; rute lain tanpa ekstensi mendapat `index.html` |
 
-Tanpa token, `/mcp` dijawab `401` dengan `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource"`. Token untuk service lain dijawab `401` `wrong_audience`, token tanpa `agen.mcp.use` dijawab `403` `permission_denied`.
+`/mcp` hanya menerima Bearer dan mengabaikan cookie sesi dashboard. Tanpa token, `/mcp` dijawab `401` dengan `WWW-Authenticate: Bearer resource_metadata="<PUBLIC_URL>/.well-known/oauth-protected-resource"`. Token untuk service lain dijawab `401` `wrong_audience`, token tanpa `agen.mcp.use` dijawab `403` `permission_denied`.
 
 | Tool | Argumen | Jawaban |
 |---|---|---|
@@ -131,6 +146,32 @@ Contoh teks hasil tool untuk organisasi yang bukan milik user:
 ```text
 access_denied (organization is not usable): NICE refused a token for nadi in that organization: the user is not an active member of it, the organization is not active, or it does not use nadi or agen
 ```
+
+## Dashboard chat
+
+Selain `/mcp`, agen menyajikan dashboard chat ([`../web`](../web/README.md)) di `/`. User masuk lewat `/auth/login` dengan client `agen-backend` (langkah 7). Refresh token disimpan di server, dan browser hanya memegang cookie `agen_session`. `/chat/*` hanya menerima cookie itu: request yang membawa `Authorization` ditolak `401`, sebaliknya `/mcp` mengabaikan cookie.
+
+**Satu giliran.** `POST /chat/conversations/{id}/messages` dengan `{"text"}` (paling panjang 8000 karakter) menyimpan pesan user, lalu memanggil model dengan system prompt, riwayat percakapan, dan tiga tool yang sama dengan server MCP (nama, deskripsi, dan schema input dibaca dari satu tabel di `adapter/mcp/tools_routes.go`). Tool dijalankan lewat use case yang sama dengan MCP, atas nama user, dengan token konteks aktif sebagai subject token exchange. Model tidak pernah melihat token. Setiap langkah disimpan dulu, baru dikirim sebagai server-sent event:
+
+| Event | Data |
+|---|---|
+| `assistant` | pesan model (teks dan panggilan tool) |
+| `tool_call` | `call_id`, `name`: tool mulai berjalan |
+| `tool_result` | pesan berisi hasil satu tool (JSON yang sama dengan `structuredContent` MCP, atau `{"error","message"}`) |
+| `approval` | `call_id`, `message`: panggilan menunggu persetujuan |
+| `done` | `reason`: `answered`, `awaiting_approval`, atau `step_limit` |
+| `error` | `error`, `message`: mis. `model_unavailable`, `model_refused` |
+
+Giliran tetap berjalan bila browser menutup koneksi; dashboard membaca ulang percakapan setelahnya. Satu percakapan hanya menjalankan satu giliran sekaligus (giliran kedua dijawab `409 turn_in_progress`), dan satu giliran berhenti setelah `CHAT_MAX_STEPS` panggilan model. Tanpa `LLM_PROVIDER`, riwayat tetap bisa dibaca, tetapi mengirim pesan dijawab `503 chat_not_configured`.
+
+**Persetujuan.** Saat `call_operation` mengenai operasi sensitif, panggilan disimpan dengan status `awaiting_approval`, beserta state persetujuan dan pesan dari katalog (bukan dari teks model), lalu giliran berhenti. Dashboard menampilkan pesan itu dengan tombol Setujui dan Tolak, yang mengirim `POST /chat/conversations/{id}/approvals/{call_id}` dengan `{"approve": true|false}`. Panggilan diulang dengan state tersimpan, jadi aturannya sama dengan MCP: hanya user yang sama, sekali pakai, dan berlaku 5 menit. Tolak tidak mengirim apa pun dan tidak menukar token untuk service tujuan. State yang kedaluwarsa, atau hilang karena agen restart (kuncinya per proses), meminta persetujuan baru. Pesan baru yang dikirim saat panggilan masih menunggu menolak panggilan itu.
+
+**Riwayat.** Percakapan milik satu user (`sub` token sesi). User lain mendapat `404`. Dengan `DATABASE_URL`, riwayat disimpan di PostgreSQL, di dua tabel: `conversations` (`id`, `user_sub`, `title`, `created_at`, `updated_at`) dan `messages` (`conversation_id`, `seq`, `role` `user`/`assistant`/`tool`, `parts` jsonb dalam bentuk netral, sehingga ganti provider tidak mengubah data). Menghapus percakapan menghapus pesannya. Hasil tool disimpan apa adanya, karena itu data user dari service yang ia panggil sendiri. Token, refresh token, dan kunci persetujuan tidak pernah disimpan.
+
+**Risiko.**
+- Hasil tool berasal dari service dan bisa memuat teks yang mencoba mengarahkan model (prompt injection). Operasi sensitif tetap menunggu persetujuan dengan pesan dari katalog, operasi lain dibatasi izin user di NICE, dan batas langkah membatasi satu giliran.
+- Tidak ada kuota atau batas biaya LLM per user. Pasang batas di provider bila dashboard dibuka untuk banyak user.
+- Sesi disimpan di memori, sama seperti `nadi`: restart berarti masuk lagi, tetapi riwayat di PostgreSQL tetap ada.
 
 ## Prasyarat
 
@@ -276,13 +317,21 @@ curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients/$(jq -r .oauth_client.
 
 ### 7. Client `agen-backend` (confidential)
 
-Aktor token exchange. Exchange menolak client `public`, dan memisahkan dua client menunjukkan bahwa secret hanya ada di server agen. NICE mewajibkan redirect URI dan grant `authorization_code` untuk setiap OAuth client, walau backend ini tidak pernah login.
+Aktor token exchange, sekaligus client login dashboard (backend-for-frontend). Exchange menolak client `public`, dan memisahkan dua client menunjukkan bahwa secret hanya ada di server agen. Untuk dashboard, client ini butuh:
+
+- redirect URI `<PUBLIC_URL>/auth/callback` (bawaan `http://127.0.0.1:8083/auth/callback`; dev dengan Vite: `http://localhost:5182/auth/callback`);
+- post-logout redirect URI `<PUBLIC_URL>/` (atau nilai `POST_LOGOUT_URL`);
+- grant `authorization_code` dan `refresh_token`: refresh token disimpan di server agen, dan pindah konteks dilakukan lewat refresh.
+
+Untuk client `agen-backend` yang sudah ada (dibuat hanya dengan redirect `.../unused`), tambahkan URI dan grant di atas di console (detail client) atau lewat `PUT` client yang sama.
 
 ```bash
 CLIENT=$(curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients" -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"agen-backend","client_type":"CLIENT_TYPE_CONFIDENTIAL","redirect_uris":["http://127.0.0.1:8083/unused"],
-       "grant_types":["authorization_code"]}')
+  -d '{"name":"agen-backend","client_type":"CLIENT_TYPE_CONFIDENTIAL",
+       "redirect_uris":["http://127.0.0.1:8083/auth/callback","http://localhost:5182/auth/callback"],
+       "post_logout_redirect_uris":["http://127.0.0.1:8083/","http://localhost:5182/"],
+       "grant_types":["authorization_code","refresh_token"]}')
 curl -sS "$NICE/api/v1/projects/$AGENT_PROJECT_ID/clients/$(jq -r .oauth_client.id <<<"$CLIENT")/service" -X PUT \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{"service":"agen"}' \
   | jq '.oauth_client | {client_class, service}'
