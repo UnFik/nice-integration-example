@@ -20,7 +20,7 @@ Path tanpa awalan relatif terhadap `agent/backend` di worktree `.worktrees/examp
 
 ## 3. Skema operasi
 
-- [ ] 3.1 Tambah `calldto.OperationSchemas` dan `OperationSchema`, method `Discoverer.OperationSchemas` dan `Discoverer.Redact` di adapter (membungkus `OperationSchemas`, `ResponseSchema`, dan `RedactSecrets`), serta use case `GetOperationSchemas` (validasi slug, 1–10 key, `schemas_unavailable` untuk 404, galat lain lewat `failure.Discovery`). Verifikasi dengan tes use case: dua key dengan satu `missing`, 0 dan 11 key ditolak tanpa memanggil NICE, 404 menjadi `schemas_unavailable`, dan `input_schema` diteruskan byte demi byte. Jalankan perintah tes yang sama.
+- [x] 3.1 Tambah `calldto.OperationSchemas` dan `OperationSchema`, method `Discoverer.OperationSchemas` dan `Discoverer.Redact` di adapter (membungkus `OperationSchemas`, `ResponseSchema`, dan `RedactSecrets`), serta use case `GetOperationSchemas` (validasi slug, 1–10 key, `schemas_unavailable` untuk 404, galat lain lewat `failure.Discovery`). Verifikasi dengan tes use case: dua key dengan satu `missing`, 0 dan 11 key ditolak tanpa memanggil NICE, 404 menjadi `schemas_unavailable`, dan `input_schema` diteruskan byte demi byte. Jalankan perintah tes yang sama.
 - [ ] 3.2 Tambah tool `get_operation_schema` ke tabel `tools` (`readOnly`, deskripsi sesuai design) beserta handler `internal/adapter/mcp/get_operation_schema_handler.go`, dan daftarkan di `newServer`. Verifikasi dengan tes MCP yang ada untuk `tools/list` (empat tool, skema input `operations` berupa array string) dan tes `ToolSpecs` chat. Jalankan perintah tes yang sama.
 
 ## 4. Pembersihan rahasia di `call_operation`

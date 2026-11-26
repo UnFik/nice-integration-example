@@ -12,6 +12,11 @@ type Discoverer interface {
 	Services(ctx context.Context, token string) (calldto.ServiceMap, error)
 	// Operations reads the operations of slug for user, the subject of token, which keys what the adapter keeps.
 	Operations(ctx context.Context, token, user, slug string) (calldto.ServiceOperations, error)
+	// OperationSchemas reads the full schemas of the operations keys of slug.
+	OperationSchemas(ctx context.Context, token, slug string, keys []string) (calldto.OperationSchemas, error)
+	// Redact removes from body the properties that the response schema of status marks x-secret. A body that is not
+	// JSON is an error.
+	Redact(schema calldto.OperationSchema, status int, body []byte) ([]byte, error)
 }
 
 // Operator sends one call of an operation with a token exchanged on behalf of the user who holds token. It is the

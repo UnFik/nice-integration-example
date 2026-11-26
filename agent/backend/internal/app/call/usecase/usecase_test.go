@@ -2,10 +2,13 @@ package callusecase
 
 import (
 	"context"
+	"fmt"
 	"encoding/json"
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 
 	calldto "github.com/nice-platform/example/agent/backend/internal/app/call/dto"
 	"github.com/nice-platform/example/agent/backend/internal/domain"
@@ -28,6 +31,34 @@ type fakeNICE struct {
 	callErr  error
 	result   calldto.OperationResult
 	mapReads int
+	// schemas answers OperationSchemas by key; schemaErr fails it; schemaAsks records the keys asked.
+	schemas    map[string]calldto.OperationSchema
+	schemaErr  error
+	schemaAsks [][]string
+}
+
+func (f *fakeNICE) OperationSchemas(_ context.Context, _, slug string, keys []string) (calldto.OperationSchemas, error) {
+	f.schemaAsks = append(f.schemaAsks, keys)
+	if f.schemaErr != nil {
+		return calldto.OperationSchemas{}, f.schemaErr
+	}
+	if _, ok := f.ops[slug]; !ok {
+		return calldto.OperationSchemas{}, &domain.APIError{Status: 404, Code: "not_found"}
+	}
+	out := calldto.OperationSchemas{Service: slug, Schemas: []calldto.OperationSchema{}, Missing: []string{}}
+	for _, k := range keys {
+		if sc, ok := f.schemas[k]; ok {
+			out.Schemas = append(out.Schemas, sc)
+		} else {
+			out.Missing = append(out.Missing, k)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeNICE) Redact(schema calldto.OperationSchema, status int, body []byte) ([]byte, error) {
+	s := credentials.OperationSchema{Key: schema.Key, InputSchema: schema.InputSchema, Responses: schema.Responses}
+	return credentials.RedactSecrets(s.ResponseSchema(status), body)
 }
 
 func (f *fakeNICE) Services(context.Context, string) (calldto.ServiceMap, error) {
@@ -67,6 +98,11 @@ func newFake() *fakeNICE {
 				RequestFields: []calldto.RequestField{{Location: "path", Name: "id", Required: true}}},
 		}}},
 		result: calldto.OperationResult{Status: 200, Body: []byte(`{"devices":[]}`)},
+		schemas: map[string]calldto.OperationSchema{
+			"listDevices":  {Key: "listDevices", InputSchema: []byte(`{"type":"object"}`), Responses: []byte(`{}`)},
+			"createDevice": {Key: "createDevice", InputSchema: []byte(`{"type":"object","properties":{"body":{"type":"object","required":["name"]}}}`), Responses: []byte(`{}`)},
+			"deleteDevice": {Key: "deleteDevice", InputSchema: []byte(`{"type":"object"}`), Responses: []byte(`{}`)},
+		},
 	}
 }
 
@@ -311,5 +347,44 @@ func TestListOperationsCarriesDescriptionsAndAllowedValues(t *testing.T) {
 	}
 	if strings.Contains(s, `"format"`) || strings.Contains(s, `"enum_truncated"`) {
 		t.Fatalf("what NICE does not send stays out: %s", s)
+	}
+}
+
+func TestGetOperationSchemasNamesKeysTheUserMayNotCallAsMissing(t *testing.T) {
+	f := newFake()
+	v, fail := newService(f).GetOperationSchemas(context.Background(), user, "nadi", []string{"createDevice", "ghost"})
+	if fail != nil || len(v.Schemas) != 1 || v.Schemas[0].Key != "createDevice" || fmt.Sprint(v.Missing) != "[ghost]" {
+		t.Fatalf("view = %+v, %v", v, fail)
+	}
+	raw, _ := json.Marshal(v)
+	if !strings.Contains(string(raw), `"input_schema":{"type":"object","properties":{"body":{"type":"object","required":["name"]}}}`) {
+		t.Fatalf("the input schema is passed on as it is: %s", raw)
+	}
+}
+
+func TestGetOperationSchemasBoundsTheKeys(t *testing.T) {
+	f := newFake()
+	var eleven []string
+	for i := range 11 {
+		eleven = append(eleven, fmt.Sprintf("k%d", i))
+	}
+	for _, keys := range [][]string{nil, eleven, {""}} {
+		if _, fail := newService(f).GetOperationSchemas(context.Background(), user, "nadi", keys); fail == nil || fail.Code != "invalid_argument" {
+			t.Fatalf("%d keys: %+v", len(keys), fail)
+		}
+	}
+	if len(f.schemaAsks) != 0 {
+		t.Fatalf("NICE asked: %v", f.schemaAsks)
+	}
+}
+
+func TestGetOperationSchemasOfAnOlderNICE(t *testing.T) {
+	f := newFake()
+	f.schemaErr = &domain.APIError{Status: 404, Code: "not_found"}
+	if _, fail := newService(f).GetOperationSchemas(context.Background(), user, "nadi", []string{"listDevices"}); fail == nil || fail.Code != "schemas_unavailable" {
+		t.Fatalf("an older NICE: %+v", fail)
+	}
+	if _, fail := newService(f).GetOperationSchemas(context.Background(), user, "pengiriman", []string{"x"}); fail == nil || fail.Code != "service_not_allowed" {
+		t.Fatalf("a service out of reach: %+v", fail)
 	}
 }
