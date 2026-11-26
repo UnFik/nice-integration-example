@@ -58,13 +58,13 @@
 
 - [x] 7.1 Jadikan `Dockerfile` di `agent/` multi-stage: Node membangun `web/dist`, Go membangun binary, dan image distroless menjalankan binary dengan `WEB_DIR` ke UI tertanam. Selesai bila image ter-build, lalu `GET /` menyajikan UI, `/healthz` 200, dan `/mcp` tanpa token 401 di container lokal.
 - [x] 7.2 Tambahkan fase `agenbff` di `~/.config/nice-vps-register.sh`: perbarui client `agen-backend` dengan redirect `https://agent.unfik.my.id/auth/callback`, post-logout `https://agent.unfik.my.id/`, dan grant `authorization_code` + `refresh_token`. Jalankan dengan token admin `~/.config/nice-vps-admin.json`. Selesai bila respons PUT menampilkan URI dan grant baru, tanpa rahasia tercetak.
-- [ ] 7.3 Siapkan VPS:
+- [x] 7.3 Siapkan VPS:
   - buat database dan user `agen` di PostgreSQL VPS;
   - tambahkan `DATABASE_URL`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `PUBLIC_URL`, `POST_LOGOUT_URL`, dan `WEB_DIR` ke service agen di `/opt/nice/compose.examples.yml` (cadangkan dulu);
   - tulis `LLM_API_KEY` ke `/opt/nice/.env` lewat stdin.
 
   Tanyakan provider dan model ke user sebelum langkah ini. Selesai bila `docker compose config` valid dan tidak ada rahasia di berkas compose.
-- [ ] 7.4 Build image dari `agent/`, kirim ke VPS, naikkan `AGEN_IMAGE_TAG`, lalu jalankan `~/.config/nice-vps-agen-smoke.sh` (path smoke disesuaikan ke `agent/backend/scripts/smoke.sh`). Selesai bila semua langkah smoke MCP dan uji persetujuan MCP `ok`.
+- [x] 7.4 Build image dari `agent/`, kirim ke VPS, naikkan `AGEN_IMAGE_TAG`, lalu jalankan `~/.config/nice-vps-agen-smoke.sh` (path smoke disesuaikan ke `agent/backend/scripts/smoke.sh`). Selesai bila semua langkah smoke MCP dan uji persetujuan MCP `ok`.
 - [ ] 7.5 Jalankan checklist dashboard di browser terhadap `https://agent.unfik.my.id` (masuk sebagai user demo):
   - minta daftar perangkat `nadi`;
   - buat perangkat;
