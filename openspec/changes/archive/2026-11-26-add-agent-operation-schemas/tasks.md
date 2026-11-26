@@ -37,12 +37,25 @@ Path tanpa awalan relatif terhadap `agent/backend` di worktree `.worktrees/examp
 ## 5. Dokumen, smoke, dan uji manual
 
 - [x] 5.1 Perbarui `agent/README.md` dan `agent/README.en.md`: tabel tool, pembersihan `x-secret`, cache `ETag`, versi NICE/SDK, dan baris "Diuji terhadap nice revisi". Perbarui baris `agent/backend` di `README.md` dan `README.en.md` akar, serta kalimat versi SDK di `AGENTS.md`. Perbarui `scripts/smoke.sh`: daftar tool yang diharapkan memuat `get_operation_schema`, dan satu langkah baru memanggilnya untuk key `GET /devices` lalu memeriksa `input_schema` ada. Verifikasi dengan `bash -n scripts/smoke.sh` dan membaca ulang kedua README berdampingan.
-- [ ] 5.2 Gerbang: `test -z "$(gofmt -l .)"`, `heavy go vet ./...`, dan `heavy make test`; semuanya harus hijau.
-- [ ] 5.3 Jalankan agen terhadap NICE `dev` di clone DB dev dengan katalog `nadi` yang diimpor ulang (salinan dokumen dengan `acted_by` bertanda `x-secret`) dan `sharedservice-oauth` sebagai `nadi`. Jalankan `make smoke`, lalu di dashboard chat minta model mendaftar perangkat dan membuat satu perangkat. Verifikasi:
+- [x] 5.2 Gerbang: `test -z "$(gofmt -l .)"`, `heavy go vet ./...`, dan `heavy make test`; semuanya harus hijau.
+- [x] 5.3 Jalankan agen terhadap NICE `dev` di clone DB dev dengan katalog `nadi` yang diimpor ulang (salinan dokumen dengan `acted_by` bertanda `x-secret`) dan `sharedservice-oauth` sebagai `nadi`. Jalankan `make smoke`, lalu di dashboard chat minta model mendaftar perangkat dan membuat satu perangkat. Verifikasi:
   - model memanggil `get_operation_schema` sebelum membuat perangkat;
   - hasil `call_operation` dan riwayat chat tidak memuat `acted_by`.
 
   Catat hasilnya di tugas ini, lalu bersihkan clone dan proses.
+
+  **Hasil (di VPS atas permintaan pengguna, bukan clone):**
+  - NICE VPS dinaikkan ke `dev-abd6ec4`; migrasi `12`–`14` berjalan lewat `nice-migrate`.
+  - Agen diganti ke image `agen:bfe23e0`.
+  - Katalog `nadi` diimpor ulang dengan `Device.acted_by` dan `DeviceList.acted_by` bertanda `x-secret`. Diff-nya hanya `request_fields`, `description`, `responses`, dan `schema`, tanpa operasi yang hilang dan tanpa perubahan izin atau role.
+  - `make smoke` (token `demo@unfik.my.id` lewat `agen-user`) lulus semua langkah, termasuk empat tool dan `get_operation_schema`.
+  - Lewat MCP, `call_operation listDevices` mengembalikan 20 perangkat tanpa `acted_by`.
+  - **Dashboard chat**, membuat perangkat:
+    - model memilih status `active` dari `enum` di `list_operations`;
+    - hasil `createDevice` dan `listDevices` di riwayat tanpa properti `acted_by`;
+    - di database `nadi`, perangkat `SN-SKEMA-01` tetap tercatat dengan `acted_by` client `agen-backend`.
+  - **Dashboard chat**, membaca skema: `get_operation_schema updateDevice` berjalan, dan model menjelaskan field wajib, `enum`, dan bentuk jawaban, serta menyebut `acted_by` rahasia.
+  - **Satu pengamatan:** model tidak memanggil `get_operation_schema` sendiri sebelum `createDevice`, karena isian `list_operations` sudah cukup. Tidak ada clone atau proses lokal yang perlu dibersihkan.
 
 ## Workflow follow-up
 
