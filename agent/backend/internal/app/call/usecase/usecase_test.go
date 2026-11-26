@@ -3,9 +3,12 @@ package callusecase
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/ABA-Developer/nice-auth-sdk/credentials"
 
 	calldto "github.com/nice-platform/example/agent/backend/internal/app/call/dto"
 	"github.com/nice-platform/example/agent/backend/internal/domain"
@@ -28,6 +31,34 @@ type fakeNICE struct {
 	callErr  error
 	result   calldto.OperationResult
 	mapReads int
+	// schemas answers OperationSchemas by key; schemaErr fails it; schemaAsks records the keys asked.
+	schemas    map[string]calldto.OperationSchema
+	schemaErr  error
+	schemaAsks [][]string
+}
+
+func (f *fakeNICE) OperationSchemas(_ context.Context, _, slug string, keys []string) (calldto.OperationSchemas, error) {
+	f.schemaAsks = append(f.schemaAsks, keys)
+	if f.schemaErr != nil {
+		return calldto.OperationSchemas{}, f.schemaErr
+	}
+	if _, ok := f.ops[slug]; !ok {
+		return calldto.OperationSchemas{}, &domain.APIError{Status: 404, Code: "not_found"}
+	}
+	out := calldto.OperationSchemas{Service: slug, Schemas: []calldto.OperationSchema{}, Missing: []string{}}
+	for _, k := range keys {
+		if sc, ok := f.schemas[k]; ok {
+			out.Schemas = append(out.Schemas, sc)
+		} else {
+			out.Missing = append(out.Missing, k)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeNICE) Redact(schema calldto.OperationSchema, status int, body []byte) ([]byte, error) {
+	s := credentials.OperationSchema{Key: schema.Key, InputSchema: schema.InputSchema, Responses: schema.Responses}
+	return credentials.RedactSecrets(s.ResponseSchema(status), body)
 }
 
 func (f *fakeNICE) Services(context.Context, string) (calldto.ServiceMap, error) {
@@ -35,7 +66,7 @@ func (f *fakeNICE) Services(context.Context, string) (calldto.ServiceMap, error)
 	return f.m, f.mapErr
 }
 
-func (f *fakeNICE) Operations(_ context.Context, _, slug string) (calldto.ServiceOperations, error) {
+func (f *fakeNICE) Operations(_ context.Context, _, _, slug string) (calldto.ServiceOperations, error) {
 	if f.opsErr != nil {
 		return calldto.ServiceOperations{}, f.opsErr
 	}
@@ -67,6 +98,11 @@ func newFake() *fakeNICE {
 				RequestFields: []calldto.RequestField{{Location: "path", Name: "id", Required: true}}},
 		}}},
 		result: calldto.OperationResult{Status: 200, Body: []byte(`{"devices":[]}`)},
+		schemas: map[string]calldto.OperationSchema{
+			"listDevices":  {Key: "listDevices", InputSchema: []byte(`{"type":"object"}`), Responses: []byte(`{}`)},
+			"createDevice": {Key: "createDevice", InputSchema: []byte(`{"type":"object","properties":{"body":{"type":"object","required":["name"]}}}`), Responses: []byte(`{}`)},
+			"deleteDevice": {Key: "deleteDevice", InputSchema: []byte(`{"type":"object"}`), Responses: []byte(`{}`)},
+		},
 	}
 }
 
@@ -288,5 +324,135 @@ func TestNonSensitiveOperationAsksNothing(t *testing.T) {
 	_, ask, fail := call(newService(newFake()), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
 	if ask != nil || fail != nil {
 		t.Fatalf("ask %+v fail %+v", ask, fail)
+	}
+}
+
+func TestListOperationsCarriesDescriptionsAndAllowedValues(t *testing.T) {
+	f := newFake()
+	nadi := f.ops["nadi"]
+	nadi.Operations[0].Description = "Devices of the project."
+	nadi.Operations[0].RequestFields[0] = calldto.RequestField{Location: "query", Name: "status", Type: "string",
+		Description: "State of the device", Enum: []any{"active", "inactive"}}
+	f.ops["nadi"] = nadi
+	v, fail := newService(f).ListOperations(context.Background(), user, "nadi")
+	if fail != nil {
+		t.Fatal(fail)
+	}
+	raw, _ := json.Marshal(v)
+	s := string(raw)
+	for _, want := range []string{`"description":"Devices of the project."`, `"description":"State of the device"`, `"enum":["active","inactive"]`} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %s in %s", want, s)
+		}
+	}
+	if strings.Contains(s, `"format"`) || strings.Contains(s, `"enum_truncated"`) {
+		t.Fatalf("what NICE does not send stays out: %s", s)
+	}
+}
+
+func TestGetOperationSchemasNamesKeysTheUserMayNotCallAsMissing(t *testing.T) {
+	f := newFake()
+	v, fail := newService(f).GetOperationSchemas(context.Background(), user, "nadi", []string{"createDevice", "ghost"})
+	if fail != nil || len(v.Schemas) != 1 || v.Schemas[0].Key != "createDevice" || fmt.Sprint(v.Missing) != "[ghost]" {
+		t.Fatalf("view = %+v, %v", v, fail)
+	}
+	raw, _ := json.Marshal(v)
+	if !strings.Contains(string(raw), `"input_schema":{"type":"object","properties":{"body":{"type":"object","required":["name"]}}}`) {
+		t.Fatalf("the input schema is passed on as it is: %s", raw)
+	}
+}
+
+func TestGetOperationSchemasBoundsTheKeys(t *testing.T) {
+	f := newFake()
+	var eleven []string
+	for i := range 11 {
+		eleven = append(eleven, fmt.Sprintf("k%d", i))
+	}
+	for _, keys := range [][]string{nil, eleven, {""}} {
+		if _, fail := newService(f).GetOperationSchemas(context.Background(), user, "nadi", keys); fail == nil || fail.Code != "invalid_argument" {
+			t.Fatalf("%d keys: %+v", len(keys), fail)
+		}
+	}
+	if len(f.schemaAsks) != 0 {
+		t.Fatalf("NICE asked: %v", f.schemaAsks)
+	}
+}
+
+func TestGetOperationSchemasOfAnOlderNICE(t *testing.T) {
+	f := newFake()
+	f.schemaErr = &domain.APIError{Status: 404, Code: "not_found"}
+	if _, fail := newService(f).GetOperationSchemas(context.Background(), user, "nadi", []string{"listDevices"}); fail == nil || fail.Code != "schemas_unavailable" {
+		t.Fatalf("an older NICE: %+v", fail)
+	}
+	if _, fail := newService(f).GetOperationSchemas(context.Background(), user, "pengiriman", []string{"x"}); fail == nil || fail.Code != "service_not_allowed" {
+		t.Fatalf("a service out of reach: %+v", fail)
+	}
+}
+
+const secretList = `{"200":{"schema":{"type":"object","properties":{"devices":{"type":"array","items":{"type":"object",
+	"properties":{"id":{"type":"string"},"acted_by":{"type":"string","x-secret":true}}}}}}}}`
+
+func TestCallRemovesSecretPropertiesBeforeTheModelSeesThem(t *testing.T) {
+	f := newFake()
+	sc := f.schemas["listDevices"]
+	sc.Responses = []byte(secretList)
+	f.schemas["listDevices"] = sc
+	f.result = calldto.OperationResult{Status: 200, Body: []byte(`{"devices":[{"id":"d1","acted_by":"cli_x","name":"Pump"}],"total":1}`)}
+	out, _, fail := call(newService(f), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
+	if fail != nil {
+		t.Fatal(fail)
+	}
+	raw, _ := json.Marshal(out.Body)
+	if strings.Contains(string(raw), "acted_by") || strings.Contains(string(raw), "cli_x") || !strings.Contains(string(raw), `"name":"Pump"`) {
+		t.Fatalf("body = %s", raw)
+	}
+	if len(f.schemaAsks) != 1 || fmt.Sprint(f.schemaAsks[0]) != "[listDevices]" {
+		t.Fatalf("schema asks = %v", f.schemaAsks)
+	}
+}
+
+func TestCallIsNotSentWhenTheSchemaCannotBeRead(t *testing.T) {
+	f := newFake()
+	f.schemaErr = domain.ErrTemporary
+	_, _, fail := call(newService(f), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
+	if fail == nil || len(f.calls) != 0 {
+		t.Fatalf("fail %+v, calls %d", fail, len(f.calls))
+	}
+}
+
+func TestCallGoesOnAgainstANICEWithoutSchemas(t *testing.T) {
+	f := newFake()
+	f.schemaErr = &domain.APIError{Status: 404, Code: "not_found"}
+	f.result = calldto.OperationResult{Status: 200, Body: []byte(`{"devices":[{"acted_by":"cli_x"}]}`)}
+	out, _, fail := call(newService(f), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
+	raw, _ := json.Marshal(out)
+	if fail != nil || len(f.calls) != 1 || !strings.Contains(string(raw), "cli_x") {
+		t.Fatalf("out %s, fail %+v", raw, fail)
+	}
+}
+
+func TestCallOfAKeyMissingFromTheSchemasIsRefused(t *testing.T) {
+	f := newFake()
+	delete(f.schemas, "listDevices")
+	_, _, fail := call(newService(f), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
+	if fail == nil || fail.Code != "invalid_argument" || len(f.calls) != 0 {
+		t.Fatalf("fail %+v, calls %d", fail, len(f.calls))
+	}
+}
+
+func TestSensitiveCallStillAsksAfterTheSchemaIsRead(t *testing.T) {
+	f := newFake()
+	_, ask, fail := call(newService(f), calldto.OperationInput{Service: "nadi", Operation: "deleteDevice", PathParams: map[string]string{"id": "d1"}}, calldto.Approval{})
+	if fail != nil || ask == nil || len(f.calls) != 0 || len(f.schemaAsks) != 1 {
+		t.Fatalf("ask %+v, fail %+v, calls %d, schema asks %d", ask, fail, len(f.calls), len(f.schemaAsks))
+	}
+}
+
+func TestErrorAnswerIsCleanedBeforeItsCodeIsRead(t *testing.T) {
+	f := newFake()
+	f.result = calldto.OperationResult{Status: 503, Body: []byte("<html>down</html>")}
+	_, _, fail := call(newService(f), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
+	if fail == nil || fail.Code != "http_503" || strings.Contains(fail.Message+fail.Description, "html") {
+		t.Fatalf("fail %+v", fail)
 	}
 }

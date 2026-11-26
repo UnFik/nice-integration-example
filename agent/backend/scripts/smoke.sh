@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Smoke test of the agen example against a NICE set up with the README checklist: the agent answers, /mcp without a
 # token points to the resource metadata, the metadata names NICE, and, with AGENT_USER_TOKEN in the environment
-# (checklist step 10), the three tools are listed, list_services lists nadi, list_operations lists GET /devices of
-# nadi, and call_operation runs it through a token exchange. AGENT_URL points it at an agent elsewhere.
+# (checklist step 10), the four tools are listed, list_services lists nadi, list_operations lists GET /devices of
+# nadi, get_operation_schema gives its input schema, and call_operation runs it through a token exchange. AGENT_URL points it at an agent elsewhere.
 # It reads .env, AGENT_URL, and AGENT_USER_TOKEN only and never prints a token or the secret; neither reaches the
 # argv of curl.
 set -euo pipefail
@@ -86,9 +86,9 @@ if [[ $status != 200 ]]; then
   esac
 fi
 tools=$(jq -r '[.result.tools[].name] | sort | join(",")' "$body")
-[[ $tools == call_operation,list_operations,list_services ]] ||
-  fail "tools/list memuat $tools, seharusnya list_services, list_operations, dan call_operation."
-ok "tools/list: tiga tool"
+[[ $tools == call_operation,get_operation_schema,list_operations,list_services ]] ||
+  fail "tools/list memuat $tools, seharusnya list_services, list_operations, get_operation_schema, dan call_operation."
+ok "tools/list: empat tool"
 
 # tool <id> <name> <arguments JSON> calls one tool and stops with a hint for the step a refusal points to.
 tool() {
@@ -100,6 +100,7 @@ tool() {
   case $text in
     discovery_unavailable*) fail "$text" "NICE terlalu lama: naikkan ke revisi yang disebut README (Versi NICE minimum)." ;;
     service_not_allowed*) fail "$text" "User belum boleh memanggil nadi: langkah 6 sampai 8 README sharedservice-oauth/backend." ;;
+    schemas_unavailable*) fail "$text" "NICE belum menyajikan skema operasi: naikkan ke revisi yang disebut README (Versi NICE minimum)." ;;
     insecure_endpoint*) fail "$text" "Daftarkan endpoint nadi di katalog sebagai https, atau loopback untuk uji lokal." ;;
     invalid_client*) fail "$text" "Periksa NICE_CLIENT_ID dan NICE_CLIENT_SECRET (checklist langkah 7)." ;;
     invalid_scope*) fail "$text" "Periksa bahwa nadi aktif di project token (langkah 7 README sharedservice-oauth/backend)." ;;
@@ -118,5 +119,10 @@ key=$(jq -r '.result.structuredContent.operations[] | select(.method == "GET" an
 [[ -n $key ]] || fail "list_operations nadi tidak memuat GET /devices." "Impor ulang katalog nadi dan pastikan user memegang nadi.devices.read."
 ok "list_operations nadi: $(jq '.result.structuredContent.operations | length' "$body") operasi, GET /devices = $key"
 
-tool 4 call_operation "$(jq -nc --arg key "$key" '{service: "nadi", operation: $key}')"
+tool 4 get_operation_schema "$(jq -nc --arg key "$key" '{service: "nadi", operations: [$key]}')"
+jq -e '.result.structuredContent.schemas[0].input_schema | type == "object"' "$body" >/dev/null ||
+  fail "get_operation_schema $key tidak memuat input_schema." "Impor ulang katalog nadi agar NICE membaca skemanya."
+ok "get_operation_schema $key: input_schema dan $(jq '.result.structuredContent.schemas[0].responses | length' "$body") status jawaban"
+
+tool 5 call_operation "$(jq -nc --arg key "$key" '{service: "nadi", operation: $key}')"
 ok "call_operation $key lewat token exchange: HTTP $(jq -r '.result.structuredContent.status' "$body"), $(jq -r '.result.structuredContent.body.devices | length' "$body") perangkat"

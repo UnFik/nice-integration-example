@@ -17,9 +17,9 @@ agen --token exchange: subject_token + client agen-backend (aud=nadi)--> NICE /o
 agen --Bearer exchanged token (act.sub=agen-backend)--> <catalog endpoint of nadi>/devices
 ```
 
-Minimum NICE version: `235445c` (`add-caller-service-discovery`), because the tools use `GET /api/v1/me/services` and `GET /api/v1/me/services/{slug}/operations`; an older NICE answers `404` and the tools answer `discovery_unavailable`. Before it, `b361d25` (`service-calls-without-service-account`), because the resolution of `perms_ref` forwards the token of the request, not an API key. SDK: `github.com/ABA-Developer/nice-auth-sdk`, `v0.2.4` (`Services`, `ServiceOperations`, `CallOperation`). The MCP SDK is pinned in `go.mod` at `v1.8.0`, which has MCP protocol `2026-07-28` for approvals without a session.
+Minimum NICE version: `235445c` (`add-caller-service-discovery`), because the tools use `GET /api/v1/me/services` and `GET /api/v1/me/services/{slug}/operations`; an older NICE answers `404` and the tools answer `discovery_unavailable`. Before it, `b361d25` (`service-calls-without-service-account`), because the resolution of `perms_ref` forwards the token of the request, not an API key. The rich operation fields, `get_operation_schema`, and the removal of `x-secret` need a NICE with `add-operation-schemas` (`dev`); against an older NICE those fields are empty, `get_operation_schema` answers `schemas_unavailable`, and `call_operation` passes the answer on as it is. SDK: `github.com/ABA-Developer/nice-auth-sdk`, `v0.2.5` (`Services`, `ServiceOperationsIfChanged`, `OperationSchemas`, `RedactSecrets`, `CallOperation`). The MCP SDK is pinned in `go.mod` at `v1.8.0`, which has MCP protocol `2026-07-28` for approvals without a session.
 
-Tested against nice revision: the chat dashboard (2026-11-26) with unit tests (fake NICE, `nadi`, model, and fake or temporary PostgreSQL), then on the VPS with NICE `dev-235445c`, image `agen:99c97d0`, PostgreSQL, and the OpenAI-compatible model `deepseek-v4.1-flash:netra`, over HTTP with a cookie jar as a browser does: sign-in through `/auth/login` at NICE, a POST without CSRF `403`, listing and creating devices through the chat (`acted_by` the agent), a delete with Tolak (`not_approved`) then Setujui (`204`, a second answer `409`), a container restart (the session ends, history stays in PostgreSQL), and sign-out. The MCP smoke and the MCP approval test also pass on that image. Then in a real browser (viewport 1280×800): sign-in through the NICE login page, a message from the UI that creates and then asks to delete a device, the approval card with the catalog message, Setujui (the device is deleted), every page request to the agent origin only, empty `localStorage` and `sessionStorage`, a cookie scripts cannot read, and Keluar from the account menu (revoke and `end_session` at NICE, then `/auth/session` `401`). A context switch is tested in unit tests only, since the demo user has one project that uses `nadi`. Before: SDK `v0.2.4` and `nice` `235445c`, 2026-11-25, with the unit tests (fake NICE and `nadi`), then `scripts/smoke.sh` and the delete with an approval (two rounds of protocol `2026-07-28`) against NICE `dev-235445c` on a VPS, with an `https` endpoint of `nadi`.
+Tested against nice revision: operation schemas (2026-11-26) with unit tests (fake NICE and model), then on the VPS with NICE `dev-abd6ec4`, image `agen:bfe23e0`, and the `nadi` catalog imported again with `acted_by` marked `x-secret`: `scripts/smoke.sh` passes (four tools, `get_operation_schema` of `listDevices` with an `input_schema` and four statuses, `call_operation` with 20 devices), the result of `call_operation` over MCP holds no `acted_by`, and in the chat dashboard the model creates a device with a status from the `enum` of `list_operations`, the results of `createDevice` and `listDevices` hold no `acted_by` while `nadi` still stores the agent client as `acted_by`, then `get_operation_schema` of `updateDevice` explains the required fields and the shape of the answer. The model does not call `get_operation_schema` on its own before creating a device; the fields of `list_operations` are enough for it. Before: the chat dashboard (2026-11-26) with unit tests (fake NICE, `nadi`, model, and fake or temporary PostgreSQL), then on the VPS with NICE `dev-235445c`, image `agen:99c97d0`, PostgreSQL, and the OpenAI-compatible model `deepseek-v4.1-flash:netra`, over HTTP with a cookie jar as a browser does: sign-in through `/auth/login` at NICE, a POST without CSRF `403`, listing and creating devices through the chat (`acted_by` the agent), a delete with Tolak (`not_approved`) then Setujui (`204`, a second answer `409`), a container restart (the session ends, history stays in PostgreSQL), and sign-out. The MCP smoke and the MCP approval test also pass on that image. Then in a real browser (viewport 1280×800): sign-in through the NICE login page, a message from the UI that creates and then asks to delete a device, the approval card with the catalog message, Setujui (the device is deleted), every page request to the agent origin only, empty `localStorage` and `sessionStorage`, a cookie scripts cannot read, and Keluar from the account menu (revoke and `end_session` at NICE, then `/auth/session` `401`). A context switch is tested in unit tests only, since the demo user has one project that uses `nadi`. Before: SDK `v0.2.4` and `nice` `235445c`, 2026-11-25, with the unit tests (fake NICE and `nadi`), then `scripts/smoke.sh` and the delete with an approval (two rounds of protocol `2026-07-28`) against NICE `dev-235445c` on a VPS, with an `https` endpoint of `nadi`.
 
 ## Folder structure
 
@@ -76,10 +76,11 @@ Why: `main.go` only assembles; the rules and the use case do not import `net/htt
 | Tool | Arguments | Answer |
 |---|---|---|
 | `list_services` | none | the organizations of the user, their projects, and the slugs of the services the user may call in each project, with the name and description of each service. An organization whose projects NICE lists only in part is marked `projects_truncated` |
-| `list_operations` | `service` | the operations of that service whose permission the user holds: `key`, `method`, `path`, `summary`, `permission`, `request_fields` (name, location `path`/`query`/`body`, required or not), and `sensitive` |
+| `list_operations` | `service` | the operations of that service whose permission the user holds: `key`, `method`, `path`, `summary`, `description`, `permission`, `request_fields` (name, location `path`/`query`/`body`, required or not, `type`, `description`, `format`, `enum`, `enum_truncated`; what the document of the service does not state is left out), and `sensitive` |
+| `get_operation_schema` | `service`, `operations` (1 to 10 keys) | per key: `input_schema` (JSON Schema of `path`, `query`, `header`, and nested `body`) and `responses` (by status: `description`, `headers`, `schema`) from NICE, `truncated` when NICE cut the schema, and `missing` for keys the user may not call |
 | `call_operation` | `service`, `operation` (key), `organization_id`, `project_id`, `path_params`, `query`, `body` | the `status` and JSON `body` of the answer of the service |
 
-The tool list is the same for every user; what a user may call is read from NICE when a tool runs, from the roles of the user at that moment, not from a claim of the token. The agent keeps neither the map nor the operations.
+The tool list is the same for every user; what a user may call is read from NICE when a tool runs, from the roles of the user at that moment, not from a claim of the token. The agent keeps no map. The last operation list of each user and service is kept in memory (at most 1000) with its `ETag`, but every read still asks NICE with `If-None-Match`: the kept list is used only when NICE answers `304`, and dropped when NICE refuses.
 
 `call_operation` matches `service` with the map and `operation` with the list of operations on every call. The address (endpoint and base path of the catalog), the method, and the headers of the operation never come from the arguments of the model. Before any exchange for the target service, the agent refuses with `invalid_argument`:
 
@@ -110,11 +111,13 @@ An `api_key` service uses a key per Service Account and refuses user tokens (`40
 
 ### How a call works
 
-`list_services` and `list_operations` call `credentials.ExchangeClient.Services` and `ServiceOperations` with the user's token from the MCP request. Both share one delegated token of the NICE API (`aud=nice`) per user token, so discovery adds one exchange per user token, not per service or project. `call_operation` reads the map and the operations again (two `GET`s to NICE), then calls `CallOperation`, which sends through `DoAs` with the key `{Org, Project, Audience}`. `DoAs`:
+`list_services` and `list_operations` call `credentials.ExchangeClient.Services` and `ServiceOperations` with the user's token from the MCP request. Both share one delegated token of the NICE API (`aud=nice`) per user token, so discovery adds one exchange per user token, not per service or project. `call_operation` reads the map, the operations, and the schema of the operation it calls (three `GET`s to NICE), then calls `CallOperation`, which sends through `DoAs` with the key `{Org, Project, Audience}`. `DoAs`:
 
 - keeps a token per `(user, organization, project, service)` until 60 seconds before it expires, and never uses a token that outlives the user's token;
 - runs one exchange per key for parallel calls, with no queue across keys, so different contexts (organization or project) are exchanged at the same time;
 - exchanges again and resends the request once when the service answers `401` `token_stale` or `expired`.
+
+**Secret fields.** Before an answer of a service reaches the model, the conversation history, or an error message, the agent removes every property that the schema of the status of that answer marks `x-secret: true` (`RedactSecrets` with `ResponseSchema(status)`). The schema is read before the call is sent: when NICE fails for a temporary reason, the call is not sent (`nice_unavailable` or `temporarily_unavailable`), so that no side effect happens whose answer cannot be cleaned. When NICE does not serve schemas yet (`404`), the call is sent and its answer passed on as it is.
 
 A catalog endpoint must be `https` unless its host is a loopback: the agent refuses another endpoint with `insecure_endpoint` before any token is sent to it, the same rule as the SDK.
 
@@ -151,7 +154,7 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 Besides `/mcp`, the agent serves a chat dashboard ([`../web`](../web/README.en.md)) at `/`. Users sign in through `/auth/login` with the client `agen-backend` (step 7). The refresh token is kept on the server, and the browser holds only the cookie `agen_session`. `/chat/*` accepts only that cookie: a request with `Authorization` is refused with `401`, while `/mcp` ignores the cookie.
 
-**One turn.** `POST /chat/conversations/{id}/messages` with `{"text"}` (at most 8000 characters) stores the user's message, then calls the model with a system prompt, the conversation history, and the same three tools as the MCP server (name, description, and input schema read from one table in `adapter/mcp/tools_routes.go`). The tools run through the same use cases as MCP, on behalf of the user, with the active context token as the token exchange subject token. The model never sees a token. Every step is stored first, then sent as a server-sent event:
+**One turn.** `POST /chat/conversations/{id}/messages` with `{"text"}` (at most 8000 characters) stores the user's message, then calls the model with a system prompt, the conversation history, and the same four tools as the MCP server (name, description, and input schema read from one table in `adapter/mcp/tools_routes.go`). The tools run through the same use cases as MCP, on behalf of the user, with the active context token as the token exchange subject token. The model never sees a token. Every step is stored first, then sent as a server-sent event:
 
 | Event | Data |
 |---|---|
@@ -175,7 +178,7 @@ A turn keeps running when the browser drops the connection; the dashboard reads 
 
 ## Prerequisites
 
-- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk`, so this example builds without the `nice` repo. The code needs SDK `v0.2.4` or later. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
+- The SDK comes from the public module `github.com/ABA-Developer/nice-auth-sdk`, so this example builds without the `nice` repo. The code needs SDK `v0.2.5` or later. The `nice` repo next to `example/` is needed only to run a local NICE and for `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, and `openssl` (for `nice/scripts/dev-token.sh`).
 - NICE at the minimum version above, by default at `http://localhost:8080`.
 - `nadi` running and set up through step 8 of [`../sharedservice-oauth/backend/README.en.md`](../sharedservice-oauth/backend/README.en.md) (register, import, activate, entitlement, project activation, binding). The catalog endpoint of `nadi` is the address the agent calls, so it must be `https` or a loopback (locally: `http://127.0.0.1:8081`). The test user holds the role `nadi.editor` in the same project, or `nadi.admin` to try the approval of a delete. Do not use `nadi.operator`: that is the platform operator role of the service, not a project role.
@@ -385,7 +388,7 @@ export AGENT_USER_TOKEN=$USER_TOKEN   # read by scripts/smoke.sh
 make smoke
 ```
 
-The script reads `.env` and `AGENT_USER_TOKEN` from the environment, never prints a token or the secret, and checks: NICE answers, `/healthz` answers, `/mcp` without a token answers `401` with `resource_metadata`, the metadata names `NICE_ISSUER`, then, with the user token, `tools/list` holds the three tools, `list_services` lists `nadi`, `list_operations` for `nadi` lists `GET /devices`, and `call_operation` of that operation succeeds. `AGENT_URL` points the script at an agent elsewhere (e.g. `AGENT_URL=https://agen.example.com make smoke`). Failures map to steps:
+The script reads `.env` and `AGENT_USER_TOKEN` from the environment, never prints a token or the secret, and checks: NICE answers, `/healthz` answers, `/mcp` without a token answers `401` with `resource_metadata`, the metadata names `NICE_ISSUER`, then, with the user token, `tools/list` holds the four tools, `list_services` lists `nadi`, `list_operations` for `nadi` lists `GET /devices`, `get_operation_schema` of that operation holds an `input_schema`, and `call_operation` of that operation succeeds. `AGENT_URL` points the script at an agent elsewhere (e.g. `AGENT_URL=https://agen.example.com make smoke`). Failures map to steps:
 
 | Answer | Step likely missed |
 |---|---|
@@ -413,7 +416,7 @@ tool() {   # tool <name> [arguments JSON]
 }
 ```
 
-1. **Tool list.** Three tools: `list_services`, `list_operations`, `call_operation`:
+1. **Tool list.** Four tools: `list_services`, `list_operations`, `get_operation_schema`, `call_operation`:
 
    ```bash
    curl -sS http://127.0.0.1:8083/mcp -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
@@ -496,7 +499,7 @@ tool() {   # tool <name> [arguments JSON]
 - **No `api_key` services.** Those services serve Service Accounts only (see "Why only `nice_token` services"), so this example does not show a call to an `api_key` service.
 - **Approvals only in clients of protocol `2026-07-28`.** An older client cannot run a sensitive operation (`approval_unavailable`).
 - **Approvals per process.** The set of used nonces lives in memory: with several replicas, one approval can be used again within 5 minutes on another replica for the exact same call. A restart drops pending approvals.
-- **No input schema per operation.** `request_fields` hold the name, location, and basic type only; the agent does not validate `body`, the target service checks it.
+- **Schemas are not validated in the agent.** The model reads `get_operation_schema`, but the agent does not check `body` against `input_schema`; the target service checks it. Operations are still called through one generic tool, not one tool per operation.
 - **One project per call.** A question over many projects means one `call_operation` per project, each with one exchange; `/oauth/token` is rate limited per client (30 a minute by default).
 - No chat UI or LLM, and no agent work while the user is away.
 - **No access change feed in the agent.** A stale user token is still refused at the exchange (`invalid_grant` `token_stale`), because NICE checks the feed itself.

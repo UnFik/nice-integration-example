@@ -39,6 +39,10 @@ type fakeNICE struct {
 	pages     []string
 	staleOnce bool
 	svcCalls  []string
+	// opsTag is the ETag of the operations of nadi; opsGone answers them 404; opsAsked records If-None-Match.
+	opsTag   string
+	opsGone  bool
+	opsAsked []string
 }
 
 func newFakeNICE(t *testing.T) *fakeNICE {
@@ -73,15 +77,31 @@ func newFakeNICE(t *testing.T) *fakeNICE {
 		_, _ = fmt.Fprintf(w, `%s, "page": {"next_page_token": %q}}`, strings.TrimSuffix(pages[i], "}"), next)
 	})
 	mux.HandleFunc("GET /api/v1/me/services/{slug}/operations", func(w http.ResponseWriter, r *http.Request) {
-		if r.PathValue("slug") != "nadi" {
+		f.mu.Lock()
+		tag, gone := f.opsTag, f.opsGone
+		if r.PathValue("slug") == "nadi" {
+			f.opsAsked = append(f.opsAsked, r.Header.Get("If-None-Match"))
+		}
+		f.mu.Unlock()
+		if r.PathValue("slug") != "nadi" || gone {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = fmt.Fprint(w, `{"error_code":"not_found","message":"service not found"}`)
 			return
 		}
-		_, _ = fmt.Fprint(w, `{"service":"nadi","operations":[
+		if tag != "" {
+			if r.Header.Get("If-None-Match") == tag {
+				w.Header().Set("ETag", tag)
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("ETag", tag)
+		}
+		_, _ = fmt.Fprint(w, `{"service":"nadi","catalog_version":"7","operations":[
 			{"key":"getDevice","method":"GET","path":"/devices/{id}","permission":"nadi.devices.read",
+			 "description":"One device of the project.",
 			 "headers":[{"name":"X-Version","value":"1"}],
-			 "request_fields":[{"location":"path","name":"id","required":true,"type":"string"}]},
+			 "request_fields":[{"location":"path","name":"id","required":true,"type":"string","description":"Device ID"},
+			   {"location":"query","name":"status","type":"string","enum":["active","inactive"],"enum_truncated":true}]},
 			{"key":"deleteDevice","method":"DELETE","path":"/devices/{id}","sensitive":true,
 			 "request_fields":[{"location":"path","name":"id","required":true}]}]}`)
 	})
@@ -147,11 +167,11 @@ func TestServicesOfAnOldNICEIsAnAPIError(t *testing.T) {
 func TestOperationsOfAServiceTheUserMayNotCall(t *testing.T) {
 	f := newFakeNICE(t)
 	c := newClient(t, f)
-	ops, err := c.Operations(context.Background(), userToken(), "nadi")
+	ops, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi")
 	if err != nil || len(ops.Operations) != 2 || !ops.Operations[1].Sensitive || ops.Operations[0].RequestFields[0].Name != "id" {
 		t.Fatalf("operations = %+v, %v", ops, err)
 	}
-	_, err = c.Operations(context.Background(), userToken(), "pengiriman")
+	_, err = c.Operations(context.Background(), userToken(), "usr_1", "pengiriman")
 	var api *domain.APIError
 	if !errors.As(err, &api) || api.Status != 404 || api.Code != "not_found" {
 		t.Fatalf("err = %v, want a domain.APIError 404 not_found", err)
@@ -159,7 +179,7 @@ func TestOperationsOfAServiceTheUserMayNotCall(t *testing.T) {
 }
 
 func call(f *fakeNICE, c *Client, id string) (calldto.OperationResult, error) {
-	ops, _ := c.Operations(context.Background(), userToken(), "nadi")
+	ops, _ := c.Operations(context.Background(), userToken(), "usr_1", "nadi")
 	return c.CallOperation(context.Background(), userToken(), calldto.OperationCall{
 		Service:   calldto.MapService{Slug: "nadi", Endpoint: f.srv.URL, BasePath: "/svc"},
 		Operation: ops.Operations[0], Org: "org_a", Project: "prj_p", PathParams: map[string]string{"id": id},
@@ -180,7 +200,7 @@ func TestCallOperationSendsTheOperationHeadersAndEscapesThePath(t *testing.T) {
 func TestCallOperationRefusesAPathThatMovesBeforeAnyExchange(t *testing.T) {
 	f := newFakeNICE(t)
 	c := newClient(t, f)
-	ops, _ := c.Operations(context.Background(), userToken(), "nadi")
+	ops, _ := c.Operations(context.Background(), userToken(), "usr_1", "nadi")
 	before := len(f.scopes)
 	_, err := c.CallOperation(context.Background(), userToken(), calldto.OperationCall{
 		Service: calldto.MapService{Slug: "nadi", Endpoint: f.srv.URL}, Operation: ops.Operations[0],
@@ -204,5 +224,92 @@ func TestCallOperationRetriesOnceOnTokenStale(t *testing.T) {
 	}
 	if len(f.svcCalls) != 2 {
 		t.Fatalf("service calls = %v, want the call once more after token_stale", f.svcCalls)
+	}
+}
+
+func TestOperationsCarryTheRichFieldsOfNICE(t *testing.T) {
+	f := newFakeNICE(t)
+	ops, err := newClient(t, f).Operations(context.Background(), userToken(), "usr_1", "nadi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := ops.Operations[0]
+	if get.Description != "One device of the project." || get.RequestFields[0].Description != "Device ID" ||
+		fmt.Sprint(get.RequestFields[1].Enum) != "[active inactive]" || !get.RequestFields[1].EnumTruncated {
+		t.Fatalf("operation = %+v", get)
+	}
+	if del := ops.Operations[1]; del.Description != "" || del.RequestFields[0].Enum != nil {
+		t.Fatalf("what NICE does not send stays empty: %+v", del)
+	}
+}
+
+func TestOperationsAreAskedAgainWithTheirETag(t *testing.T) {
+	f := newFakeNICE(t)
+	f.opsTag = `W/"7-a"`
+	c := newClient(t, f)
+	first, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi")
+	if err != nil || len(first.Operations) != 2 {
+		t.Fatalf("first = %+v, %v", first, err)
+	}
+	again, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi")
+	if err != nil || len(again.Operations) != 2 || again.Operations[0].Key != "getDevice" {
+		t.Fatalf("again = %+v, %v", again, err)
+	}
+	if fmt.Sprint(f.opsAsked) != `[ W/"7-a"]` {
+		t.Fatalf("If-None-Match sent: %q", f.opsAsked)
+	}
+
+	// Another user never reads the list of the first.
+	if _, err := c.Operations(context.Background(), userToken(), "usr_2", "nadi"); err != nil || f.opsAsked[2] != "" {
+		t.Fatalf("usr_2 asked with %q, %v", f.opsAsked[2], err)
+	}
+
+	// A new ETag replaces the kept list.
+	f.mu.Lock()
+	f.opsTag = `W/"8-b"`
+	f.mu.Unlock()
+	if _, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi"); err != nil || f.opsAsked[4] != `W/"8-b"` {
+		t.Fatalf("after a change, asked with %q, %v", f.opsAsked[4], err)
+	}
+
+	// A refusal drops the kept list, so the next read asks without a tag.
+	f.mu.Lock()
+	f.opsGone = true
+	f.mu.Unlock()
+	if _, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi"); err == nil {
+		t.Fatal("404 is an error")
+	}
+	f.mu.Lock()
+	f.opsGone = false
+	f.mu.Unlock()
+	if _, err := c.Operations(context.Background(), userToken(), "usr_1", "nadi"); err != nil || f.opsAsked[6] != "" {
+		t.Fatalf("after 404, asked with %q, %v", f.opsAsked[6], err)
+	}
+}
+
+func TestKeptListsEvictTheLeastRecentlyUsed(t *testing.T) {
+	k := newKeptLists(3)
+	for _, key := range []string{"a", "b", "c"} {
+		k.put(key, credentials.ServiceOperations{ETag: key})
+	}
+	k.get("a")
+	k.put("d", credentials.ServiceOperations{ETag: "d"})
+	if _, ok := k.get("b"); ok || k.len() != 3 {
+		t.Fatalf("b should be evicted; len %d", k.len())
+	}
+	for _, key := range []string{"a", "c", "d"} {
+		if _, ok := k.get(key); !ok {
+			t.Fatalf("%s should be kept", key)
+		}
+	}
+	k = newKeptLists(maxKeptLists)
+	for i := range maxKeptLists + 1 {
+		k.put(fmt.Sprint(i), credentials.ServiceOperations{})
+	}
+	if _, ok := k.get("0"); ok || k.len() != maxKeptLists {
+		t.Fatalf("entry %d evicts the oldest; len %d", maxKeptLists+1, k.len())
 	}
 }

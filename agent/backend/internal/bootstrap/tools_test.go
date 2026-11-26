@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -68,7 +69,7 @@ func body(t *testing.T, out map[string]any) map[string]any {
 	return b
 }
 
-func TestToolListHasTheThreeDiscoveryTools(t *testing.T) {
+func TestToolListHasTheFourDiscoveryTools(t *testing.T) {
 	e := newTestEnv(t)
 	res, err := e.connect(e.userToken(orgA, prjP)).ListTools(context.Background(), nil)
 	if err != nil {
@@ -82,6 +83,26 @@ func TestToolListHasTheThreeDiscoveryTools(t *testing.T) {
 		case "list_services", "list_operations":
 			if a == nil || !a.ReadOnlyHint {
 				t.Errorf("tool %s must be annotated read-only", tool.Name)
+			}
+		case "get_operation_schema":
+			if a == nil || !a.ReadOnlyHint {
+				t.Errorf("tool %s must be annotated read-only", tool.Name)
+			}
+			raw, _ := json.Marshal(tool.InputSchema)
+			var schema struct {
+				Properties map[string]struct {
+					Type  any `json:"type"`
+					Items struct {
+						Type any `json:"type"`
+					} `json:"items"`
+				} `json:"properties"`
+				Required []string `json:"required"`
+			}
+			_ = json.Unmarshal(raw, &schema)
+			ops := schema.Properties["operations"]
+			if fmt.Sprint(ops.Type) != "array" || fmt.Sprint(ops.Items.Type) != "string" ||
+				!slices.Contains(schema.Required, "service") || !slices.Contains(schema.Required, "operations") {
+				t.Errorf("get_operation_schema: operations must be a required array of strings; schema %s", raw)
 			}
 		case "call_operation":
 			if a == nil || a.ReadOnlyHint || a.DestructiveHint == nil || !*a.DestructiveHint {
@@ -106,7 +127,7 @@ func TestToolListHasTheThreeDiscoveryTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	if want := []string{"call_operation", "list_operations", "list_services"}; !slices.Equal(names, want) {
+	if want := []string{"call_operation", "get_operation_schema", "list_operations", "list_services"}; !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}
 }

@@ -52,7 +52,7 @@ func (s *Service) CallOperation(ctx context.Context, c calldto.Caller, in calldt
 			Message: fmt.Sprintf("the catalog endpoint of %s is plain http to a host that is not a loopback, so no token is sent to it; the operator must register an https endpoint", in.Service)}
 	}
 
-	ops, err := s.Discoverer.Operations(ctx, c.Token, in.Service)
+	ops, err := s.Discoverer.Operations(ctx, c.Token, c.Subject, in.Service)
 	if err != nil {
 		return nil, nil, failure.Discovery(t, err, s.ClientVars)
 	}
@@ -61,6 +61,11 @@ func (s *Service) CallOperation(ctx context.Context, c calldto.Caller, in calldt
 		return nil, nil, failure.Invalid(fmt.Sprintf("%s has no operation %q the user may call; see list_operations", in.Service, in.Operation))
 	}
 	op := ops.Operations[i]
+	// The schema is read before anything is sent, so that a call is never made whose answer cannot be cleaned.
+	schema, f := s.schemaOf(ctx, c, t, in.Service, op.Key)
+	if f != nil {
+		return nil, nil, f
+	}
 	query := map[string][]string{}
 	for name, v := range in.Query {
 		if !slices.ContainsFunc(op.RequestFields, func(f calldto.RequestField) bool { return f.Location == "query" && f.Name == name }) {
@@ -90,6 +95,16 @@ func (s *Service) CallOperation(ctx context.Context, c calldto.Caller, in calldt
 		s.Log.Warn("tool call failed", slog.String("service", in.Service), slog.String("operation", op.Key),
 			slog.String("user", c.Subject), slog.String("code", f.Code))
 		return nil, nil, f
+	}
+	if schema != nil {
+		clean, err := s.Discoverer.Redact(*schema, res.Status, res.Body)
+		switch {
+		case err == nil:
+			res.Body = clean
+		case res.Status < 200 || res.Status > 299:
+			// An error answer that is not JSON reaches the model by its status only.
+			res.Body = nil
+		}
 	}
 	if res.Status < 200 || res.Status > 299 {
 		f := failure.Service(t, res.Status, res.Body)
@@ -196,4 +211,22 @@ func locate(m calldto.ServiceMap, c calldto.Caller, slug string, k calldto.Key) 
 		return org, prj, nil
 	}
 	return "", "", failure.Invalid(fmt.Sprintf("project %s is not listed for %s in organization %s; see list_services", k.Project, slug, orgID))
+}
+
+// schemaOf reads the schema of one operation. It is nil when NICE does not serve schemas yet: the document has then
+// marked nothing secret that NICE knows of. A key NICE names missing is not an operation the user may call.
+func (s *Service) schemaOf(ctx context.Context, c calldto.Caller, t domain.Target, slug, key string) (*calldto.OperationSchema, *calldto.Failure) {
+	got, err := s.Discoverer.OperationSchemas(ctx, c.Token, slug, []string{key})
+	switch {
+	case notFound(err):
+		return nil, nil
+	case err != nil:
+		return nil, failure.Discovery(t, err, s.ClientVars)
+	}
+	for _, sc := range got.Schemas {
+		if sc.Key == key {
+			return &sc, nil
+		}
+	}
+	return nil, failure.Invalid(fmt.Sprintf("%s has no operation %q the user may call; see list_operations", slug, key))
 }

@@ -3,7 +3,7 @@ module github.com/nice-platform/example/agent/backend
 go 1.27
 
 require (
-	github.com/ABA-Developer/nice-auth-sdk v0.2.4
+	github.com/ABA-Developer/nice-auth-sdk v0.2.5
 	github.com/anthropics/anthropic-sdk-go v1.84.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/google/jsonschema-go v0.4.3

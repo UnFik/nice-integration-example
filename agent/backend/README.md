@@ -17,9 +17,9 @@ agen --token exchange: subject_token + client agen-backend (aud=nadi)--> NICE /o
 agen --Bearer token hasil exchange (act.sub=agen-backend)--> <endpoint nadi di katalog>/devices
 ```
 
-Versi NICE minimum: `235445c` (`add-caller-service-discovery`), karena tool memakai `GET /api/v1/me/services` dan `GET /api/v1/me/services/{slug}/operations`; NICE yang lebih lama menjawab `404` dan tool menjawab `discovery_unavailable`. Sebelumnya `b361d25` (`service-calls-without-service-account`), karena penyelesaian `perms_ref` meneruskan token request, bukan API key. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.4` (`Services`, `ServiceOperations`, `CallOperation`). SDK MCP dipin di `go.mod` pada `v1.8.0`, yang memuat protokol MCP `2026-07-28` untuk persetujuan tanpa sesi.
+Versi NICE minimum: `235445c` (`add-caller-service-discovery`), karena tool memakai `GET /api/v1/me/services` dan `GET /api/v1/me/services/{slug}/operations`; NICE yang lebih lama menjawab `404` dan tool menjawab `discovery_unavailable`. Sebelumnya `b361d25` (`service-calls-without-service-account`), karena penyelesaian `perms_ref` meneruskan token request, bukan API key. Isian operasi yang kaya, `get_operation_schema`, dan pembersihan `x-secret` butuh NICE dengan `add-operation-schemas` (`dev`); terhadap NICE yang lebih lama isian itu kosong, `get_operation_schema` menjawab `schemas_unavailable`, dan `call_operation` meneruskan jawaban apa adanya. SDK: `github.com/ABA-Developer/nice-auth-sdk` `v0.2.5` (`Services`, `ServiceOperationsIfChanged`, `OperationSchemas`, `RedactSecrets`, `CallOperation`). SDK MCP dipin di `go.mod` pada `v1.8.0`, yang memuat protokol MCP `2026-07-28` untuk persetujuan tanpa sesi.
 
-Diuji terhadap nice revisi: dashboard chat (2026-11-26) dengan tes unit (NICE, `nadi`, model, dan PostgreSQL palsu atau sementara), lalu di VPS dengan NICE `dev-235445c`, image `agen:99c97d0`, PostgreSQL, dan model OpenAI-compatible `deepseek-v4.1-flash:netra`, lewat HTTP dengan cookie jar seperti browser: masuk lewat `/auth/login` ke NICE, POST tanpa CSRF `403`, daftar perangkat dan buat perangkat lewat chat (`acted_by` agen), hapus dengan Tolak (`not_approved`) lalu Setujui (`204`, jawaban kedua `409`), restart container (sesi berakhir, riwayat tetap dari PostgreSQL), dan keluar. Smoke MCP dan uji persetujuan MCP juga lulus pada image itu. Lalu di browser sungguhan (viewport 1280×800): masuk lewat halaman login NICE, kirim pesan dari UI yang membuat lalu meminta hapus perangkat, kartu persetujuan dengan pesan katalog, Setujui (perangkat terhapus), semua request halaman hanya ke origin agen, `localStorage` dan `sessionStorage` kosong, cookie tidak terbaca skrip, dan Keluar lewat menu akun (revoke dan `end_session` di NICE, `/auth/session` lalu `401`). Pindah konteks hanya diuji di tes unit, karena user demo hanya punya satu project yang memakai `nadi`. Sebelumnya: SDK `v0.2.4` dan `nice` `235445c`, 2026-11-25, dengan tes unit (NICE dan `nadi` palsu), lalu `scripts/smoke.sh` dan uji hapus dengan persetujuan (dua putaran protokol `2026-07-28`) terhadap NICE `dev-235445c` di VPS, dengan endpoint `nadi` `https`.
+Diuji terhadap nice revisi: skema operasi (2026-11-26) dengan tes unit (NICE dan model palsu), lalu di VPS dengan NICE `dev-abd6ec4`, image `agen:bfe23e0`, dan katalog `nadi` yang diimpor ulang dengan `acted_by` bertanda `x-secret`: `scripts/smoke.sh` lulus (empat tool, `get_operation_schema` `listDevices` dengan `input_schema` dan empat status, `call_operation` 20 perangkat), hasil `call_operation` lewat MCP tidak memuat `acted_by`, dan di dashboard chat model membuat perangkat dengan status dari `enum` `list_operations`, hasil `createDevice` dan `listDevices` tanpa `acted_by` sementara `nadi` tetap menyimpan `acted_by` client agen, lalu `get_operation_schema` `updateDevice` menjelaskan field wajib dan bentuk jawabannya. Model tidak memanggil `get_operation_schema` sendiri sebelum membuat perangkat; isian `list_operations` sudah cukup baginya. Sebelumnya: dashboard chat (2026-11-26) dengan tes unit (NICE, `nadi`, model, dan PostgreSQL palsu atau sementara), lalu di VPS dengan NICE `dev-235445c`, image `agen:99c97d0`, PostgreSQL, dan model OpenAI-compatible `deepseek-v4.1-flash:netra`, lewat HTTP dengan cookie jar seperti browser: masuk lewat `/auth/login` ke NICE, POST tanpa CSRF `403`, daftar perangkat dan buat perangkat lewat chat (`acted_by` agen), hapus dengan Tolak (`not_approved`) lalu Setujui (`204`, jawaban kedua `409`), restart container (sesi berakhir, riwayat tetap dari PostgreSQL), dan keluar. Smoke MCP dan uji persetujuan MCP juga lulus pada image itu. Lalu di browser sungguhan (viewport 1280×800): masuk lewat halaman login NICE, kirim pesan dari UI yang membuat lalu meminta hapus perangkat, kartu persetujuan dengan pesan katalog, Setujui (perangkat terhapus), semua request halaman hanya ke origin agen, `localStorage` dan `sessionStorage` kosong, cookie tidak terbaca skrip, dan Keluar lewat menu akun (revoke dan `end_session` di NICE, `/auth/session` lalu `401`). Pindah konteks hanya diuji di tes unit, karena user demo hanya punya satu project yang memakai `nadi`. Sebelumnya: SDK `v0.2.4` dan `nice` `235445c`, 2026-11-25, dengan tes unit (NICE dan `nadi` palsu), lalu `scripts/smoke.sh` dan uji hapus dengan persetujuan (dua putaran protokol `2026-07-28`) terhadap NICE `dev-235445c` di VPS, dengan endpoint `nadi` `https`.
 
 ## Struktur folder
 
@@ -76,10 +76,11 @@ Alasannya: `main.go` hanya merakit; aturan dan use case tidak mengimpor `net/htt
 | Tool | Argumen | Jawaban |
 |---|---|---|
 | `list_services` | tanpa argumen | organisasi user, project-nya, dan slug service yang boleh dipanggil user di tiap project, beserta nama dan deskripsi service. Organisasi yang project-nya hanya sebagian disebut NICE ditandai `projects_truncated` |
-| `list_operations` | `service` | operasi service itu yang izinnya dipegang user: `key`, `method`, `path`, `summary`, `permission`, `request_fields` (nama, lokasi `path`/`query`/`body`, wajib atau tidak), dan `sensitive` |
+| `list_operations` | `service` | operasi service itu yang izinnya dipegang user: `key`, `method`, `path`, `summary`, `description`, `permission`, `request_fields` (nama, lokasi `path`/`query`/`body`, wajib atau tidak, `type`, `description`, `format`, `enum`, `enum_truncated`; isian yang tidak dinyatakan dokumen service tidak muncul), dan `sensitive` |
+| `get_operation_schema` | `service`, `operations` (1–10 key) | per key: `input_schema` (JSON Schema `path`, `query`, `header`, dan `body` bersarang) dan `responses` (per status: `description`, `headers`, `schema`) dari NICE, `truncated` bila NICE memotong skema, dan `missing` untuk key yang tidak boleh dipanggil user |
 | `call_operation` | `service`, `operation` (key), `organization_id`, `project_id`, `path_params`, `query`, `body` | `status` dan `body` JSON jawaban service |
 
-Daftar tool sama untuk setiap user; apa yang boleh dipanggil dibaca dari NICE saat tool berjalan, dari role user saat itu, bukan dari klaim token. Agen tidak menyimpan peta maupun operasi.
+Daftar tool sama untuk setiap user; apa yang boleh dipanggil dibaca dari NICE saat tool berjalan, dari role user saat itu, bukan dari klaim token. Agen tidak menyimpan peta. Daftar operasi terakhir per user dan service disimpan di memori (paling banyak 1000) beserta `ETag`-nya, tetapi setiap pembacaan tetap bertanya ke NICE dengan `If-None-Match`: simpanan hanya dipakai saat NICE menjawab `304`, dan dibuang saat NICE menolak.
 
 `call_operation` mencocokkan `service` dengan peta dan `operation` dengan daftar operasi pada setiap panggilan. Alamat (endpoint dan base path katalog), method, dan header operasi tidak pernah diambil dari argumen model. Sebelum exchange untuk service tujuan, agen menolak dengan `invalid_argument`:
 
@@ -110,11 +111,13 @@ Service `api_key` memakai kunci per Service Account dan menolak token user (`403
 
 ### Cara kerja panggilan
 
-`list_services` dan `list_operations` memanggil `credentials.ExchangeClient.Services` dan `ServiceOperations` dengan token user dari request MCP. Keduanya berbagi satu token API NICE terdelegasi (`aud=nice`) per token user, jadi discovery hanya menambah satu exchange per token user, bukan per service atau project. `call_operation` membaca peta dan operasi lagi (dua `GET` ke NICE), lalu memanggil `CallOperation`, yang mengirim lewat `DoAs` dengan kunci `{Org, Project, Audience}`. `DoAs`:
+`list_services` dan `list_operations` memanggil `credentials.ExchangeClient.Services` dan `ServiceOperations` dengan token user dari request MCP. Keduanya berbagi satu token API NICE terdelegasi (`aud=nice`) per token user, jadi discovery hanya menambah satu exchange per token user, bukan per service atau project. `call_operation` membaca peta, operasi, dan skema operasi yang dipanggil (tiga `GET` ke NICE), lalu memanggil `CallOperation`, yang mengirim lewat `DoAs` dengan kunci `{Org, Project, Audience}`. `DoAs`:
 
 - menyimpan token per `(user, organisasi, project, service)` sampai 60 detik sebelum kedaluwarsa, dan tidak pernah memakai token yang umurnya melebihi token user;
 - menjalankan satu exchange per kunci untuk panggilan paralel, tanpa antrean antar kunci, sehingga konteks (organisasi atau project) yang berbeda ditukar bersamaan;
 - mengulang exchange dan request sekali bila service menjawab `401` `token_stale` atau `expired`.
+
+**Field rahasia.** Sebelum jawaban service sampai ke model, riwayat percakapan, atau pesan galat, agen membuang setiap properti yang skema status jawaban itu tandai `x-secret: true` (`RedactSecrets` dengan `ResponseSchema(status)`). Skema dibaca sebelum panggilan dikirim: bila NICE gagal sementara, panggilan tidak dikirim (`nice_unavailable` atau `temporarily_unavailable`), supaya tidak ada efek samping yang jawabannya tidak bisa dibersihkan. Bila NICE belum menyajikan skema (`404`), panggilan tetap dikirim dan jawabannya diteruskan apa adanya.
 
 Endpoint katalog harus `https`, kecuali hostnya loopback: agen menolak endpoint lain dengan `insecure_endpoint` sebelum token apa pun dikirim ke sana, sama dengan aturan SDK.
 
@@ -151,7 +154,7 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 Selain `/mcp`, agen menyajikan dashboard chat ([`../web`](../web/README.md)) di `/`. User masuk lewat `/auth/login` dengan client `agen-backend` (langkah 7). Refresh token disimpan di server, dan browser hanya memegang cookie `agen_session`. `/chat/*` hanya menerima cookie itu: request yang membawa `Authorization` ditolak `401`, sebaliknya `/mcp` mengabaikan cookie.
 
-**Satu giliran.** `POST /chat/conversations/{id}/messages` dengan `{"text"}` (paling panjang 8000 karakter) menyimpan pesan user, lalu memanggil model dengan system prompt, riwayat percakapan, dan tiga tool yang sama dengan server MCP (nama, deskripsi, dan schema input dibaca dari satu tabel di `adapter/mcp/tools_routes.go`). Tool dijalankan lewat use case yang sama dengan MCP, atas nama user, dengan token konteks aktif sebagai subject token exchange. Model tidak pernah melihat token. Setiap langkah disimpan dulu, baru dikirim sebagai server-sent event:
+**Satu giliran.** `POST /chat/conversations/{id}/messages` dengan `{"text"}` (paling panjang 8000 karakter) menyimpan pesan user, lalu memanggil model dengan system prompt, riwayat percakapan, dan empat tool yang sama dengan server MCP (nama, deskripsi, dan schema input dibaca dari satu tabel di `adapter/mcp/tools_routes.go`). Tool dijalankan lewat use case yang sama dengan MCP, atas nama user, dengan token konteks aktif sebagai subject token exchange. Model tidak pernah melihat token. Setiap langkah disimpan dulu, baru dikirim sebagai server-sent event:
 
 | Event | Data |
 |---|---|
@@ -175,7 +178,7 @@ Giliran tetap berjalan bila browser menutup koneksi; dashboard membaca ulang per
 
 ## Prasyarat
 
-- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk`, jadi contoh ini bisa dibangun tanpa repo `nice`. Kodenya butuh SDK `v0.2.4` atau sesudahnya. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
+- SDK diambil dari modul publik `github.com/ABA-Developer/nice-auth-sdk`, jadi contoh ini bisa dibangun tanpa repo `nice`. Kodenya butuh SDK `v0.2.5` atau sesudahnya. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`.
 - Go 1.27, `curl`, `jq`, dan `openssl` (untuk `nice/scripts/dev-token.sh`).
 - NICE dengan versi minimum di atas, bawaannya di `http://localhost:8080`.
 - `nadi` berjalan dan sudah diatur sampai langkah 8 [`../sharedservice-oauth/backend/README.md`](../sharedservice-oauth/backend/README.md) (daftar, impor, aktifkan, entitlement, aktivasi di project, binding). Endpoint `nadi` di katalog adalah alamat yang dipanggil agen, jadi harus `https` atau loopback (lokal: `http://127.0.0.1:8081`). User uji memegang role `nadi.editor` di project yang sama, atau `nadi.admin` untuk mencoba persetujuan hapus. Jangan memakai `nadi.operator`: itu role operator platform service, bukan role project.
@@ -385,7 +388,7 @@ export AGENT_USER_TOKEN=$USER_TOKEN   # dibaca scripts/smoke.sh
 make smoke
 ```
 
-Skrip membaca `.env` dan `AGENT_USER_TOKEN` dari environment, tidak pernah mencetak token atau secret, dan memeriksa: NICE menjawab, `/healthz` menjawab, `/mcp` tanpa token dijawab `401` dengan `resource_metadata`, metadata menyebut `NICE_ISSUER`, lalu dengan token user `tools/list` memuat tiga tool, `list_services` memuat `nadi`, `list_operations` untuk `nadi` memuat `GET /devices`, dan `call_operation` operasi itu sukses. `AGENT_URL` mengarahkan skrip ke agen di alamat lain (mis. `AGENT_URL=https://agen.example.com make smoke`). Kegagalan dipetakan ke langkah:
+Skrip membaca `.env` dan `AGENT_USER_TOKEN` dari environment, tidak pernah mencetak token atau secret, dan memeriksa: NICE menjawab, `/healthz` menjawab, `/mcp` tanpa token dijawab `401` dengan `resource_metadata`, metadata menyebut `NICE_ISSUER`, lalu dengan token user `tools/list` memuat empat tool, `list_services` memuat `nadi`, `list_operations` untuk `nadi` memuat `GET /devices`, `get_operation_schema` operasi itu memuat `input_schema`, dan `call_operation` operasi itu sukses. `AGENT_URL` mengarahkan skrip ke agen di alamat lain (mis. `AGENT_URL=https://agen.example.com make smoke`). Kegagalan dipetakan ke langkah:
 
 | Jawaban | Langkah yang kemungkinan terlewat |
 |---|---|
@@ -413,7 +416,7 @@ tool() {   # tool <nama> [argumen JSON]
 }
 ```
 
-1. **Daftar tool.** Tiga tool: `list_services`, `list_operations`, `call_operation`:
+1. **Daftar tool.** Empat tool: `list_services`, `list_operations`, `get_operation_schema`, `call_operation`:
 
    ```bash
    curl -sS http://127.0.0.1:8083/mcp -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
@@ -496,7 +499,7 @@ tool() {   # tool <nama> [argumen JSON]
 - **Tanpa service `api_key`.** Service itu hanya melayani Service Account (lihat "Mengapa hanya service `nice_token`"), jadi contoh ini tidak menunjukkan pemanggilan service `api_key`.
 - **Persetujuan hanya di client protokol `2026-07-28`.** Client lama tidak bisa menjalankan operasi sensitif (`approval_unavailable`).
 - **Persetujuan per proses.** Set nonce sekali pakai disimpan di memori: dengan beberapa replika, satu persetujuan bisa dipakai lagi dalam 5 menit di replika lain untuk panggilan yang persis sama. Restart membatalkan persetujuan yang tertunda.
-- **Tanpa skema input per operasi.** `request_fields` hanya memuat nama, lokasi, dan tipe dasar; agen tidak memvalidasi `body`, service tujuan yang memeriksanya.
+- **Skema tidak divalidasi di agen.** Model membaca `get_operation_schema`, tetapi agen tidak memeriksa `body` terhadap `input_schema`; service tujuan yang memeriksanya. Operasi tetap dipanggil lewat satu tool generik, bukan satu tool per operasi.
 - **Satu project per panggilan.** Pertanyaan lintas banyak project berarti satu `call_operation` per project, masing-masing satu exchange; `/oauth/token` dibatasi per client (bawaan 30 per menit).
 - Tanpa UI chat atau LLM, dan tanpa pekerjaan agen saat user tidak hadir.
 - **Tanpa feed perubahan akses di agen.** Token user yang basi tetap ditolak di exchange (`invalid_grant` `token_stale`), karena NICE memeriksa feed sendiri.
