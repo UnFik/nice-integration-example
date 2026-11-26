@@ -23,6 +23,11 @@ type listOperationsInput struct {
 	Service string `json:"service" jsonschema:"Slug of a service from list_services, e.g. nadi"`
 }
 
+type getOperationSchemaInput struct {
+	Service    string   `json:"service" jsonschema:"Slug of a service from list_services, e.g. nadi"`
+	Operations []string `json:"operations" jsonschema:"1 to 10 keys of operations of that service from list_operations"`
+}
+
 type callOperationInput struct {
 	Service        string            `json:"service" jsonschema:"Slug of a service from list_services, e.g. nadi"`
 	Operation      string            `json:"operation" jsonschema:"Key of an operation of that service from list_operations"`
@@ -53,6 +58,12 @@ var tools = []*mcp.Tool{
 		InputSchema: schemaFor[listOperationsInput](),
 	},
 	{
+		Name: "get_operation_schema", Title: "Get the schemas of operations",
+		Description: "Gives, for 1 to 10 operations from list_operations, the JSON Schema of their input (path, query, header, and body, with nested properties, required names, formats, and allowed values) and of their answers by status. Call it before call_operation when the operation takes a body or a parameter whose meaning list_operations does not make clear. truncated means the schema was cut and is not complete; missing lists keys the user may not call.",
+		Annotations: readOnly,
+		InputSchema: operationSchemaInput(),
+	},
+	{
 		Name: "call_operation", Title: "Call an operation of a service",
 		Description: "Calls one operation from list_operations on behalf of the user, in the organization and project of the user's token or the ones named. The service records the user as caller and this agent as actor (acted_by). A sensitive operation is sent only after the user approves it.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(false)},
@@ -66,6 +77,16 @@ func schemaFor[T any]() *jsonschema.Schema {
 	if err != nil {
 		panic(fmt.Sprintf("input schema of %T: %v", *new(T), err))
 	}
+	return s
+}
+
+// operationSchemaInput is the inferred schema with operations as a plain array of 1 to 10 keys: the inference allows
+// null for a slice, which models read as an optional argument.
+func operationSchemaInput() *jsonschema.Schema {
+	s := schemaFor[getOperationSchemaInput]()
+	ops := s.Properties["operations"]
+	ops.Type, ops.Types = "array", nil
+	ops.MinItems, ops.MaxItems = ptr(1), ptr(10)
 	return s
 }
 
@@ -93,7 +114,7 @@ func ToolSpecs() []chatdto.ToolSpec {
 	return out
 }
 
-// newServer registers the three tools. The list is the same for every user: what a user may call is read from NICE
+// newServer registers the four tools. The list is the same for every user: what a user may call is read from NICE
 // when a tool runs. NICE does not cap an exchanged token below the user's own permissions, so the limits the agent
 // adds are its own: operations the catalog marks sensitive need the approval of the user, and only nice_token
 // services are called, because an api_key service accepts Service Accounts only.
@@ -101,6 +122,7 @@ func newServer(h *Handlers) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "agen", Title: "Agen (NICE example)", Version: "2.0.0"}, nil)
 	mcp.AddTool(s, tool("list_services"), h.ListServices)
 	mcp.AddTool(s, tool("list_operations"), h.ListOperations)
+	mcp.AddTool(s, tool("get_operation_schema"), h.GetOperationSchema)
 	mcp.AddTool(s, tool("call_operation"), h.CallOperation)
 	return s
 }

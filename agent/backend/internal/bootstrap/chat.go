@@ -49,6 +49,7 @@ type chatToolInput struct {
 	PathParams     map[string]string `json:"path_params"`
 	Query          map[string]string `json:"query"`
 	Body           any               `json:"body"`
+	Operations     []string          `json:"operations"`
 }
 
 func (t *chatTools) Run(ctx context.Context, c calldto.Caller, call chatdto.ToolCall, ap *calldto.Approval) chatdto.ToolOutcome {
@@ -66,6 +67,9 @@ func (t *chatTools) Run(ctx context.Context, c calldto.Caller, call chatdto.Tool
 		return result(out, f)
 	case "list_operations":
 		out, f := t.calls.ListOperations(ctx, c, in.Service)
+		return result(out, f)
+	case "get_operation_schema":
+		out, f := t.calls.GetOperationSchemas(ctx, c, in.Service, in.Operations)
 		return result(out, f)
 	case "call_operation":
 		answer := calldto.Approval{}
