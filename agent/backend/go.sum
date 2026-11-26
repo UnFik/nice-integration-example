@@ -4,8 +4,8 @@ cloud.google.com/go/auth/oauth2adapt v0.2.3 h1:MlxF+Pd3OmSudg/b1yZ5lJwoXCEaeedAg
 cloud.google.com/go/auth/oauth2adapt v0.2.3/go.mod h1:tMQXOfZzFuNuUxOypHlQEXgdfX5cuhwU+ffUuXRJE8I=
 cloud.google.com/go/compute/metadata v0.5.0 h1:Zr0eK8JbFv6+Wi4ilXAR8FJ3wyNdpxHKJNPos6LTZOY=
 cloud.google.com/go/compute/metadata v0.5.0/go.mod h1:aHnloV2TPI38yx4s9+wAZhHykWvVCfu7hQbF+9CWoiY=
-github.com/ABA-Developer/nice-auth-sdk v0.2.4 h1:KmL/ZTzmqr7Mkp323BNxrcrV672ByqnnFSQ7Cuog4yY=
-github.com/ABA-Developer/nice-auth-sdk v0.2.4/go.mod h1:ImKGAMbOM3KV62g/gwNt+ByCCT8UCBzo4qJXLsOAKJE=
+github.com/ABA-Developer/nice-auth-sdk v0.2.5 h1:Q1WObont6uxjHohaezntvSTdw506o3bDDLZV65BDm6Q=
+github.com/ABA-Developer/nice-auth-sdk v0.2.5/go.mod h1:ImKGAMbOM3KV62g/gwNt+ByCCT8UCBzo4qJXLsOAKJE=
 github.com/Azure/azure-sdk-for-go/sdk/azcore v1.24.0 h1:5H6YRLGMoC8z5aXpxqcD6FfswI8mwoVNHSecvIoazt4=
 github.com/Azure/azure-sdk-for-go/sdk/azcore v1.24.0/go.mod h1:Sk63W6X/TElfcE2BknMYg0Q9JuCpebgjnHcbs5md4NM=
 github.com/Azure/azure-sdk-for-go/sdk/internal v1.13.0 h1:Terj1CMW4+NY5CpWjSRkqLoxh2DkYDdv/FH2z0897Uc=
