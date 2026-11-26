@@ -49,15 +49,15 @@
 
 ## 6. UI `agent/web`
 
-- [ ] 6.1 Buat scaffold `agent/web` (React 19, Vite, TypeScript, Vitest) dengan versi sama seperti `sharedservice-oauth/web`, dev server di 5182 yang meneruskan `/auth`, `/chat`, dan `/mcp` ke 8083, serta `api.ts` dan `session.ts` disalin dari `sharedservice-oauth/web`. Selesai bila `heavy npm run typecheck` dan `heavy npm test` di `agent/web` hijau.
-- [ ] 6.2 Buat `chat.ts` sebagai klien API percakapan dan pembaca SSE dari `fetch` (POST, header CSRF). Selesai bila tes Vitest hijau: parsing event terpecah antar-chunk, event `approval`, dan galat 409/503.
-- [ ] 6.3 Buat UI: tombol masuk/keluar, pemilih konteks, daftar percakapan (buat, ganti judul, hapus), panel pesan dengan kartu tool, kartu persetujuan Setujui/Tolak, dan kotak input yang nonaktif selama giliran. Semua teks dirender sebagai teks biasa. Selesai bila tes komponen hijau: daftar milik user, alur persetujuan memanggil endpoint approval, dan teks `<img src=x onerror=...>` tampil sebagai teks tanpa elemen `img`.
-- [ ] 6.4 Tulis `agent/web/README.md` dan `README.en.md` berisi perintah dev, build, dan aturan "UI tidak memegang token". Tambahkan `agent/web` ke tabel dan perintah di `AGENTS.md` dan README akar. Selesai bila `heavy npm run build` menghasilkan `web/dist` dan backend menyajikannya di `/`.
+- [x] 6.1 Buat scaffold `agent/web` (React 19, Vite, TypeScript, Vitest) dengan versi sama seperti `sharedservice-oauth/web`, dev server di 5182 yang meneruskan `/auth`, `/chat`, dan `/mcp` ke 8083, serta `api.ts` dan `session.ts` disalin dari `sharedservice-oauth/web`. Selesai bila `heavy npm run typecheck` dan `heavy npm test` di `agent/web` hijau.
+- [x] 6.2 Buat `chat.ts` sebagai klien API percakapan dan pembaca SSE dari `fetch` (POST, header CSRF). Selesai bila tes Vitest hijau: parsing event terpecah antar-chunk, event `approval`, dan galat 409/503.
+- [x] 6.3 Buat UI: tombol masuk/keluar, pemilih konteks, daftar percakapan (buat, ganti judul, hapus), panel pesan dengan kartu tool, kartu persetujuan Setujui/Tolak, dan kotak input yang nonaktif selama giliran. Semua teks dirender sebagai teks biasa. Selesai bila tes komponen hijau: daftar milik user, alur persetujuan memanggil endpoint approval, dan teks `<img src=x onerror=...>` tampil sebagai teks tanpa elemen `img`.
+- [x] 6.4 Tulis `agent/web/README.md` dan `README.en.md` berisi perintah dev, build, dan aturan "UI tidak memegang token". Tambahkan `agent/web` ke tabel dan perintah di `AGENTS.md` dan README akar. Selesai bila `heavy npm run build` menghasilkan `web/dist` dan backend menyajikannya di `/`.
 
 ## 7. Image, setup VPS, dan uji integrasi
 
-- [ ] 7.1 Jadikan `Dockerfile` di `agent/` multi-stage: Node membangun `web/dist`, Go membangun binary, dan image distroless menjalankan binary dengan `WEB_DIR` ke UI tertanam. Selesai bila image ter-build, lalu `GET /` menyajikan UI, `/healthz` 200, dan `/mcp` tanpa token 401 di container lokal.
-- [ ] 7.2 Tambahkan fase `agenbff` di `~/.config/nice-vps-register.sh`: perbarui client `agen-backend` dengan redirect `https://agent.unfik.my.id/auth/callback`, post-logout `https://agent.unfik.my.id/`, dan grant `authorization_code` + `refresh_token`. Jalankan dengan token admin `~/.config/nice-vps-admin.json`. Selesai bila respons PUT menampilkan URI dan grant baru, tanpa rahasia tercetak.
+- [x] 7.1 Jadikan `Dockerfile` di `agent/` multi-stage: Node membangun `web/dist`, Go membangun binary, dan image distroless menjalankan binary dengan `WEB_DIR` ke UI tertanam. Selesai bila image ter-build, lalu `GET /` menyajikan UI, `/healthz` 200, dan `/mcp` tanpa token 401 di container lokal.
+- [x] 7.2 Tambahkan fase `agenbff` di `~/.config/nice-vps-register.sh`: perbarui client `agen-backend` dengan redirect `https://agent.unfik.my.id/auth/callback`, post-logout `https://agent.unfik.my.id/`, dan grant `authorization_code` + `refresh_token`. Jalankan dengan token admin `~/.config/nice-vps-admin.json`. Selesai bila respons PUT menampilkan URI dan grant baru, tanpa rahasia tercetak.
 - [ ] 7.3 Siapkan VPS:
   - buat database dan user `agen` di PostgreSQL VPS;
   - tambahkan `DATABASE_URL`, `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `PUBLIC_URL`, `POST_LOGOUT_URL`, dan `WEB_DIR` ke service agen di `/opt/nice/compose.examples.yml` (cadangkan dulu);

@@ -221,7 +221,7 @@ The tests run the agent over in-process HTTP with the MCP client of the SDK, in 
 
 ### Running in a container
 
-The `Dockerfile` lives in `agent/` (its build context is the `agent/` folder, so from here it is `docker build -t agen ..`). It builds a static binary with Go 1.27 and runs it on the distroless `nonroot` image. The image sets `LISTEN_ADDR=0.0.0.0:8083` and `JWKS_FILE=/data/jwks.json`; `.env` does not go into the image, so the configuration comes from the environment.
+The `Dockerfile` lives in `agent/` (its build context is the `agent/` folder, so from here it is `docker build -t agen ..`). It builds the dashboard (`../web`) with Node 22, builds a static binary with Go 1.27, and runs that binary on the distroless `nonroot` image. The image sets `LISTEN_ADDR=0.0.0.0:8083`, `JWKS_FILE=/data/jwks.json`, and `WEB_DIR=/web` (dashboard at `/`, MCP at `/mcp`, one host); `.env` does not go into the image, so the configuration comes from the environment.
 
 ```bash
 docker build -t agen ..

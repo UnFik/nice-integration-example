@@ -7,7 +7,7 @@ Repo ini berisi lima contoh integrasi dengan NICE yang **berdiri sendiri**. Cont
 | `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice-auth-sdk/verify` + `nice-auth-sdk/credentials`; Vite + React 19 + TypeScript, nginx untuk image UI | 8081 (UI build satu proses juga di 8081); UI 5181 saat dev dan di Docker |
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
-| `agent/backend/` | MCP server untuk SharedService `nice_token` `agen`; tool menemukan service `nice_token` (mis. `nadi`) dan operasinya lewat discovery NICE, lalu memanggilnya lewat token exchange | Go + SDK MCP Go + `nice-auth-sdk/credentials` | 8083 |
+| `agent/` | SharedService `nice_token` `agen`: `backend/` (MCP server Bearer di `/mcp`, plus backend-for-frontend dashboard chat `/auth/*` dan `/chat/*` sebagai service client confidential, loop LLM, dan riwayat percakapan; tool menemukan service `nice_token` (mis. `nadi`) dan operasinya lewat discovery NICE, lalu memanggilnya lewat token exchange) dan `web/` (UI chat yang hanya bicara ke backend) | Go + SDK MCP Go + `nice-auth-sdk/credentials`; Vite + React 19 + TypeScript | 8083 (UI build juga disajikan di 8083); UI 5182 saat dev |
 | `service-account-client/` | Pemanggil mesin: Service Account tenant yang menukar API key ke NICE (`client_credentials`) lalu memanggil service `nice_token` `nadi` | Go + `nice-auth-sdk/credentials` (`KindServiceAccount`) | tanpa port (program baris perintah) |
 
 Ketiga contoh Go mengambil SDK dari modul publik `github.com/ABA-Developer/nice-auth-sdk` pada versi yang dipin di `go.mod` masing-masing, tanpa `replace`; jangan menambah `replace` ke repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`. `compose.yml` di akar menjalankan `sharedservice-oauth` dan PostgreSQL-nya di samping stack NICE di Docker.
@@ -37,6 +37,10 @@ cd agent/backend
 make run | make test               jalankan agen / tes unit dengan -race (tanpa NICE)
 make smoke                         uji terhadap NICE yang sudah diatur (baca .env dan AGENT_USER_TOKEN)
 
+cd agent/web
+npm run dev                        http://localhost:5182, /auth, /chat, /mcp, dan /.well-known diteruskan ke 8083 (backend dengan PUBLIC_URL=http://localhost:5182)
+npm test | npm run typecheck | npm run build   (build: web/dist, disajikan backend di 8083 lewat WEB_DIR)
+
 cd service-account-client
 make run | make test               jalankan satu perintah (ARGS="list" | "create ..." | "watch") / tes unit dengan -race (tanpa NICE)
 make smoke                         uji terhadap NICE dan nadi yang sudah diatur (baca .env)
@@ -47,13 +51,13 @@ Versi NICE minimum dan versi SDK per contoh ada di `README.md` akar. `agent/back
 ## Aturan
 
 - **Dokumen.** Dokumen ditulis dalam bahasa Indonesia. Setiap `README.md` punya `README.en.md` dengan isi yang setara, dan mengubah salah satunya berarti mengubah keduanya.
-- **Kode protokol OAuth.** Di browser, `oidc.ts`, token manager, dan NICE palsu di `src/test/` hanya ada di `public-client-pkce`. `sharedservice-oauth/web` tidak boleh memuat kode protokol, token, atau pustaka OAuth: login, refresh, pindah konteks, dan keluar dikerjakan `sharedservice-oauth/backend` lewat `nice-auth-sdk/credentials`. Perbaikan protokol yang juga menyentuh SDK diterapkan lewat `niceauth/credentials` di repo `nice`.
+- **Kode protokol OAuth.** Di browser, `oidc.ts`, token manager, dan NICE palsu di `src/test/` hanya ada di `public-client-pkce`. `sharedservice-oauth/web` dan `agent/web` tidak boleh memuat kode protokol, token, atau pustaka OAuth: login, refresh, pindah konteks, dan keluar dikerjakan backend masing-masing lewat `nice-auth-sdk/credentials`. `agent/web` juga tidak memanggil provider LLM atau service, dan merender teks model serta hasil tool sebagai teks biasa. Perbaikan protokol yang juga menyentuh SDK diterapkan lewat `niceauth/credentials` di repo `nice`.
 - **Komentar kode.** Komentar boleh di semua contoh: singkat, berbahasa Inggris, dan hanya untuk menjelaskan alasan. Jangan menulis komentar yang sekadar mengulang isi kode. Contoh ini bahan ajar, jadi aturannya berbeda dengan `nice-console` yang melarang komentar.
 - **Rahasia.** Jangan menulis rahasia ke berkas yang di-commit. `.env` dan `data/` di-ignore, dan `.env.example` hanya berisi placeholder. Nilai kredensial, API key, dan token tidak boleh muncul di log, respons galat, atau keluaran `smoke.sh`.
 - **Tes.** Tes unit tidak boleh butuh NICE yang berjalan. Hanya `scripts/smoke.sh` dan uji manual browser yang menyentuh NICE. Tes PostgreSQL `sharedservice-oauth/backend` dilewati tanpa `TEST_DATABASE_URL`; pakai database sementara milik tes sendiri, bukan database NICE.
 - **OpenAPI.** Dokumen ini adalah sumber katalog di NICE:
   - Izin di dokumen harus sama dengan yang ditegakkan kode (`agent/backend/docs/openapi_test.go` dan `sharedservice-oauth/backend/internal/bootstrap/openapi_test.go` di Go, serta `test/openapi.test.ts` di Hono, menjaganya). `agent/backend/docs/openapi.json` ditulis tangan, bukan hasil swag.
-  - Operasi key (`/keys*`), `/healthz`, `/openapi.json`, dan `/auth/*` (sesi UI `sharedservice-oauth`) tidak boleh masuk dokumen.
+  - Operasi key (`/keys*`), `/healthz`, `/openapi.json`, `/auth/*` (sesi UI `sharedservice-oauth` dan dashboard `agent`), dan `/chat/*` (API dashboard `agent`) tidak boleh masuk dokumen.
   - Setelah mengubah anotasi swag, jalankan `make swag`.
 - **Checklist dan smoke.** Nomor langkah checklist di README dirujuk oleh `scripts/smoke.sh`. Mengubah urutan checklist berarti memperbarui skripnya juga.
 - **Kontrak NICE.** Kontrak yang diikuti ada di `docs/token-verification.md` repo SDK (`nice/docs/token-verification.md` hanya penunjuk ke sana), `nice/docs/api.md` ("Token OIDC", "Service api_key dan proxy", "Kunci per Service Account", "Akses lintas origin", "Service Account: `client_credentials`", "Service client", "Token API NICE terdelegasi", "Pindah organisasi lewat refresh", "Konteks pemanggil", "Token exchange: backend atas nama user"), dan `nice/docs/gateway-integration.md`. Bila kontrak berubah:

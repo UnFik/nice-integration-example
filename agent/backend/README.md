@@ -221,7 +221,7 @@ Tes menjalankan agen lewat HTTP di dalam proses dengan client MCP dari SDK, di d
 
 ### Menjalankan di container
 
-`Dockerfile` ada di `agent/` (konteks build-nya folder `agent/`, jadi dijalankan dari sini sebagai `docker build -t agen ..`). Ia membangun binary statis dengan Go 1.27 dan menjalankannya di image distroless `nonroot`. Image mengisi `LISTEN_ADDR=0.0.0.0:8083` dan `JWKS_FILE=/data/jwks.json`; `.env` tidak ikut masuk image, jadi konfigurasi diberikan lewat environment.
+`Dockerfile` ada di `agent/` (konteks build-nya folder `agent/`, jadi dijalankan dari sini sebagai `docker build -t agen ..`). Ia membangun dashboard (`../web`) dengan Node 22, membangun binary statis dengan Go 1.27, lalu menjalankan binary itu di image distroless `nonroot`. Image mengisi `LISTEN_ADDR=0.0.0.0:8083`, `JWKS_FILE=/data/jwks.json`, dan `WEB_DIR=/web` (dashboard di `/`, MCP di `/mcp`, satu host); `.env` tidak ikut masuk image, jadi konfigurasi diberikan lewat environment.
 
 ```bash
 docker build -t agen ..
