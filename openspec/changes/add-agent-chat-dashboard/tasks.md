@@ -14,7 +14,7 @@
 
 ## 3. Penyimpanan percakapan
 
-- [ ] 3.1 Buat `domain/chat_domain.go` (percakapan, pesan, bagian `text`/`tool_call`/`tool_result`, status `awaiting_approval`, batas judul dan panjang pesan), DTO `app/chat/dto`, dan kontrak repositori di `app/chat/usecase/chat_contract.go`. Selesai bila tes domain untuk validasi judul dan panjang pesan hijau, dan `arch_test` hijau.
+- [x] 3.1 Buat `domain/chat_domain.go` (percakapan, pesan, bagian `text`/`tool_call`/`tool_result`, status `awaiting_approval`, batas judul dan panjang pesan), DTO `app/chat/dto`, dan kontrak repositori di `app/chat/usecase/chat_contract.go`. Selesai bila tes domain untuk validasi judul dan panjang pesan hijau, dan `arch_test` hijau.
 - [ ] 3.2 Buat repositori memori `adapter/memory/chat` dengan operasi: list per `sub` terurut `updated_at desc`, get dengan pemilik, create, rename, delete berikut pesannya, append pesan, dan update status panggilan tertunda. Selesai bila tes repositori memori hijau, termasuk akses ke percakapan user lain yang dijawab not found.
 - [ ] 3.3 Buat migrasi `migrations/000001_create_conversations_messages` (up/down) beserta `embed.go`, repositori `adapter/postgres/chat` (pgx v5), dan penerapan migrasi saat start bila `DATABASE_URL` diisi. Selesai bila tes repositori yang sama dijalankan terhadap PostgreSQL saat `TEST_DATABASE_URL` diisi (database sementara milik tes), dan dilewati bila tidak. Uji juga riwayat yang masih terbaca setelah repositori dibuat ulang, dan tidak adanya string `eyJ` di baris tersimpan.
 - [ ] 3.4 Dokumentasikan `DATABASE_URL` dan skema singkatnya di README (id/en) dan `.env.example`. Selesai bila tes config hijau.

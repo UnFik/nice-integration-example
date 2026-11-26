@@ -150,8 +150,17 @@ Salin `.env.example` ke `.env`. Agen membaca `.env` di direktori tempat ia dijal
 | `NICE_CLIENT_ID` | wajib | `client_id` client confidential `agen-backend` (langkah 7) |
 | `NICE_CLIENT_SECRET` | wajib | secret client itu. Hanya dikirim ke endpoint token NICE |
 | `LISTEN_ADDR` | `127.0.0.1:8083` | alamat listen |
-| `PUBLIC_URL` | `http://127.0.0.1:8083` | alamat yang dipakai MCP client; `resource` metadata adalah `<PUBLIC_URL>/mcp` |
+| `PUBLIC_URL` | `http://127.0.0.1:8083` | alamat yang dipakai MCP client dan browser dashboard; `resource` metadata adalah `<PUBLIC_URL>/mcp`, dan client `agen-backend` harus punya redirect URI `<PUBLIC_URL>/auth/callback`. Dev dengan Vite (`npm run dev` di `../web`): `http://localhost:5182` |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
+| `POST_LOGOUT_URL` | `<PUBLIC_URL>/` | ke mana NICE mengirim browser setelah Keluar di dashboard; harus post-logout redirect URI client `agen-backend`. `none` membiarkan browser di halaman NICE |
+| `SESSION_IDLE_TIMEOUT` | `8h` | sesi dashboard yang tidak dipakai selama ini berakhir (durasi Go) |
+| `WEB_DIR` | `../web/dist` | hasil build dashboard (`npm run build` di `../web`), disajikan di `/` bila direktorinya ada |
+| `DATABASE_URL` | kosong | PostgreSQL riwayat percakapan, mis. `postgres://agen:<password>@localhost:5432/agen?sslmode=disable`; migrasi diterapkan saat start. Kosong: riwayat di memori dan hilang saat restart |
+| `LLM_PROVIDER` | kosong | `anthropic` atau `openai` (API Chat Completions yang kompatibel OpenAI: OpenAI, Ollama, vLLM). Kosong: chat nonaktif, `/mcp` tetap jalan |
+| `LLM_MODEL` | `claude-sonnet-5-5` untuk `anthropic` | model; wajib untuk `openai` |
+| `LLM_BASE_URL` | bawaan provider | alamat API provider, mis. `http://localhost:11434/v1` untuk Ollama |
+| `LLM_API_KEY` | kosong | key provider, rahasia, hanya dikirim ke provider. Wajib untuk `anthropic` |
+| `CHAT_MAX_STEPS` | `8` | batas panggilan model dalam satu giliran chat (1 sampai 50) |
 
 Variabel wajib yang kosong menghentikan start dengan pesan yang menyebut namanya. Tidak ada alamat service di konfigurasi: agen memanggil setiap service di endpoint katalog NICE.
 

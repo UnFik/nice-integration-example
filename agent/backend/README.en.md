@@ -150,8 +150,17 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `NICE_CLIENT_ID` | required | `client_id` of the confidential client `agen-backend` (step 7) |
 | `NICE_CLIENT_SECRET` | required | the secret of that client. Sent to the NICE token endpoint only |
 | `LISTEN_ADDR` | `127.0.0.1:8083` | listen address |
-| `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients use; the metadata `resource` is `<PUBLIC_URL>/mcp` |
+| `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients and the dashboard browser use; the metadata `resource` is `<PUBLIC_URL>/mcp`, and the client `agen-backend` must have the redirect URI `<PUBLIC_URL>/auth/callback`. Development with Vite (`npm run dev` in `../web`): `http://localhost:5182` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
+| `POST_LOGOUT_URL` | `<PUBLIC_URL>/` | where NICE sends the browser after Keluar in the dashboard; it must be a post-logout redirect URI of the client `agen-backend`. `none` leaves the browser on the page of NICE |
+| `SESSION_IDLE_TIMEOUT` | `8h` | a dashboard session unused for this long ends (Go duration) |
+| `WEB_DIR` | `../web/dist` | the built dashboard (`npm run build` in `../web`), served at `/` when the directory exists |
+| `DATABASE_URL` | empty | PostgreSQL of the conversation history, e.g. `postgres://agen:<password>@localhost:5432/agen?sslmode=disable`; migrations run on start. Empty: the history is kept in memory and lost on restart |
+| `LLM_PROVIDER` | empty | `anthropic` or `openai` (an OpenAI-compatible Chat Completions API: OpenAI, Ollama, vLLM). Empty: the chat is off, `/mcp` still works |
+| `LLM_MODEL` | `claude-sonnet-5-5` for `anthropic` | the model; required for `openai` |
+| `LLM_BASE_URL` | the provider's | the provider API address, e.g. `http://localhost:11434/v1` for Ollama |
+| `LLM_API_KEY` | empty | the provider key, a secret, sent to the provider only. Required for `anthropic` |
+| `CHAT_MAX_STEPS` | `8` | the limit of model calls in one chat turn (1 to 50) |
 
 An empty required variable stops the start with a message that names it. No service address is configured: the agent calls each service at the endpoint of the NICE catalog.
 

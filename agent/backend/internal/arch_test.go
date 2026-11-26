@@ -31,6 +31,16 @@ func suffixesFor(rel string) []string {
 		return []string{"_handler.go", "_routes.go", "routes.go"}
 	case parts[0] == "adapter" && parts[1] == "niceexchange":
 		return []string{"_client.go"}
+	case parts[0] == "adapter" && parts[1] == "nice":
+		return []string{"_gateway.go"}
+	case parts[0] == "adapter" && (parts[1] == "memory" || parts[1] == "postgres"):
+		return []string{"_repository.go"}
+	case parts[0] == "adapter" && parts[1] == "llm":
+		return []string{"_client.go"}
+	case parts[0] == "adapter" && parts[1] == "rest" && len(parts) > 3 && parts[2] != "internal" && parts[3] == "dto":
+		return []string{"_dto.go"}
+	case parts[0] == "adapter" && parts[1] == "rest":
+		return []string{"_handler.go", "_routes.go", "_middleware.go", "_helper.go", "routes.go"}
 	}
 	return nil
 }
@@ -113,6 +123,11 @@ var forbidden = []struct {
 	{"domain/", []string{"net/http", "github.com/modelcontextprotocol", "github.com/ABA-Developer/nice-auth-sdk", "/internal/app", "/internal/adapter", "/internal/platform"}},
 	{"app/", []string{"net/http", "github.com/modelcontextprotocol", "github.com/ABA-Developer/nice-auth-sdk", "/internal/adapter", "/internal/platform", "/internal/bootstrap"}},
 	{"adapter/", []string{"/internal/bootstrap"}},
+	// The model, the store, and the session are reached through contracts of app/: one adapter never imports another.
+	{"adapter/llm/", []string{"/internal/adapter/", "net/http/httptest"}},
+	{"adapter/memory/", []string{"/internal/adapter/"}},
+	{"adapter/postgres/", []string{"/internal/adapter/"}},
+	{"platform/", []string{"/internal/app", "/internal/adapter", "/internal/domain", "/internal/bootstrap"}},
 }
 
 func TestImportsRunOneWay(t *testing.T) {
