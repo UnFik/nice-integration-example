@@ -36,7 +36,7 @@ Path tanpa awalan relatif terhadap `agent/backend` di worktree `.worktrees/examp
 
 ## 5. Dokumen, smoke, dan uji manual
 
-- [ ] 5.1 Perbarui `agent/README.md` dan `agent/README.en.md`: tabel tool, pembersihan `x-secret`, cache `ETag`, versi NICE/SDK, dan baris "Diuji terhadap nice revisi". Perbarui baris `agent/backend` di `README.md` dan `README.en.md` akar, serta kalimat versi SDK di `AGENTS.md`. Perbarui `scripts/smoke.sh`: daftar tool yang diharapkan memuat `get_operation_schema`, dan satu langkah baru memanggilnya untuk key `GET /devices` lalu memeriksa `input_schema` ada. Verifikasi dengan `bash -n scripts/smoke.sh` dan membaca ulang kedua README berdampingan.
+- [x] 5.1 Perbarui `agent/README.md` dan `agent/README.en.md`: tabel tool, pembersihan `x-secret`, cache `ETag`, versi NICE/SDK, dan baris "Diuji terhadap nice revisi". Perbarui baris `agent/backend` di `README.md` dan `README.en.md` akar, serta kalimat versi SDK di `AGENTS.md`. Perbarui `scripts/smoke.sh`: daftar tool yang diharapkan memuat `get_operation_schema`, dan satu langkah baru memanggilnya untuk key `GET /devices` lalu memeriksa `input_schema` ada. Verifikasi dengan `bash -n scripts/smoke.sh` dan membaca ulang kedua README berdampingan.
 - [ ] 5.2 Gerbang: `test -z "$(gofmt -l .)"`, `heavy go vet ./...`, dan `heavy make test`; semuanya harus hijau.
 - [ ] 5.3 Jalankan agen terhadap NICE `dev` di clone DB dev dengan katalog `nadi` yang diimpor ulang (salinan dokumen dengan `acted_by` bertanda `x-secret`) dan `sharedservice-oauth` sebagai `nadi`. Jalankan `make smoke`, lalu di dashboard chat minta model mendaftar perangkat dan membuat satu perangkat. Verifikasi:
   - model memanggil `get_operation_schema` sebelum membuat perangkat;

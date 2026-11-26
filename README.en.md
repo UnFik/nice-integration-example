@@ -46,7 +46,7 @@ The NICE column is the oldest server revision with the features the example uses
 | `sharedservice-oauth` | `b361d25` (`service-calls-without-service-account`): the feed, the online check, and the resolution of `perms_ref` without a `nice.service` Service Account. Before it, `4282316` (`add-client-org-switch`, `add-signin-token-exchange`) | `v0.2.3` |
 | `shared-service-apikey` | `40ddb20` (key operations are required when registering an `api_key` service; mirrored keys reach the upstream through the proxy); the `pengiriman.operator` role in the import preview from `b65a3e3` | not used |
 | `public-client-pkce` | `5def119` (the oldest commit of the current `nice` history; it already has `add-delegated-nice-api`, so `NICE_CORS_ALLOWED_ORIGINS` is not needed). Unit tests against `dev` `eb17848` (2026-11-25) | not used |
-| `agent/backend` | `235445c` (`add-caller-service-discovery`): the caller service map and its operations. Before it, `b361d25` (the resolution of `perms_ref` forwards the token of the request) | `v0.2.4` |
+| `agent/backend` | `cb2751b` (`add-operation-schemas`): rich operation fields, operation schemas, and the `x-secret` mark. Before it, `235445c` (`add-caller-service-discovery`: the caller service map and its operations) and `b361d25` (the resolution of `perms_ref` forwards the token of the request) | `v0.2.5` |
 | `service-account-client` | `5def119` for this client itself; the `nadi` it calls needs NICE with the change `service-calls-without-service-account` | `v0.2.3` (`credentials` only, not affected) |
 
 ## Prerequisites

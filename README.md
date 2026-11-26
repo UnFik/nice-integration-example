@@ -46,7 +46,7 @@ Kolom NICE adalah revisi server terlama yang punya fitur yang dipakai contoh. Ko
 | `sharedservice-oauth` | `b361d25` (`service-calls-without-service-account`): feed, pemeriksaan online, dan penyelesaian `perms_ref` tanpa Service Account `nice.service`. Sebelumnya `4282316` (`add-client-org-switch`, `add-signin-token-exchange`) | `v0.2.3` |
 | `shared-service-apikey` | `40ddb20` (operasi key wajib pada registrasi `api_key`; mirrored key sampai ke upstream lewat proxy); role `pengiriman.operator` di pratinjau impor mulai `b65a3e3` | tidak dipakai |
 | `public-client-pkce` | `5def119` (commit tertua riwayat `nice` sekarang; sudah memuat `add-delegated-nice-api`, jadi `NICE_CORS_ALLOWED_ORIGINS` tidak perlu). Diuji dengan tes unit terhadap `dev` `eb17848` (2026-11-25) | tidak dipakai |
-| `agent/backend` | `235445c` (`add-caller-service-discovery`): peta service pemanggil dan operasinya. Sebelumnya `b361d25` (penyelesaian `perms_ref` meneruskan token request) | `v0.2.4` |
+| `agent/backend` | `cb2751b` (`add-operation-schemas`): isian operasi yang kaya, skema operasi, dan penanda `x-secret`. Sebelumnya `235445c` (`add-caller-service-discovery`: peta service pemanggil dan operasinya) dan `b361d25` (penyelesaian `perms_ref` meneruskan token request) | `v0.2.5` |
 | `service-account-client` | `5def119` untuk klien ini sendiri; `nadi` yang dipanggilnya butuh NICE dengan change `service-calls-without-service-account` | `v0.2.3` (hanya `credentials`, tidak terdampak) |
 
 ## Prasyarat
