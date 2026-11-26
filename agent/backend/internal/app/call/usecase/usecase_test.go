@@ -2,8 +2,8 @@ package callusecase
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
