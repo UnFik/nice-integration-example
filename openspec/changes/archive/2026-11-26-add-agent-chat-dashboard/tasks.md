@@ -65,7 +65,7 @@
 
   Tanyakan provider dan model ke user sebelum langkah ini. Selesai bila `docker compose config` valid dan tidak ada rahasia di berkas compose.
 - [x] 7.4 Build image dari `agent/`, kirim ke VPS, naikkan `AGEN_IMAGE_TAG`, lalu jalankan `~/.config/nice-vps-agen-smoke.sh` (path smoke disesuaikan ke `agent/backend/scripts/smoke.sh`). Selesai bila semua langkah smoke MCP dan uji persetujuan MCP `ok`.
-- [ ] 7.5 Jalankan checklist dashboard di browser terhadap `https://agent.unfik.my.id` (masuk sebagai user demo):
+- [x] 7.5 Jalankan checklist dashboard di browser terhadap `https://agent.unfik.my.id` (masuk sebagai user demo):
   - minta daftar perangkat `nadi`;
   - buat perangkat;
   - hapus dengan Tolak lalu dengan Setujui (perangkat hilang dari `nadi` hanya setelah Setujui);
