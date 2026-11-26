@@ -35,7 +35,7 @@ func (f *fakeNICE) Services(context.Context, string) (calldto.ServiceMap, error)
 	return f.m, f.mapErr
 }
 
-func (f *fakeNICE) Operations(_ context.Context, _, slug string) (calldto.ServiceOperations, error) {
+func (f *fakeNICE) Operations(_ context.Context, _, _, slug string) (calldto.ServiceOperations, error) {
 	if f.opsErr != nil {
 		return calldto.ServiceOperations{}, f.opsErr
 	}
@@ -288,5 +288,28 @@ func TestNonSensitiveOperationAsksNothing(t *testing.T) {
 	_, ask, fail := call(newService(newFake()), calldto.OperationInput{Service: "nadi", Operation: "listDevices"}, calldto.Approval{})
 	if ask != nil || fail != nil {
 		t.Fatalf("ask %+v fail %+v", ask, fail)
+	}
+}
+
+func TestListOperationsCarriesDescriptionsAndAllowedValues(t *testing.T) {
+	f := newFake()
+	nadi := f.ops["nadi"]
+	nadi.Operations[0].Description = "Devices of the project."
+	nadi.Operations[0].RequestFields[0] = calldto.RequestField{Location: "query", Name: "status", Type: "string",
+		Description: "State of the device", Enum: []any{"active", "inactive"}}
+	f.ops["nadi"] = nadi
+	v, fail := newService(f).ListOperations(context.Background(), user, "nadi")
+	if fail != nil {
+		t.Fatal(fail)
+	}
+	raw, _ := json.Marshal(v)
+	s := string(raw)
+	for _, want := range []string{`"description":"Devices of the project."`, `"description":"State of the device"`, `"enum":["active","inactive"]`} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %s in %s", want, s)
+		}
+	}
+	if strings.Contains(s, `"format"`) || strings.Contains(s, `"enum_truncated"`) {
+		t.Fatalf("what NICE does not send stays out: %s", s)
 	}
 }

@@ -12,6 +12,7 @@ type Operation struct {
 	Method        string
 	Path          string
 	Summary       string
+	Description   string
 	Permission    string
 	Tag           string
 	Sensitive     bool
@@ -25,12 +26,17 @@ type Header struct {
 	Value string
 }
 
-// RequestField names one parameter or top-level body property of an operation, never a value.
+// RequestField names one parameter or top-level body property of an operation, never a value. Description, Format
+// and Enum come from the document of the service and help the model fill the field.
 type RequestField struct {
-	Location string `json:"location"`
-	Name     string `json:"name"`
-	Required bool   `json:"required,omitempty"`
-	Type     string `json:"type,omitempty"`
+	Location      string `json:"location"`
+	Name          string `json:"name"`
+	Required      bool   `json:"required,omitempty"`
+	Type          string `json:"type,omitempty"`
+	Description   string `json:"description,omitempty"`
+	Format        string `json:"format,omitempty"`
+	Enum          []any  `json:"enum,omitempty"`
+	EnumTruncated bool   `json:"enum_truncated,omitempty"`
 }
 
 // OperationsView is the answer of list_operations.
@@ -44,6 +50,7 @@ type OperationView struct {
 	Method        string         `json:"method"`
 	Path          string         `json:"path"`
 	Summary       string         `json:"summary,omitempty"`
+	Description   string         `json:"description,omitempty"`
 	Permission    string         `json:"permission,omitempty"`
 	Tag           string         `json:"tag,omitempty"`
 	Sensitive     bool           `json:"sensitive"`

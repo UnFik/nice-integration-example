@@ -13,7 +13,7 @@ func (s *Service) ListOperations(ctx context.Context, c calldto.Caller, slug str
 	if !domain.ValidServiceSlug(slug) {
 		return nil, failure.Invalid("service must be the slug of a service from list_services")
 	}
-	ops, err := s.Discoverer.Operations(ctx, c.Token, slug)
+	ops, err := s.Discoverer.Operations(ctx, c.Token, c.Subject, slug)
 	if err != nil {
 		return nil, failure.Discovery(domain.Target(slug), err, s.ClientVars)
 	}
@@ -24,7 +24,7 @@ func (s *Service) ListOperations(ctx context.Context, c calldto.Caller, slug str
 			fields = []calldto.RequestField{}
 		}
 		out.Operations = append(out.Operations, calldto.OperationView{Key: o.Key, Method: o.Method, Path: o.Path,
-			Summary: o.Summary, Permission: o.Permission, Tag: o.Tag, Sensitive: o.Sensitive, RequestFields: fields})
+			Summary: o.Summary, Description: o.Description, Permission: o.Permission, Tag: o.Tag, Sensitive: o.Sensitive, RequestFields: fields})
 	}
 	return out, nil
 }

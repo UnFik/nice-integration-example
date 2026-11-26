@@ -10,7 +10,8 @@ import (
 // Its errors are domain.APIError, domain.GrantError, domain.ErrTemporary, or domain.ErrUnreachable.
 type Discoverer interface {
 	Services(ctx context.Context, token string) (calldto.ServiceMap, error)
-	Operations(ctx context.Context, token, slug string) (calldto.ServiceOperations, error)
+	// Operations reads the operations of slug for user, the subject of token, which keys what the adapter keeps.
+	Operations(ctx context.Context, token, user, slug string) (calldto.ServiceOperations, error)
 }
 
 // Operator sends one call of an operation with a token exchanged on behalf of the user who holds token. It is the

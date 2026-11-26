@@ -20,7 +20,8 @@ const maxBody = 1 << 20
 // Client is the exchange client of the confidential service client bound to agen, the actor of every exchange. It
 // fills the Discoverer and Operator contracts of the call use case.
 type Client struct {
-	x *credentials.ExchangeClient
+	x     *credentials.ExchangeClient
+	lists *keptLists
 }
 
 // New makes the client. The HTTP client of cfg is shared by NICE and the services, so they share its connection pool.
@@ -29,7 +30,7 @@ func New(cfg credentials.ExchangeConfig) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{x: x}, nil
+	return &Client{x: x, lists: newKeptLists(maxKeptLists)}, nil
 }
 
 // CallOperation is the only place a service is called. The SDK builds the address from the catalog, keeps the token

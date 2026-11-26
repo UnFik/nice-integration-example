@@ -52,7 +52,7 @@ func (s *Service) CallOperation(ctx context.Context, c calldto.Caller, in calldt
 			Message: fmt.Sprintf("the catalog endpoint of %s is plain http to a host that is not a loopback, so no token is sent to it; the operator must register an https endpoint", in.Service)}
 	}
 
-	ops, err := s.Discoverer.Operations(ctx, c.Token, in.Service)
+	ops, err := s.Discoverer.Operations(ctx, c.Token, c.Subject, in.Service)
 	if err != nil {
 		return nil, nil, failure.Discovery(t, err, s.ClientVars)
 	}

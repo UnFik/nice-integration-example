@@ -8,8 +8,8 @@ Path tanpa awalan relatif terhadap `agent/backend` di worktree `.worktrees/examp
 
 ## 2. Discovery yang lebih kaya dan cache
 
-- [ ] 2.1 Tambah `Description` ke `calldto.Operation` dan `OperationView`, serta `Description`, `Format`, `Enum`, dan `EnumTruncated` (JSON `omitempty`) ke `calldto.RequestField`. Salin dari SDK di `niceexchange/discovery_client.go`, dan teruskan di `ListOperations`. Verifikasi dengan tes adapter (isian kaya tersalin; jawaban NICE lama tanpa isian itu tetap terbaca) dan tes use case (`list_operations` memuat `description` dan `enum`, dan isian kosong tidak muncul). Jalankan `heavy go test ./internal/... -count=1 -race`.
-- [ ] 2.2 Tambah parameter `user` ke `Discoverer.Operations` dan pakai `Caller.Subject` di use case. Buat cache LRU per `(user, slug)` di `niceexchange.Client` (maksimal 1000 entri) yang memakai `ServiceOperationsIfChanged` dan menghapus entri saat galat. Verifikasi dengan tes adapter terhadap NICE palsu `httptest`:
+- [x] 2.1 Tambah `Description` ke `calldto.Operation` dan `OperationView`, serta `Description`, `Format`, `Enum`, dan `EnumTruncated` (JSON `omitempty`) ke `calldto.RequestField`. Salin dari SDK di `niceexchange/discovery_client.go`, dan teruskan di `ListOperations`. Verifikasi dengan tes adapter (isian kaya tersalin; jawaban NICE lama tanpa isian itu tetap terbaca) dan tes use case (`list_operations` memuat `description` dan `enum`, dan isian kosong tidak muncul). Jalankan `heavy go test ./internal/... -count=1 -race`.
+- [x] 2.2 Tambah parameter `user` ke `Discoverer.Operations` dan pakai `Caller.Subject` di use case. Buat cache LRU per `(user, slug)` di `niceexchange.Client` (maksimal 1000 entri) yang memakai `ServiceOperationsIfChanged` dan menghapus entri saat galat. Verifikasi dengan tes adapter terhadap NICE palsu `httptest`:
   - panggilan kedua mengirim `If-None-Match` dan memakai simpanan saat 304;
   - 200 dengan `ETag` baru mengganti simpanan;
   - 404 menghapus entri;
