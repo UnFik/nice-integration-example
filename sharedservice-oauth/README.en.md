@@ -22,7 +22,7 @@ Minimum NICE version: `b361d25` (`service-calls-without-service-account`; before
  NICE --302 /auth/callback?code--> backend --code + client_secret--> NICE /oauth/token
  browser --cookie nadi_session--> backend /auth/session, /auth/contexts, /auth/context, /auth/logout
  browser --cookie + X-CSRF-Token--> backend /devices --Bearer token of the active context--> niceauth/verify chain --> device handler
- agent-backend, Service Account --Bearer--> backend /devices   (direct path, the cookie is not used)
+ agent/backend, Service Account --Bearer--> backend /devices   (direct path, the cookie is not used)
 ```
 
 - **Sign-in.** `GET /auth/login` creates a pending session (a cookie that lives 10 minutes), then redirects to NICE with the scope `openid profile email offline_access`. `GET /auth/callback` matches `state` with the session of that browser, exchanges the `code` with the `client_secret`, then creates a new session with a new ID. A callback whose `state` is unknown, already used, or belongs to another browser is refused without keeping any token. A failed sign-in (`access_denied`, `state_mismatch`, `temporarily_unavailable`) is sent to the UI as `/?login_error=<code>`; the URL never carries a token.

@@ -351,7 +351,7 @@ func TestBearerCallerIsNotChangedByTheCookie(t *testing.T) {
 	b.login()
 	b.do(http.MethodPost, "/devices", map[string]any{"name": "Sensor A", "serial_number": "SN-1", "status": "active"})
 
-	// agent-backend and Service Accounts send Authorization: the cookie is ignored, and so is the CSRF rule.
+	// agent/backend and Service Accounts send Authorization: the cookie is ignored, and so is the CSRF rule.
 	cl := claims(orgB, allPerms...)
 	cl["iss"], cl["prj"] = e.nice.URL, projectR
 	tok := sign(t, cl)

@@ -7,7 +7,7 @@ Repo ini berisi lima contoh integrasi dengan NICE yang **berdiri sendiri**. Cont
 | `sharedservice-oauth/` | SharedService `nice_token`, slug `nadi` (CRUD perangkat IoT): `backend/` (service Bearer + backend-for-frontend UI sebagai service client confidential) dan `web/` (UI yang hanya bicara ke backend) | Go + `nice-auth-sdk/verify` + `nice-auth-sdk/credentials`; Vite + React 19 + TypeScript, nginx untuk image UI | 8081 (UI build satu proses juga di 8081); UI 5181 saat dev dan di Docker |
 | `shared-service-apikey/` | SharedService `api_key`, slug `pengiriman` | TypeScript + Hono (Node 22.18+) | 8082 |
 | `public-client-pkce/` | OAuth client tenant `public` (PKCE) | Vite + React 19 + TypeScript | 5180 |
-| `agent-backend/` | MCP server untuk SharedService `nice_token` `agen`; tool menemukan service `nice_token` (mis. `nadi`) dan operasinya lewat discovery NICE, lalu memanggilnya lewat token exchange | Go + SDK MCP Go + `nice-auth-sdk/credentials` | 8083 |
+| `agent/backend/` | MCP server untuk SharedService `nice_token` `agen`; tool menemukan service `nice_token` (mis. `nadi`) dan operasinya lewat discovery NICE, lalu memanggilnya lewat token exchange | Go + SDK MCP Go + `nice-auth-sdk/credentials` | 8083 |
 | `service-account-client/` | Pemanggil mesin: Service Account tenant yang menukar API key ke NICE (`client_credentials`) lalu memanggil service `nice_token` `nadi` | Go + `nice-auth-sdk/credentials` (`KindServiceAccount`) | tanpa port (program baris perintah) |
 
 Ketiga contoh Go mengambil SDK dari modul publik `github.com/ABA-Developer/nice-auth-sdk` pada versi yang dipin di `go.mod` masing-masing, tanpa `replace`; jangan menambah `replace` ke repo `nice`. Repo `nice` di sebelah `example/` hanya dibutuhkan untuk menjalankan NICE lokal dan `nice/scripts/dev-token.sh`. `compose.yml` di akar menjalankan `sharedservice-oauth` dan PostgreSQL-nya di samping stack NICE di Docker.
@@ -33,7 +33,7 @@ cd public-client-pkce
 npm run dev                        http://localhost:5180
 npm test | npm run typecheck | npm run build
 
-cd agent-backend
+cd agent/backend
 make run | make test               jalankan agen / tes unit dengan -race (tanpa NICE)
 make smoke                         uji terhadap NICE yang sudah diatur (baca .env dan AGENT_USER_TOKEN)
 
@@ -42,7 +42,7 @@ make run | make test               jalankan satu perintah (ARGS="list" | "create
 make smoke                         uji terhadap NICE dan nadi yang sudah diatur (baca .env)
 ```
 
-Versi NICE minimum dan versi SDK per contoh ada di `README.md` akar. `agent-backend` memakai SDK `v0.2.4`, dua contoh Go lain `v0.2.3`; menaikkannya berarti `go get github.com/ABA-Developer/nice-auth-sdk@vX.Y.Z && go mod tidy` di tiap contoh, lalu tes dan smoke.
+Versi NICE minimum dan versi SDK per contoh ada di `README.md` akar. `agent/backend` memakai SDK `v0.2.4`, dua contoh Go lain `v0.2.3`; menaikkannya berarti `go get github.com/ABA-Developer/nice-auth-sdk@vX.Y.Z && go mod tidy` di tiap contoh, lalu tes dan smoke.
 
 ## Aturan
 
@@ -52,7 +52,7 @@ Versi NICE minimum dan versi SDK per contoh ada di `README.md` akar. `agent-back
 - **Rahasia.** Jangan menulis rahasia ke berkas yang di-commit. `.env` dan `data/` di-ignore, dan `.env.example` hanya berisi placeholder. Nilai kredensial, API key, dan token tidak boleh muncul di log, respons galat, atau keluaran `smoke.sh`.
 - **Tes.** Tes unit tidak boleh butuh NICE yang berjalan. Hanya `scripts/smoke.sh` dan uji manual browser yang menyentuh NICE. Tes PostgreSQL `sharedservice-oauth/backend` dilewati tanpa `TEST_DATABASE_URL`; pakai database sementara milik tes sendiri, bukan database NICE.
 - **OpenAPI.** Dokumen ini adalah sumber katalog di NICE:
-  - Izin di dokumen harus sama dengan yang ditegakkan kode (`agent-backend/docs/openapi_test.go` dan `sharedservice-oauth/backend/internal/bootstrap/openapi_test.go` di Go, serta `test/openapi.test.ts` di Hono, menjaganya). `agent-backend/docs/openapi.json` ditulis tangan, bukan hasil swag.
+  - Izin di dokumen harus sama dengan yang ditegakkan kode (`agent/backend/docs/openapi_test.go` dan `sharedservice-oauth/backend/internal/bootstrap/openapi_test.go` di Go, serta `test/openapi.test.ts` di Hono, menjaganya). `agent/backend/docs/openapi.json` ditulis tangan, bukan hasil swag.
   - Operasi key (`/keys*`), `/healthz`, `/openapi.json`, dan `/auth/*` (sesi UI `sharedservice-oauth`) tidak boleh masuk dokumen.
   - Setelah mengubah anotasi swag, jalankan `make swag`.
 - **Checklist dan smoke.** Nomor langkah checklist di README dirujuk oleh `scripts/smoke.sh`. Mengubah urutan checklist berarti memperbarui skripnya juga.

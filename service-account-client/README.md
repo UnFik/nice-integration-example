@@ -20,7 +20,7 @@ Diuji terhadap nice revisi: SDK `v0.2.2`, `v0.2.1`, dan `v0.2.0` (2026-11-24) ha
 
 ## Struktur folder
 
-Polanya sama dengan `agent-backend` dan `sharedservice-oauth/backend`, yang meniru `nice/internal/modules` (lihat `nice/AGENTS.md`), dipangkas untuk satu resource (`device`) tanpa repository dan facade.
+Polanya sama dengan `agent/backend` dan `sharedservice-oauth/backend`, yang meniru `nice/internal/modules` (lihat `nice/AGENTS.md`), dipangkas untuk satu resource (`device`) tanpa repository dan facade.
 
 ```text
 cmd/service-account-client/main.go   tipis: slog, sinyal, memanggil bootstrap.Run, kode keluar
@@ -281,5 +281,5 @@ Skrip membaca `.env` saja, tidak pernah mencetak key atau token, dan memeriksa: 
 
 - **Satu Service Account, satu service.** Tidak ada banyak akun dalam satu proses, dan tidak ada panggilan ke service `api_key` (lihat [`../shared-service-apikey`](../shared-service-apikey/README.md) untuk jalur proxy dan kunci per Service Account).
 - **Token hanya di memori.** Setiap proses mengambil token sendiri; tidak ada penyimpanan ke disk dan tidak ada rotasi key otomatis.
-- **Tanpa operasi ubah dan hapus**, dan tanpa atas nama user: token ini milik Service Account. Untuk bertindak atas nama user, lihat [`../agent-backend`](../agent-backend/README.md) (token exchange).
+- **Tanpa operasi ubah dan hapus**, dan tanpa atas nama user: token ini milik Service Account. Untuk bertindak atas nama user, lihat [`../agent/backend`](../agent/backend/README.md) (token exchange).
 - **Batas laju.** NICE membatasi `/oauth/token` per alamat dan `client_id`, serta menghitung kegagalan API key per alamat. Jangan meminta token per request; pakai ulang seperti contoh ini.

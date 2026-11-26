@@ -67,7 +67,7 @@ The `X-Api-Key` middleware (`src/auth.ts`) hashes the presented value with SHA-2
 
 ## The agent backend does not call this service
 
-The agent backend [`../agent-backend`](../agent-backend/README.en.md) acts on behalf of the user through token exchange, so the token it holds has a user as principal. An `api_key` service with per-Service-Account keys refuses such a token with 403 `service_account_required`, so the agent does not call `pengiriman`. The agent example uses only `inventaris` (a `nice_token` service, which supports a user principal with the actor recorded as `acted_by`).
+The agent backend [`../agent/backend`](../agent/backend/README.en.md) acts on behalf of the user through token exchange, so the token it holds has a user as principal. An `api_key` service with per-Service-Account keys refuses such a token with 403 `service_account_required`, so the agent does not call `pengiriman`. The agent example uses only `inventaris` (a `nice_token` service, which supports a user principal with the actor recorded as `acted_by`).
 
 ## Requirements
 

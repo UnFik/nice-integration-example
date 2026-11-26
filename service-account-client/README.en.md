@@ -20,7 +20,7 @@ Tested against nice revision: SDK `v0.2.2`, `v0.2.1` and `v0.2.0` (2026-11-24) w
 
 ## Folder structure
 
-The pattern is that of `agent-backend` and `sharedservice-oauth/backend`, which mirror `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one resource (`device`) with no repository and no facade.
+The pattern is that of `agent/backend` and `sharedservice-oauth/backend`, which mirror `nice/internal/modules` (see `nice/AGENTS.md`), trimmed for one resource (`device`) with no repository and no facade.
 
 ```text
 cmd/service-account-client/main.go   thin: slog, signals, calls bootstrap.Run, exit code
@@ -281,5 +281,5 @@ The script reads `.env` only, never prints the key or a token, and checks: NICE 
 
 - **One Service Account, one service.** No several accounts in one process, and no call to an `api_key` service (see [`../shared-service-apikey`](../shared-service-apikey/README.en.md) for the proxy path and the key per Service Account).
 - **Tokens in memory only.** Every process fetches its own token; nothing is stored on disk and there is no automatic key rotation.
-- **No update and delete operations**, and nothing on behalf of a user: this token is the Service Account's. To act on behalf of a user, see [`../agent-backend`](../agent-backend/README.en.md) (token exchange).
+- **No update and delete operations**, and nothing on behalf of a user: this token is the Service Account's. To act on behalf of a user, see [`../agent/backend`](../agent/backend/README.en.md) (token exchange).
 - **Rate limits.** NICE limits `/oauth/token` per address and `client_id`, and counts API key failures per address. Do not ask for a token per request; reuse it as this example does.
