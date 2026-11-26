@@ -25,7 +25,7 @@ Path tanpa awalan relatif terhadap `agent/backend` di worktree `.worktrees/examp
 
 ## 4. Pembersihan rahasia di `call_operation`
 
-- [ ] 4.1 Di `CallOperation`, baca skema operasi sebelum persetujuan sensitif dan sebelum `Operator.CallOperation`. Galat sementara atau tak terjangkau dikembalikan tanpa memanggil service; 404 berarti lanjut tanpa skema; key di `missing` menjadi `invalid_argument`. Bersihkan body dengan `Redact` sebelum decode 2xx dan sebelum `failure.Service`; bila pembersihan gagal pada jawaban galat, kirim body kosong ke `failure.Service`. Verifikasi dengan tes use case:
+- [x] 4.1 Di `CallOperation`, baca skema operasi sebelum persetujuan sensitif dan sebelum `Operator.CallOperation`. Galat sementara atau tak terjangkau dikembalikan tanpa memanggil service; 404 berarti lanjut tanpa skema; key di `missing` menjadi `invalid_argument`. Bersihkan body dengan `Redact` sebelum decode 2xx dan sebelum `failure.Service`; bila pembersihan gagal pada jawaban galat, kirim body kosong ke `failure.Service`. Verifikasi dengan tes use case:
   - `acted_by` bertanda `x-secret` hilang dari `CallView.Body`, dan properti lain tetap;
   - NICE 503 saat membaca skema menghasilkan galat sementara dan `Operator` tidak dipanggil;
   - NICE 404 saat membaca skema membuat panggilan tetap berjalan dengan body utuh;
