@@ -95,7 +95,7 @@ Every query uses `WHERE org_id = $1 AND project_id = $2`, reads, updates and del
 
 ## Agent attribution (`acted_by`)
 
-A backend that exchanges the user's token through token exchange, for example [`../../agent-backend`](../../agent-backend/README.en.md), calls this service with a token whose `sub` is still the user and whose `act.sub` claim is the `client_id` of that backend's service client. The service verifies that token with the same steps. The actor gains no rights: the permissions are still the `perms` of the token, the user's permissions in the target project. NICE does not narrow them further, since service dependency declarations were removed; the only limit is the tools that backend offers.
+A backend that exchanges the user's token through token exchange, for example [`../../agent/backend`](../../agent/backend/README.en.md), calls this service with a token whose `sub` is still the user and whose `act.sub` claim is the `client_id` of that backend's service client. The service verifies that token with the same steps. The actor gains no rights: the permissions are still the `perms` of the token, the user's permissions in the target project. NICE does not narrow them further, since service dependency declarations were removed; the only limit is the tools that backend offers.
 
 A device created with such a token records both:
 

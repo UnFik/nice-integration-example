@@ -95,7 +95,7 @@ Setiap query memakai `WHERE org_id = $1 AND project_id = $2`, termasuk baca, uba
 
 ## Atribusi agen (`acted_by`)
 
-Backend yang menukar token user lewat token exchange, misalnya [`../../agent-backend`](../../agent-backend/README.md), memanggil service ini dengan token yang `sub`-nya tetap user dan klaim `act.sub`-nya `client_id` service client backend itu. Service memverifikasi token itu dengan langkah yang sama. Aktor tidak mendapat hak tambahan: izinnya tetap `perms` di token, yaitu izin user di project tujuan. NICE tidak membatasinya lebih jauh, karena deklarasi dependensi service sudah dihapus; batas yang ada hanya tool yang disediakan backend itu.
+Backend yang menukar token user lewat token exchange, misalnya [`../../agent/backend`](../../agent/backend/README.md), memanggil service ini dengan token yang `sub`-nya tetap user dan klaim `act.sub`-nya `client_id` service client backend itu. Service memverifikasi token itu dengan langkah yang sama. Aktor tidak mendapat hak tambahan: izinnya tetap `perms` di token, yaitu izin user di project tujuan. NICE tidak membatasinya lebih jauh, karena deklarasi dependensi service sudah dihapus; batas yang ada hanya tool yang disediakan backend itu.
 
 Perangkat yang dibuat dengan token seperti itu mencatat keduanya:
 

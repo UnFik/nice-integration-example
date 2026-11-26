@@ -22,7 +22,7 @@ Versi NICE minimum: `b361d25` (`service-calls-without-service-account`; sebelumn
  NICE --302 /auth/callback?code--> backend --code + client_secret--> NICE /oauth/token
  browser --cookie nadi_session--> backend /auth/session, /auth/contexts, /auth/context, /auth/logout
  browser --cookie + X-CSRF-Token--> backend /devices --Bearer token konteks aktif--> rantai niceauth/verify --> handler perangkat
- agent-backend, Service Account --Bearer--> backend /devices   (jalur langsung, cookie tidak dipakai)
+ agent/backend, Service Account --Bearer--> backend /devices   (jalur langsung, cookie tidak dipakai)
 ```
 
 - **Login.** `GET /auth/login` membuat sesi tertunda (cookie berumur 10 menit), lalu mengalihkan ke NICE dengan scope `openid profile email offline_access`. `GET /auth/callback` mencocokkan `state` dengan sesi browser itu, menukar `code` dengan `client_secret`, lalu membuat sesi baru dengan ID baru. Callback dengan `state` asing, sudah dipakai, atau milik browser lain ditolak tanpa menyimpan token. Galat login (`access_denied`, `state_mismatch`, `temporarily_unavailable`) dikirim ke UI sebagai `/?login_error=<kode>`; URL tidak pernah memuat token.

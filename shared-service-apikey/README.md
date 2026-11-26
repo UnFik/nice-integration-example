@@ -67,7 +67,7 @@ Middleware `X-Api-Key` (`src/auth.ts`) menghitung SHA-256 nilai yang dikirim, la
 
 ## Backend agen tidak memanggil service ini
 
-Backend agen [`../agent-backend`](../agent-backend/README.md) bertindak atas nama user lewat token exchange, sehingga token yang dibawanya berprincipal user. Service `api_key` dengan kunci per Service Account menolak token seperti itu dengan 403 `service_account_required`, jadi agen tidak memanggil `pengiriman`. Contoh agen hanya memakai `inventaris` (service `nice_token`, yang mendukung principal user dengan aktor `acted_by`).
+Backend agen [`../agent/backend`](../agent/backend/README.md) bertindak atas nama user lewat token exchange, sehingga token yang dibawanya berprincipal user. Service `api_key` dengan kunci per Service Account menolak token seperti itu dengan 403 `service_account_required`, jadi agen tidak memanggil `pengiriman`. Contoh agen hanya memakai `inventaris` (service `nice_token`, yang mendukung principal user dengan aktor `acted_by`).
 
 ## Prasyarat
 
