@@ -111,6 +111,26 @@ func TestCallbackThatDoesNotBelongToTheSessionIsRefused(t *testing.T) {
 	}
 }
 
+// The cookie of a signed-in session lives as long as the idle limit and is sent again on every use: the browser keeps
+// it over a restart, and drops it when the server would end the session.
+func TestSessionCookieLastsTheIdleLimitAndIsRenewedOnUse(t *testing.T) {
+	e := newBFFEnv(t, &chatProbe{})
+	b := e.browser()
+	state := b.startLogin()
+	b.do(http.MethodGet, "/auth/callback?"+url.Values{"code": {"good"}, "state": {state}}.Encode(), nil)
+	want := int(e.auth.Sessions.Idle.Seconds())
+	if c := b.cookie0; c == nil || want <= 0 || c.MaxAge != want || c.Value != b.cookie {
+		t.Fatalf("cookie after the sign-in = %+v, want Max-Age %d", c, want)
+	}
+	for _, path := range []string{"/auth/session", "/chat/conversations"} {
+		b.cookie0 = nil
+		b.do(http.MethodGet, path, nil)
+		if c := b.cookie0; c == nil || c.MaxAge != want || c.Value != b.cookie || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" {
+			t.Fatalf("cookie after GET %s = %+v, want the same session with Max-Age %d", path, c, want)
+		}
+	}
+}
+
 func TestSessionWithoutCookieIs401(t *testing.T) {
 	e := newBFFEnv(t, nil)
 	wantBFFError(t, e.browser().do(http.MethodGet, "/auth/session", nil), http.StatusUnauthorized, "unauthenticated", "")

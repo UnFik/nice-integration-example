@@ -152,7 +152,7 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 ## Chat dashboard
 
-Besides `/mcp`, the agent serves a chat dashboard ([`../web`](../web/README.en.md)) at `/`. Users sign in through `/auth/login` with the client `agen-backend` (step 7). The refresh token is kept on the server, and the browser holds only the cookie `agen_session`. `/chat/*` accepts only that cookie: a request with `Authorization` is refused with `401`, while `/mcp` ignores the cookie.
+Besides `/mcp`, the agent serves a chat dashboard ([`../web`](../web/README.en.md)) at `/`. Users sign in through `/auth/login` with the client `agen-backend` (step 7). The refresh token is kept on the server, and the browser holds only the cookie `agen_session`. The cookie of a signed-in session lives for `SESSION_IDLE_TIMEOUT` (`Max-Age`) and is sent again on every use, so it stays after the browser closes and ends with the session on the server. `/chat/*` accepts only that cookie: a request with `Authorization` is refused with `401`, while `/mcp` ignores the cookie.
 
 **One turn.** `POST /chat/conversations/{id}/messages` with `{"text"}` (at most 8000 characters) stores the user's message, then calls the model with a system prompt, the conversation history, and the same four tools as the MCP server (name, description, and input schema read from one table in `adapter/mcp/tools_routes.go`). The tools run through the same use cases as MCP, on behalf of the user, with the active context token as the token exchange subject token. The model never sees a token. Every step is stored first, then sent as a server-sent event:
 

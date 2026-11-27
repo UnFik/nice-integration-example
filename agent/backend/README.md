@@ -152,7 +152,7 @@ access_denied (organization is not usable): NICE refused a token for nadi in tha
 
 ## Dashboard chat
 
-Selain `/mcp`, agen menyajikan dashboard chat ([`../web`](../web/README.md)) di `/`. User masuk lewat `/auth/login` dengan client `agen-backend` (langkah 7). Refresh token disimpan di server, dan browser hanya memegang cookie `agen_session`. `/chat/*` hanya menerima cookie itu: request yang membawa `Authorization` ditolak `401`, sebaliknya `/mcp` mengabaikan cookie.
+Selain `/mcp`, agen menyajikan dashboard chat ([`../web`](../web/README.md)) di `/`. User masuk lewat `/auth/login` dengan client `agen-backend` (langkah 7). Refresh token disimpan di server, dan browser hanya memegang cookie `agen_session`. Cookie sesi yang sudah login berumur `SESSION_IDLE_TIMEOUT` (`Max-Age`) dan dikirim ulang setiap sesi dipakai, jadi ia tetap ada setelah browser ditutup dan habis bersama sesi di server. `/chat/*` hanya menerima cookie itu: request yang membawa `Authorization` ditolak `401`, sebaliknya `/mcp` mengabaikan cookie.
 
 **Satu giliran.** `POST /chat/conversations/{id}/messages` dengan `{"text"}` (paling panjang 8000 karakter) menyimpan pesan user, lalu memanggil model dengan system prompt, riwayat percakapan, dan empat tool yang sama dengan server MCP (nama, deskripsi, dan schema input dibaca dari satu tabel di `adapter/mcp/tools_routes.go`). Tool dijalankan lewat use case yang sama dengan MCP, atas nama user, dengan token konteks aktif sebagai subject token exchange. Model tidak pernah melihat token. Setiap langkah disimpan dulu, baru dikirim sebagai server-sent event:
 

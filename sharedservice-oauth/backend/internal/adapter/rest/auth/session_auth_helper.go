@@ -20,6 +20,13 @@ func (h *Handler) setCookie(w http.ResponseWriter, value string, maxAge int) {
 
 func (h *Handler) clearCookie(w http.ResponseWriter) { h.setCookie(w, "", -1) }
 
+// keepCookie gives the cookie of a signed-in session the lifetime of the idle
+// limit, so the browser keeps it over a restart and drops it when the server
+// would end the session. Every use of the session sends it again.
+func (h *Handler) keepCookie(w http.ResponseWriter, id string) {
+	h.setCookie(w, id, int(h.Sessions.Idle.Seconds()))
+}
+
 func cookieOf(r *http.Request) string {
 	c, err := r.Cookie(CookieName)
 	if err != nil {
@@ -73,6 +80,7 @@ func (h *Handler) session(w http.ResponseWriter, r *http.Request) (domain.Sessio
 		h.fail(w, err)
 		return domain.Session{}, false
 	}
+	h.keepCookie(w, sess.ID)
 	return sess, true
 }
 

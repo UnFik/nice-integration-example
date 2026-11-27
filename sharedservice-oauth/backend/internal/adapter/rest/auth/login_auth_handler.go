@@ -30,7 +30,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	var down *sessionusecase.UnavailableError
 	switch {
 	case err == nil:
-		h.setCookie(w, sess.ID, 0)
+		h.keepCookie(w, sess.ID)
 		h.toUI(w, r, "")
 		return
 	case errors.Is(err, sessionusecase.ErrStateMismatch):
