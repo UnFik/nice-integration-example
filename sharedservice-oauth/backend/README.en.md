@@ -123,7 +123,7 @@ Copy `.env.example` to `.env`. The service reads `.env` from the directory it ru
 | `NICE_CLIENT_ID`, `NICE_CLIENT_SECRET` | required | the confidential OAuth client of the UI (step 2). Without both the service stops with a message naming the variable; the secret is never printed |
 | `PUBLIC_URL` | `http://localhost:8081` | the UI origin the browser sees; redirect URI = `PUBLIC_URL/auth/callback`. Development with Vite, and Docker: `http://localhost:5181` |
 | `POST_LOGOUT_URL` | `PUBLIC_URL/` | where the browser goes after **Keluar** ended the NICE session; it must be a post-logout redirect URI of the client (step 2). `none`: the signed-out page of NICE |
-| `SESSION_IDLE_TIMEOUT` | `8h` | how long a browser session lives without use |
+| `SESSION_IDLE_TIMEOUT` | `360h` | how long a browser session lives without use (`360h` is 15 days) |
 | `WEB_DIR` | `../web/dist` | the built UI served at `/`; empty in Docker, where the UI has a container of its own |
 | `DATABASE_URL` | empty | a `postgres://` URL for the devices; empty keeps them in memory. Its value is never printed |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | other browser origins allowed to call with a Bearer token, comma separated, for `public-client-pkce`. The UI of this example needs no CORS since it shares the origin |

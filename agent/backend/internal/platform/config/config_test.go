@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func env(vars map[string]string) LookupFunc {
@@ -155,7 +156,7 @@ func TestChatIsOffWithoutAProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ChatEnabled() || cfg.ChatMaxSteps != 8 || cfg.SessionIdle.String() != "8h0m0s" {
+	if cfg.ChatEnabled() || cfg.ChatMaxSteps != 8 || cfg.SessionIdle != 15*24*time.Hour {
 		t.Fatalf("defaults: %+v", cfg)
 	}
 	if cfg.RedirectURI != cfg.PublicURL+"/auth/callback" || cfg.PostLogoutURL != cfg.PublicURL+"/" {

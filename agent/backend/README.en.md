@@ -197,7 +197,7 @@ Copy `.env.example` to `.env`. The agent reads `.env` from the directory it runs
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | the address MCP clients and the dashboard browser use; the metadata `resource` is `<PUBLIC_URL>/mcp`, and the client `agen-backend` must have the redirect URI `<PUBLIC_URL>/auth/callback`. Development with Vite (`npm run dev` in `../web`): `http://localhost:5182` |
 | `JWKS_FILE` | `data/jwks.json` | copy of the JWKS on disk (`data/` is not committed) |
 | `POST_LOGOUT_URL` | `<PUBLIC_URL>/` | where NICE sends the browser after Keluar in the dashboard; it must be a post-logout redirect URI of the client `agen-backend`. `none` leaves the browser on the page of NICE |
-| `SESSION_IDLE_TIMEOUT` | `8h` | a dashboard session unused for this long ends (Go duration) |
+| `SESSION_IDLE_TIMEOUT` | `360h` | a dashboard session unused for this long ends (Go duration; `360h` is 15 days) |
 | `WEB_DIR` | `../web/dist` | the built dashboard (`npm run build` in `../web`), served at `/` when the directory exists |
 | `DATABASE_URL` | empty | PostgreSQL of the conversation history, e.g. `postgres://agen:<password>@localhost:5432/agen?sslmode=disable`; migrations run on start. Empty: the history is kept in memory and lost on restart |
 | `LLM_PROVIDER` | empty | `anthropic` or `openai` (an OpenAI-compatible Chat Completions API: OpenAI, Ollama, vLLM). Empty: the chat is off, `/mcp` still works |

@@ -123,7 +123,7 @@ Salin `.env.example` ke `.env`. Service membaca `.env` di direktori tempat ia di
 | `NICE_CLIENT_ID`, `NICE_CLIENT_SECRET` | wajib | OAuth client confidential UI (langkah 2). Tanpa keduanya service berhenti dengan pesan yang menyebut nama variabelnya; secret tidak pernah dicetak |
 | `PUBLIC_URL` | `http://localhost:8081` | origin UI yang dilihat browser; redirect URI = `PUBLIC_URL/auth/callback`. Dev dengan Vite dan Docker: `http://localhost:5181` |
 | `POST_LOGOUT_URL` | `PUBLIC_URL/` | tujuan browser setelah **Keluar** mengakhiri sesi NICE; harus terdaftar sebagai post-logout redirect URI client (langkah 2). `none`: halaman keluar NICE |
-| `SESSION_IDLE_TIMEOUT` | `8h` | umur sesi browser tanpa pemakaian |
+| `SESSION_IDLE_TIMEOUT` | `360h` | umur sesi browser tanpa pemakaian (`360h` berarti 15 hari) |
 | `WEB_DIR` | `../web/dist` | hasil build UI yang disajikan di `/`; kosong di Docker, karena UI punya container sendiri |
 | `DATABASE_URL` | kosong | URL `postgres://` untuk perangkat; kosong berarti memori. Nilainya tidak pernah dicetak |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5180` | origin browser lain yang boleh memanggil dengan Bearer, dipisah koma, untuk `public-client-pkce`. UI contoh ini tidak butuh CORS karena satu origin |
