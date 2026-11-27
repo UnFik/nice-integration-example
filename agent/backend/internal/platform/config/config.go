@@ -46,7 +46,7 @@ const (
 	defaultListen    = "127.0.0.1:8083"
 	defaultPublicURL = "http://127.0.0.1:8083"
 	defaultJWKSFile  = "data/jwks.json"
-	defaultIdle      = "8h"
+	defaultIdle      = "360h"
 	defaultWebDir    = "../web/dist"
 	defaultChatSteps = "8"
 )

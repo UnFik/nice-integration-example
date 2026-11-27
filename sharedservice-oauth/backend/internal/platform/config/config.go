@@ -31,7 +31,7 @@ const (
 	defaultJWKSFile    = "data/jwks.json"
 	defaultCORSOrigins = "http://localhost:5180"
 	defaultPublicURL   = "http://localhost:8081"
-	defaultSessionIdle = "8h"
+	defaultSessionIdle = "360h"
 	defaultWebDir      = "../web/dist"
 	// CallbackPath is where NICE sends the browser back after the sign-in.
 	CallbackPath = "/auth/callback"

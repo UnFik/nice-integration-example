@@ -144,7 +144,7 @@ func TestLoadConfigDerivesTheRedirectURI(t *testing.T) {
 	if cfg.PublicURL != "http://localhost:5181" || cfg.RedirectURI != "http://localhost:5181/auth/callback" {
 		t.Fatalf("public %q redirect %q", cfg.PublicURL, cfg.RedirectURI)
 	}
-	if cfg.SessionIdle != 8*time.Hour || cfg.WebDir != "../web/dist" {
+	if cfg.SessionIdle != 15*24*time.Hour || cfg.WebDir != "../web/dist" {
 		t.Fatalf("session idle %v web dir %q", cfg.SessionIdle, cfg.WebDir)
 	}
 }

@@ -197,7 +197,7 @@ Salin `.env.example` ke `.env`. Agen membaca `.env` di direktori tempat ia dijal
 | `PUBLIC_URL` | `http://127.0.0.1:8083` | alamat yang dipakai MCP client dan browser dashboard; `resource` metadata adalah `<PUBLIC_URL>/mcp`, dan client `agen-backend` harus punya redirect URI `<PUBLIC_URL>/auth/callback`. Dev dengan Vite (`npm run dev` di `../web`): `http://localhost:5182` |
 | `JWKS_FILE` | `data/jwks.json` | salinan JWKS di disk (`data/` tidak di-commit) |
 | `POST_LOGOUT_URL` | `<PUBLIC_URL>/` | ke mana NICE mengirim browser setelah Keluar di dashboard; harus post-logout redirect URI client `agen-backend`. `none` membiarkan browser di halaman NICE |
-| `SESSION_IDLE_TIMEOUT` | `8h` | sesi dashboard yang tidak dipakai selama ini berakhir (durasi Go) |
+| `SESSION_IDLE_TIMEOUT` | `360h` | sesi dashboard yang tidak dipakai selama ini berakhir (durasi Go; `360h` berarti 15 hari) |
 | `WEB_DIR` | `../web/dist` | hasil build dashboard (`npm run build` di `../web`), disajikan di `/` bila direktorinya ada |
 | `DATABASE_URL` | kosong | PostgreSQL riwayat percakapan, mis. `postgres://agen:<password>@localhost:5432/agen?sslmode=disable`; migrasi diterapkan saat start. Kosong: riwayat di memori dan hilang saat restart |
 | `LLM_PROVIDER` | kosong | `anthropic` atau `openai` (API Chat Completions yang kompatibel OpenAI: OpenAI, Ollama, vLLM). Kosong: chat nonaktif, `/mcp` tetap jalan |
